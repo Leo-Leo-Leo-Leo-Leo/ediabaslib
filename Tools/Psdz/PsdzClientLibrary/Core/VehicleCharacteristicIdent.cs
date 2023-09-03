@@ -11,7 +11,7 @@ namespace PsdzClient.Core
 {
 	public class VehicleCharacteristicIdent : VehicleCharacteristicAbstract
 	{
-        public bool AssignVehicleCharacteristic(string vehicleCode, Vehicle vehicle, PdszDatabase.Characteristics characteristic)
+        public bool AssignVehicleCharacteristic(string vehicleCode, Vehicle vehicle, PsdzDatabase.Characteristics characteristic)
         {
             return ComputeCharacteristic(vehicleCode, vehicle, characteristic);
         }
@@ -120,10 +120,6 @@ namespace PsdzClient.Core
                     //reactor.SetBrandName(BrandName.BMWi, DataSource.Database);
                     vecInfo.BrandName = BrandName.BMWi;
                     break;
-                case "HUSQVARNA":
-                    //reactor.SetBrandName(BrandName.HUSQVARNA, DataSource.Database);
-                    vecInfo.BrandName = BrandName.HUSQVARNA;
-                    break;
                 case "TOYOTA":
                     //reactor.SetBrandName(BrandName.TOYOTA, DataSource.Database);
                     vecInfo.BrandName = BrandName.TOYOTA;
@@ -132,34 +128,30 @@ namespace PsdzClient.Core
                     //reactor.SetBrandName(BrandName.BMWMGmbHPKW, DataSource.Database);
                     vecInfo.BrandName = BrandName.BMWMGmbHPKW;
                     break;
+                case "MINI PKW":
+                    //reactor.SetBrandName(BrandName.MINIPKW, DataSource.Database);
+                    vecInfo.BrandName = BrandName.MINIPKW;
+                    break;
                 case "ROLLS-ROYCE PKW":
                     //reactor.SetBrandName(BrandName.ROLLSROYCEPKW, DataSource.Database);
                     vecInfo.BrandName = BrandName.ROLLSROYCEPKW;
-                    break;
-                case "ROSENBAU":
-                    //reactor.SetBrandName(BrandName.ROSENBAUER, DataSource.Database);
-                    vecInfo.BrandName = BrandName.ROSENBAUER;
                     break;
                 case "BMW USA PKW":
                     //reactor.SetBrandName(BrandName.BMWUSAPKW, DataSource.Database);
                     vecInfo.BrandName = BrandName.BMWUSAPKW;
                     break;
+                default:
+                    //Log.Warning("VehicleIdent.UpdateVehicleCharacteristics()", "found unknown brand name: {0}", characteristic.Name);
+                    break;
                 case "BMW MOTORRAD":
                     //reactor.SetBrandName(BrandName.BMWMOTORRAD, DataSource.Database);
                     vecInfo.BrandName = BrandName.BMWMOTORRAD;
-                    break;
-                case "MINI PKW":
-                    //reactor.SetBrandName(BrandName.MINIPKW, DataSource.Database);
-                    vecInfo.BrandName = BrandName.MINIPKW;
-                    break;
-                default:
-                    //Log.Warning("VehicleIdent.UpdateVehicleCharacteristics()", "found unknown brand name: {0}", characteristic.Name);
                     break;
             }
             return true;
         }
 
-		protected override bool ComputeCountryOfAssembly(params object[] parameters)
+        protected override bool ComputeCountryOfAssembly(params object[] parameters)
 		{
 			this.GetIdentParameters(parameters);
 			this.vecInfo.CountryOfAssembly = this.characteristic.Name;
@@ -521,7 +513,7 @@ namespace PsdzClient.Core
         private void GetIdentParameters(params object[] parameters)
         {
             vecInfo = (Vehicle)parameters[0];
-            characteristic = (PdszDatabase.Characteristics)parameters[1];
+            characteristic = (PsdzDatabase.Characteristics)parameters[1];
         }
 
         private HeatMotor GetHeatMotorByDriveId(string driveId)
@@ -543,6 +535,6 @@ namespace PsdzClient.Core
 
 		private Vehicle vecInfo;
 
-		private PdszDatabase.Characteristics characteristic;
+		private PsdzDatabase.Characteristics characteristic;
 	}
 }

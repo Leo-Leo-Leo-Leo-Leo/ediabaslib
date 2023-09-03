@@ -153,16 +153,22 @@ namespace BmwDeepObd
 
         public class ErrorsInfo
         {
-            public ErrorsInfo(string sgbdFunctional, string vehicleSeries, List<EcuInfo> ecuList)
+            public ErrorsInfo(string sgbdFunctional, string vehicleSeries, string bnType, string brandName, List<EcuInfo> ecuList)
             {
                 SgbdFunctional = sgbdFunctional;
                 VehicleSeries = vehicleSeries;
+                BnType = bnType;
+                BrandName = brandName;
                 EcuList = ecuList;
             }
 
             public string SgbdFunctional { get; }
 
             public string VehicleSeries { get; }
+
+            public string BnType { get; }
+
+            public string BrandName { get; }
 
             public List<EcuInfo> EcuList { get; }
         }
@@ -301,6 +307,8 @@ namespace BmwDeepObd
         private string _sgbdFunctional = string.Empty;
         private string _interfaceName = string.Empty;
         private string _vehicleSeries = string.Empty;
+        private string _bnType = string.Empty;
+        private string _brandName = string.Empty;
         private string _manufacturerName = string.Empty;
         private string _xmlFileNamePages = string.Empty;
         private string _xmlFileName = string.Empty;
@@ -329,6 +337,10 @@ namespace BmwDeepObd
 
         public string VehicleSeries => _vehicleSeries;
 
+        public string BnType => _bnType;
+
+        public string BrandName => _brandName;
+
         public string XmlFileNamePages => _xmlFileNamePages;
 
         public string XmlFileName => _xmlFileName;
@@ -336,6 +348,29 @@ namespace BmwDeepObd
         public ActivityCommon.ManufacturerType Manufacturer => _manufacturerType;
 
         public ActivityCommon.InterfaceType Interface => _interfaceType;
+
+        public bool IsMotorbike {
+            get
+            {
+                if (!string.IsNullOrEmpty(_bnType))
+                {
+                    if (_bnType.Contains("MOTORBIKE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(_brandName))
+                {
+                    if (_brandName.Contains("MOTORRAD", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
 
         public JobReader()
         {
@@ -358,6 +393,8 @@ namespace BmwDeepObd
             _manufacturerName = string.Empty;
             _interfaceName = string.Empty;
             _vehicleSeries = string.Empty;
+            _bnType = string.Empty;
+            _brandName = string.Empty;
             _xmlFileNamePages = string.Empty;
             _xmlFileName = null;
         }
@@ -438,6 +475,18 @@ namespace BmwDeepObd
                     if (attrib != null)
                     {
                         _vehicleSeries = attrib.Value;
+                    }
+
+                    attrib = xnodeGlobal.Attributes["bn_type"];
+                    if (attrib != null)
+                    {
+                        _bnType = attrib.Value;
+                    }
+
+                    attrib = xnodeGlobal.Attributes["brand_name"];
+                    if (attrib != null)
+                    {
+                        _brandName = attrib.Value;
                     }
                 }
 
@@ -738,11 +787,20 @@ namespace BmwDeepObd
                             {
                                 string sgbdFunctional = string.Empty;
                                 string vehicleSeries = string.Empty;
+                                string bnType = string.Empty;
+                                string brandName = string.Empty;
+
                                 attrib = xnodePageChild.Attributes["sgbd_functional"];
                                 if (attrib != null) sgbdFunctional = attrib.Value;
 
                                 attrib = xnodePageChild.Attributes["vehicle_series"];
                                 if (attrib != null) vehicleSeries = attrib.Value;
+
+                                attrib = xnodePageChild.Attributes["bn_type"];
+                                if (attrib != null) bnType = attrib.Value;
+
+                                attrib = xnodePageChild.Attributes["brand_name"];
+                                if (attrib != null) brandName = attrib.Value;
 
                                 List<EcuInfo> ecuList = new List<EcuInfo>();
                                 foreach (XmlNode xnodeErrorsChild in xnodePageChild.ChildNodes)
@@ -770,7 +828,7 @@ namespace BmwDeepObd
                                         ecuList.Add(new EcuInfo(ecuName, sgbd, vagDataFileName, vagUdsFileName, results));
                                     }
                                 }
-                                errorsInfo = new ErrorsInfo(sgbdFunctional, vehicleSeries, ecuList);
+                                errorsInfo = new ErrorsInfo(sgbdFunctional, vehicleSeries, bnType, brandName, ecuList);
                             }
                             if (string.Compare(xnodePageChild.Name, "code", StringComparison.OrdinalIgnoreCase) == 0)
                             {
@@ -839,6 +897,16 @@ namespace BmwDeepObd
                         if (string.IsNullOrEmpty(_sgbdFunctional))
                         {
                             _sgbdFunctional = pageInfo.ErrorsInfo.SgbdFunctional;
+                        }
+
+                        if (string.IsNullOrEmpty(_bnType))
+                        {
+                            _bnType = pageInfo.ErrorsInfo.BnType;
+                        }
+
+                        if (string.IsNullOrEmpty(_brandName))
+                        {
+                            _brandName = pageInfo.ErrorsInfo.BrandName;
                         }
                     }
                 }

@@ -75,7 +75,7 @@
 \nFeel free to contribute or to report problems.
 \nA detailed documentation could also be found on this web site.
 \n\nChanges in this version:\n</string>
-  <string name="version_last_changes">- Added first simple BMW service functions.\n- Fixed minor problems</string>
+  <string name="version_last_changes">- Motorbike detect option added.\n- DeepL translation.\n- Added first simple BMW service functions.\n- Fixed minor problems</string>
   <string name="app_info_message">Deep OBD for BMW and VAG\nVersion: {0}\nId: {1}</string>
   <string formatted="false" name="vag_mode_info">The VAG mode ist still experimental and only for vehicles until {0}.\nA &lt;a href=\'https://github.com/uholeschak/ediabaslib/blob/master/docs/Replacement_firmware_for_ELM327.md\'&gt;Deep OBD adapter&lt;/a&gt; with at least firmware version 0.11 is required.\nAt the moment only the protocols KWP2000, KWP1281, TP2.0 and UDS are supported.\nConfigurations have to regenerated for the new VAG mode\n.It\'s possible to select the old VAG mode again in the settings dialog.</string>
 
@@ -203,19 +203,23 @@
   <string name="menu_translation_yandex_key">Translation configuration</string>
   <string name="menu_translation_clear_cache">Clear translation cache</string>
 
-  <!-- Yandex key -->
-  <string name="yandex_api_key_title">Translation configuration</string>
-  <string name="yandex_key_desc">For automatic translation with {0} a free API key and account is required, that allows a limited amount of translations per day.\nWith the buttons below log in to your account and create a key or display your existing ones.\nCopy the key from the web browser and paste it in the field below with the paste button.\nTo copy the key press and hold the first word, extend the selected range and choose copy.</string>
-  <string name="yandex_key_copy_title">Copy API Key</string>
-  <string name="button_yandex_key_create">Create API Key</string>
-  <string name="button_yandex_key_get">Display API Keys</string>
-  <string name="yandex_key_paste_title">API Key</string>
-  <string name="button_yandex_key_paste">Paste API Key</string>
+  <!-- Translate Key -->
+  <string name="trans_api_key_title">Translation configuration</string>
+  <string name="trans_caption_translator">Translator</string>
+  <string name="trans_translator_yandex">Yandex.Translate</string>
+  <string name="trans_translator_ibm">IBM Watson</string>
+  <string name="trans_translator_deepl">DeepL</string>
+  <string name="trans_key_desc">For automatic translation with {0} a (free) API key and account is required, that allows a limited amount of translations per day.\nWith the buttons below log in to your account and create a key or display your existing ones.\nCopy the key from the web browser and paste it in the field below with the paste button.\nTo copy the key press and hold the first word, extend the selected range and choose copy.</string>
+  <string name="trans_key_copy_title">Copy API Key</string>
+  <string name="button_api_key_create">Create API Key</string>
+  <string name="button_api_key_get">Display API Keys</string>
+  <string name="trans_key_paste_title">API Key</string>
+  <string name="button_api_key_paste">Paste API Key</string>
   <string name="api_url_paste_title">API URL</string>
   <string name="button_api_url_paste">Paste API URL</string>
-  <string name="yandex_key_test_title">Translate</string>
-  <string name="button_yandex_key_test">Test translation</string>
-  <string name="button_yandex_key_test_failed">Translation failed</string>
+  <string name="trans_key_test_title">Translate</string>
+  <string name="button_api_key_test">Test translation</string>
+  <string name="button_api_key_test_failed">Translation failed</string>
 
   <!--  DeviceListActivity -->
   <string name="scanning">Scanning for devices ...</string>
@@ -362,6 +366,7 @@
   <!-- Translator selection -->
   <string name="select_translator_yantex">Yantex.Translate</string>
   <string name="select_translator_ibm">IBM Watson</string>
+  <string name="select_translator_deepl">DeepL</string>
 
   <!-- Bluetooth -->
   <string name="mtc_disconnect_warn">For a stable communication with the adapter it is recommended to pair any additional smartphone with the radio.\nDo you want to continue anyway?</string>
@@ -412,11 +417,6 @@
   <string name="settings_caption_theme">Theme</string>
   <string name="settings_theme_dark">Dark</string>
   <string name="settings_theme_light">Light</string>
-  <string name="settings_caption_translator">Translator</string>
-  <string name="settings_translator_yandex">Yandex.Translate</string>
-  <string name="settings_translator_ibm">IBM Watson</string>
-  <string name="settings_caption_translator_login">Translator keep alive</string>
-  <string name="settings_translator_login">Keep IBM Watson Api Key alive once a day</string>
   <string name="settings_caption_title_bar">Title bar</string>
   <string name="settings_auto_hide_title_bar">Auto hide title bar on main page when connected (show with long click and release)</string>
   <string name="settings_suppress_title_bar">Suppress unused title bars (show with swipe gesture)</string>
@@ -550,7 +550,7 @@
   <string name="xml_tool_no_mwtab">No data tables have been found for this ECU</string>
   <string name="xml_tool_select_sgbd">Select vehicle type</string>
   <string name="xml_tool_no_response">No response from vehicle</string>
-  <string name="xml_tool_no_response_manual">No response from vehicle.\nFor K-LINE vehicles an USB or Deep OBD adapter is required.\nHere you could find a list of <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/AdapterTypes.md'>supported adapters</a>.\nDo you want to switch to <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>manual configuration</a>?</string>
+  <string name="xml_tool_no_response_manual">No response from vehicle.\nFor motorbikes you should enable the detect motorbikes option in the menu.\nFor K-LINE vehicles an USB or Deep OBD adapter is required.\nHere you could find a list of <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/AdapterTypes.md'>supported adapters</a>.\nDo you want to switch to <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>manual configuration</a>?</string>
   <string name="xml_tool_no_response_adapter">No response from vehicle.\nDo you want to check the adapter connection?</string>
   <string name="xml_tool_no_response_raw">No response from vehicle.\nThe direct communication mode is active and could be the source of the problem.\nDo you want to select a different adapter?</string>
   <string name="xml_tool_read_jobs_failed">Reading jobs failed</string>
@@ -580,6 +580,7 @@
 
   <!-- XML Tool Options Menu -->
   <string name="menu_xml_tool_add_errors_page">Add errors page</string>
+  <string name="menu_xml_tool_detect_motorbikes">Detect Motorbikes</string>
   <string name="menu_xml_tool_cfg_type">Configuration</string>
 
   <!-- XML Tool Edit Menu -->
@@ -784,6 +785,7 @@
   <string name="can_adapter_select_fw_file">Select firmware</string>
   <string name="button_can_adapter_read">Read</string>
   <string name="button_can_adapter_write">Write</string>
+  <string name="button_can_adapter_close">Close</string>
   <string name="button_can_adapter_can_auto">Automatic</string>
   <string name="button_can_adapter_can_500">D-CAN (from 3/2007)</string>
   <string name="button_can_adapter_can_100">K-CAN (no standard)</string>

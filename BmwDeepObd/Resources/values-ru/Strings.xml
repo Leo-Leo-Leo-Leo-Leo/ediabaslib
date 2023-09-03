@@ -75,7 +75,7 @@
 \nВы можете принять участие в проекте или же сообщить об ошибках.
 \nДополнительную информацию вы можете найти на этой веб-странице.
 \n\nИзменения в этой версии:\n</string>
-  <string name="version_last_changes">- Добавлены первые простые сервисные функции BMW.\n- Исправлены незначительные проблемы</string>
+  <string name="version_last_changes">- Добавлена опция распознавания мотоцикла.\n- DeepL перевод.\n- Добавлены первые простые сервисные функции BMW.\n- Исправлены незначительные проблемы</string>
   <string name="app_info_message">Deep OBD для BMW и VAG\nВерсия: {0}\nId: {1}</string>
   <string formatted="false" name="vag_mode_info">VAG режим пока что экспериментальный и предназначен только для автомобилей до {0}.\nНеобходимо &lt;a href=\'https://github.com/uholeschak/ediabaslib/blob/master/docs/Replacement_firmware_for_ELM327.md\'&gt;Deep OBD устройство&lt;/a&gt; с версией программного обеспечения не менее 0.11.\nНа данный момент поддерживаются только KWP2000, KWP1281, TP2.0 и UDS протоколы.\nКонфигурации для нового режима VAG необходимо генерировать заново.\nВ диалоговом окне настроек можно снова выбрать старый режим VAG.</string>
 
@@ -226,19 +226,23 @@
   <string name="menu_translation_yandex_key">Настройки перевода</string>
   <string name="menu_translation_clear_cache">Удалить кэш перевода</string>
 
-  <!-- Yandex key -->
-  <string name="yandex_api_key_title">Настройки перевода</string>
-  <string name="yandex_key_desc">Для автоматического перевода с {0} требуется бесплатный ключ API и учётная запись, что позволяет делать ограниченное количество переводов в день.\nИспользуйте следующие кнопки для входа в свою учетную запись, чтобы создать ключ или для отображения существующих.\nСкопируйте ключ из браузера и вставьте его в нижнее поле с помощью кнопки Вставить.\nЧтобы скопировать ключ, нажмите и удерживайте первое слово, расширьте диапазон и выберите "Копировать".</string>
-  <string name="yandex_key_copy_title">копировать API ключ</string>
-  <string name="button_yandex_key_create">создать API ключ</string>
-  <string name="button_yandex_key_get">Показать API ключи</string>
-  <string name="yandex_key_paste_title">API ключ</string>
-  <string name="button_yandex_key_paste">Вставить API ключи</string>
+  <!-- Translate Key -->
+  <string name="trans_api_key_title">Настройки перевода</string>
+  <string name="trans_caption_translator">Переводчик</string>
+  <string name="trans_translator_yandex">Яндекс.Переводчик</string>
+  <string name="trans_translator_ibm">IBM Watson</string>
+  <string name="trans_translator_deepl">DeepL</string>
+  <string name="trans_key_desc">Для автоматического перевода с {0} требуется (бесплатный) ключ API и учётная запись, что позволяет делать ограниченное количество переводов в день.\nИспользуйте следующие кнопки для входа в свою учетную запись, чтобы создать ключ или для отображения существующих.\nСкопируйте ключ из браузера и вставьте его в нижнее поле с помощью кнопки Вставить.\nЧтобы скопировать ключ, нажмите и удерживайте первое слово, расширьте диапазон и выберите "Копировать".</string>
+  <string name="trans_key_copy_title">копировать API ключ</string>
+  <string name="button_api_key_create">создать API ключ</string>
+  <string name="button_api_key_get">Показать API ключи</string>
+  <string name="trans_key_paste_title">API ключ</string>
+  <string name="button_api_key_paste">Вставить API ключи</string>
   <string name="api_url_paste_title">API URL</string>
   <string name="button_api_url_paste">вставить API URL</string>
-  <string name="yandex_key_test_title">Перевести</string>
-  <string name="button_yandex_key_test">Проверить перевод</string>
-  <string name="button_yandex_key_test_failed">Ошибка при переводе</string>
+  <string name="trans_key_test_title">Перевести</string>
+  <string name="button_api_key_test">Проверить перевод</string>
+  <string name="button_api_key_test_failed">Ошибка при переводе</string>
 
   <!--  DeviceListActivity -->
   <string name="scanning">Поиск устройств ...</string>
@@ -251,7 +255,6 @@
   <string name="bt_mtc_module_error">Устройства Android с модулем Bluetooth FSC-BW124, похоже, имеют проблемы коммуникации с адаптерами OBD.\nСоединение, вероятно, не будет работать правильно.</string>  <string name="bt_module_name">(Модуль Bluetooth: {0})</string>
   <string name="bt_mtc_module_escape_mode">Bluetooth модуль {0} имеет ограниченный канал связи, поэтому необходимо использовать специальный режим связи.\nПо техническим причинам в этом режиме поддерживаются не все протоколы OBD, и требуется самая новая прошивка адаптера.</string>
   <string name="bt_mtc_module_pwd">Текущий пин для Bluetooth {0} не является значением для адаптера по умолчанию {1}.\nЛибо вы меняете пин адаптера, либо текущий пин для Bluetooth.\nВы хотите изменить текущий пин на {1}?</string>
-  <!--Translate-->
   <string formatted="false" name="bt_mtc_firmware_error">Известно, что текущая версия микропрограммы {0} имеет проблемы со связью по Bluetooth.&lt;br&gt;Необходимо обновить прошивку на более новую или более старую версию (в зависимости от наличия).&lt;br&gt;&lt;a href=\'{1}\'&gt;Загрузка прошивки&lt;/a&gt;&lt;br&gt;&lt;a href=\'{2}\'&gt;Инструкции по обновлению&lt;/a&gt;</string>
   <string name="title_paired_devices">Авторизированные устройства</string>
   <string name="title_other_devices">Другие доступные устройства</string>
@@ -316,7 +319,6 @@
   <string name="menu_cfg_page_functions">Функции страницы</string>
   <string name="menu_cfg_page_ediabas">Ediabas утилита</string>
   <string name="menu_cfg_page_bmw_actuator">Функции актуатора</string>
-  <!--Translate-->
   <string name="menu_cfg_page_bmw_service">Сервисные функции</string>
   <string name="menu_cfg_page_vag_coding">Кодировать</string>
   <string name="menu_cfg_page_vag_coding2">Кодировать 2</string>
@@ -386,6 +388,7 @@
   <!-- Translator selection -->
   <string name="select_translator_yantex">Yantex.Translate</string>
   <string name="select_translator_ibm">IBM Watson</string>
+  <string name="select_translator_deepl">DeepL</string>
 
   <!-- Bluetooth -->
   <string name="mtc_disconnect_warn">Для стабильной связи с адаптером, соедините радио с любым имеющимся смартфоном.\nХотите продолжить без подключения смартфона?</string>
@@ -436,11 +439,6 @@
   <string name="settings_caption_theme">Темы</string>
   <string name="settings_theme_dark">Темная</string>
   <string name="settings_theme_light">Светлая</string>
-  <string name="settings_caption_translator">Переводчик</string>
-  <string name="settings_translator_yandex">Яндекс.Переводчик</string>
-  <string name="settings_translator_ibm">IBM Watson</string>
-  <string name="settings_caption_translator_login">Держать переводчиков активным</string>
-  <string name="settings_translator_login">Держать ключ IBM Watson Api активным один раз в день.</string>
   <string name="settings_caption_title_bar">Панель заглавия</string>
   <string name="settings_auto_hide_title_bar">Автоматически скрывать панель заглавия на главной странице (показать при отпускании после длинного нажатия)</string>
   <string name="settings_suppress_title_bar">Скрывать неиспользуемые панели заглавия  (показывать при помощи жеста смахивания)</string>
@@ -528,7 +526,6 @@
   <string name="tool_check_continuous">Непрерывно</string>
   <string name="tool_read_errors_failure">Не удалось считать ошибки</string>
   <string name="tool_no_errors">Ошибки отсутствуют</string>
-  <!--Translate-->
   <string name="tool_jobs_not_found_list">В ECU не удалось найти следующие задания:</string>
 
   <!--  Argument Assistant Status -->
@@ -575,7 +572,7 @@
   <string name="xml_tool_no_mwtab">Не обнаружено таблиц данных для этого ECU файла</string>
   <string name="xml_tool_select_sgbd">Выбрать тип автомобиля</string>
   <string name="xml_tool_no_response">Автомобиль не отвечает</string>
-  <string name="xml_tool_no_response_manual">Автомобиль не отвечает.\nЕсли у вашего автомобиля используется К-LINE коммуникация, то необходимо использовать USB или Deep ОDB адаптер.\nЗдесь приведён список <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>поддерживаемых адаптеров</a>.\nПерейти к <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>ручной настройке</a>?</string>
+  <string name="xml_tool_no_response_manual">Автомобиль не отвечает.\nДля распознавания мотоциклов вы должны включить соответствующую опцию в меню.\nЕсли у вашего автомобиля используется К-LINE коммуникация, то необходимо использовать USB или Deep ОDB адаптер.\nЗдесь приведён список <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>поддерживаемых адаптеров</a>.\nПерейти к <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>ручной настройке</a>?</string>
   <string name="xml_tool_no_response_adapter">Автомобиль не отвечает.\nХотите проверить соединение адаптера?</string>
   <string name="xml_tool_no_response_raw">Автомобиль не отвечает.\nАктивен режим прямой связи, это может служить источником проблемы.\nВыбрать другой адаптер?</string>
   <string name="xml_tool_read_jobs_failed">Не удалось считать задания</string>
@@ -588,8 +585,7 @@
   <string name="xml_tool_msg_ecu_error">Для некоторых ECU информация не может быть найдена.</string>
   <string name="xml_tool_msg_pin78">Необходимо соединить контакты 7 и 8 в OBD разъеме адаптера, чтобы определилось больше блоков управления.\nВ автомобилях с OBD I разъёмом в моторном отсеке, контакт 8 должен быть дополнительно подключён к OBD II гнезду в салоне.</string>
   <string name="xml_tool_msg_page_not_avail">Выбранная страница ECU не может быть открыта.\nКонфигурация должна быть создана с помощью генератора конфигурации, и ECU должен быть доступен.</string>
-  <!--Translate-->
-  <string name="xml_tool_msg_service_menu">Чтобы выполнить сервисные функции для ЭБУ, откройте контекстное меню ЭБУ и выберите пункт «Сервисные функции».</string>
+  <string name="xml_tool_msg_service_menu">Чтобы выполнить сервисные функции для ECU, откройте контекстное меню ECU и выберите пункт «Сервисные функции».</string>
   <string name="xml_tool_select_ecu_type">Выбрать ECU-тип</string>
   <string name="xml_tool_ecu_list">Обнаруженные ECU</string>
   <string name="xml_tool_info_sgbd">SGBD</string>
@@ -601,13 +597,12 @@
   <string name="xml_tool_job_read_mwblock">Считать блок измерений</string>
   <string name="xml_tool_job_read_vin">Определить VIN</string>
   <string name="xml_tool_result_vin">VIN</string>
-  <!--Translate-->
-  <string name="xml_tool_service_open_jobs">Показать {0} вакансий</string>
-  <!--Translate-->
-  <string name="xml_tool_service_jobs_warning">Сервисные функции пока экспериментальные!\nОтображаемые задания в Ediabas Tool могут иметь только аргументы по умолчанию, которые необходимо адаптировать перед выполнением задания!\nВы обязаны проверять задания перед выполнением!\nПомощник по аргументам может быть полезен в этом случае.\nИз-за сложности сбора данных возможно, что в будущем для выполнения заданий потребуются адаптеры Deep OBD.\nВы все равно хотите продолжить?</string>
+  <string name="xml_tool_service_open_jobs">Показать {0} задания</string>
+  <string name="xml_tool_service_jobs_warning">Сервисные функции пока экспериментальные!\nОтображаемые задания в Ediabas Tool могут иметь только аргументы по умолчанию, которые необходимо адаптировать перед выполнением задания!\nВы обязаны проверять задания перед выполнением!\nПомощник по аргументам может быть полезен в этом случае.\nИз-за сложности сбора данных возможно, что в будущем для выполнения заданий потребуются адаптеры Deep OBD.\nХотите продолжить?</string>
 
   <!-- XML Tool Options Menu -->
   <string name="menu_xml_tool_add_errors_page">Добавить страницу ошибок</string>
+  <string name="menu_xml_tool_detect_motorbikes">Обнаружение мотоциклов</string>
   <string name="menu_xml_tool_cfg_type">Конфигурация</string>
 
   <!-- XML Tool Edit Menu -->
@@ -618,7 +613,6 @@
   <string name="menu_xml_tool_edit_del_all">Удалить всю ECU-информацию</string>
 
   <!-- XML Tool context Menu -->
-  <!--Translate-->
   <string name="menu_xml_config_ecu">Настроить ECU</string>
   <string name="menu_xml_tool_move_top">Переместить в начало</string>
   <string name="menu_xml_tool_move_up">Переместить вверх</string>
@@ -626,7 +620,6 @@
   <string name="menu_xml_tool_move_bottom">Переместить в конец</string>
   <string name="menu_xml_tool_ediabas_tool">Ediabas утилита</string>
   <string name="menu_xml_tool_bmw_actuator">Функции актуатора</string>
-  <!--Translate-->
   <string name="menu_xml_tool_bmw_service">Сервисные функции</string>
   <string name="menu_xml_tool_vag_coding">Кодировать</string>
   <string name="menu_xml_tool_vag_coding2">Кодировать 2</string>
@@ -634,7 +627,7 @@
   <string name="menu_xml_tool_vag_login">Авторизация</string>
   <string name="menu_xml_tool_vag_sec_access">Права доступа</string>
 
-    <!-- XML Tool Ecu Activity -->
+  <!-- XML Tool Ecu Activity -->
   <string name="xml_tool_ecu_title">Задания для ECU: {0}</string>
   <string name="xml_tool_ecu_job_comments">Комментарии для задания: {0}</string>
   <string name="xml_tool_ecu_job_comments_ecu_info">ECU информация:</string>
@@ -680,7 +673,6 @@
   <string name="xml_tool_button_ediabas_tool">Ediabas утилита</string>
   <string name="xml_tool_button_bmw_actuator">Функции актуатора</string>
   <string name="xml_tool_button_bmw_coding">Кодировать</string>
-  <!--Translate-->
   <string name="xml_tool_button_bmw_service">Сервисные функции</string>
   <string name="xml_tool_button_coding">Кодировать</string>
   <string name="xml_tool_button_coding2">Кодировать 2</string>
@@ -712,8 +704,7 @@
   <string name="vag_coding_execute_title">Выполнить операцию</string>
   <string name="vag_coding_button_execute">Выполнить</string>
   <string name="vag_coding_processing">Выполнение операции</string>
-  <!--Translate-->
-  <string name="vag_coding_write_values_invalid">Если код мастерской, номер импортера или номер оборудования равен 0 или слишком велик, ЭБУ может отклонить значения.\nХотите продолжить?</string>
+  <string name="vag_coding_write_values_invalid">Если идентификационный номер предприятия, номер импортера или серийный номер прибора равен 0 или слишком большой, ECU может отклонить значения.\nХотите продолжить?</string>
   <string name="vag_coding_write_coding_illegal_arguments">Аргументы для операции находятся вне рабочего диапазона</string>
   <string name="vag_coding_write_coding_failed">Ошибка выполнения операции</string>
   <string name="vag_coding_write_coding_access_denied">В доступе отказано, сначала вы должны авторизироваться</string>
@@ -747,7 +738,6 @@
   <string name="vag_adaption_button_store">Сохранить</string>
   <string name="vag_adaption_button_stop">Остановить</string>
   <string name="vag_adaption_ecu_reset">Выполнить ECU сброс</string>
-  <!--Translate-->
   <string name="vag_adaption_change_coding_first">Рекомендуется сначала исправить кодировку в ECU.</string>
 
   <!-- BMW Actuator Activity -->
@@ -809,8 +799,7 @@
   <string name="can_adapter_fw_update_connect">При подключении к устройству может потребоваться перезагрузка процессора.</string>
   <string name="can_adapter_fw_update_active">Обновление прошивки.\nПожалуйста не прерывайте связь.</string>
   <string name="can_adapter_fw_update_conn_failed">Не удалось подключиться к адаптеру</string>
-  <!--Translate-->
-  <string name="can_adapter_fw_update_failed">Не удалось обновление прошивки.\nЕсли все светодиоды адаптера активны, адаптер находится в режиме загрузчика, и для нормального использования его необходимо снова прошить.</string>
+  <string name="can_adapter_fw_update_failed">Не удалось обновить прошивку.\nЕсли все светодиоды адаптера активны, адаптер находится в режиме загрузчика, и для нормального использования его необходимо снова прошить.</string>
   <string name="can_adapter_fw_update_ok">Обновление прошивки успешно завершено</string>
   <string name="can_adapter_fw_invalid">Файл прошивки неисправен.</string>
   <string name="can_adapter_fw_update_ok_detect">Обновление программного обеспечения прошло успешно.\nНеобходимо перезагрузить и заново идентифицировать адаптер.</string>
@@ -818,6 +807,7 @@
   <string name="can_adapter_select_fw_file">Выбрать прошивку</string>
   <string name="button_can_adapter_read">Считать</string>
   <string name="button_can_adapter_write">Сохранить</string>
+  <string name="button_can_adapter_close">Закрыть</string>
   <string name="button_can_adapter_can_auto">Автоматически</string>
   <string name="button_can_adapter_can_500">D-CAN (после 3/2007)</string>
   <string name="button_can_adapter_can_100">K-CAN (не стандарт)</string>

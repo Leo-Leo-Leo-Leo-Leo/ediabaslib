@@ -28,7 +28,7 @@ using PsdzClientLibrary;
 
 namespace PsdzClient
 {
-    public partial class PdszDatabase
+    public partial class PsdzDatabase
     {
         [XmlInclude(typeof(TestModuleData))]
         [XmlType("TestModules")]
@@ -1594,7 +1594,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodWriteFaPrefix = typeof(PdszDatabase).GetMethod("CallWriteFaPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodWriteFaPrefix = typeof(PsdzDatabase).GetMethod("CallWriteFaPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodWriteFaPrefix == null)
                 {
                     log.ErrorFormat("ReadTestModule CallWriteFaPrefix not found");
@@ -1739,7 +1739,7 @@ namespace PsdzClient
                     return false;
                 }
 
-                MethodInfo methodGetDatabasePrefix = typeof(PdszDatabase).GetMethod("CallGetDatabaseProviderSQLitePrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodGetDatabasePrefix = typeof(PsdzDatabase).GetMethod("CallGetDatabaseProviderSQLitePrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodGetDatabasePrefix == null)
                 {
                     log.ErrorFormat("PatchCommonMethods CallGetDatabaseProviderSQLitePrefix not found");
@@ -1753,7 +1753,7 @@ namespace PsdzClient
                     return false;
                 }
 
-                MethodInfo methodModuleRefPrefix = typeof(PdszDatabase).GetMethod("CallModuleRefPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleRefPrefix = typeof(PsdzDatabase).GetMethod("CallModuleRefPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleRefPrefix == null)
                 {
                     log.ErrorFormat("PatchCommonMethods CallModuleRefPrefix not found");
@@ -2408,7 +2408,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodCreateServiceDialogPrefix = typeof(PdszDatabase).GetMethod("CreateServiceDialogPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodCreateServiceDialogPrefix = typeof(PsdzDatabase).GetMethod("CreateServiceDialogPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodCreateServiceDialogPrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule CreateServiceDialogPrefix not found");
@@ -2429,7 +2429,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodServiceDialogCmdBaseInvokePrefix = typeof(PdszDatabase).GetMethod("ServiceDialogCmdBaseInvokePrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodServiceDialogCmdBaseInvokePrefix = typeof(PsdzDatabase).GetMethod("ServiceDialogCmdBaseInvokePrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodServiceDialogCmdBaseInvokePrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule ServiceDialogCmdBaseInvokePrefix not found");
@@ -2450,14 +2450,14 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodConfigurationContainerDeserializePrefix = typeof(PdszDatabase).GetMethod("ConfigurationContainerDeserializePrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodConfigurationContainerDeserializePrefix = typeof(PsdzDatabase).GetMethod("ConfigurationContainerDeserializePrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodConfigurationContainerDeserializePrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule ConfigurationContainerDeserializePrefix not found");
                     return null;
                 }
 
-                MethodInfo methodConfigurationContainerDeserializePostfix = typeof(PdszDatabase).GetMethod("ConfigurationContainerDeserializePostfix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodConfigurationContainerDeserializePostfix = typeof(PsdzDatabase).GetMethod("ConfigurationContainerDeserializePostfix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodConfigurationContainerDeserializePostfix == null)
                 {
                     log.ErrorFormat("ReadServiceModule methodConfigurationContainerDeserializePostfix not found");
@@ -2498,14 +2498,14 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodIstaResultAsTypePrefix = typeof(PdszDatabase).GetMethod("GetIstaResultAsTypePrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodIstaResultAsTypePrefix = typeof(PsdzDatabase).GetMethod("GetIstaResultAsTypePrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodIstaResultAsTypePrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule GetIstaResultAsTypePrefix not found");
                     return null;
                 }
 
-                MethodInfo methodIstaResultAsTypePostfix = typeof(PdszDatabase).GetMethod("GetIstaResultAsTypePostfix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodIstaResultAsTypePostfix = typeof(PsdzDatabase).GetMethod("GetIstaResultAsTypePostfix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodIstaResultAsTypePostfix == null)
                 {
                     log.ErrorFormat("ReadServiceModule GetIstaResultAsTypePostfix not found");
@@ -2540,7 +2540,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodIndirectDocumentPrefix3 = typeof(PdszDatabase).GetMethod("IndirectDocumentPrefix3", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodIndirectDocumentPrefix3 = typeof(PsdzDatabase).GetMethod("IndirectDocumentPrefix3", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodIndirectDocumentPrefix3 == null)
                 {
                     log.ErrorFormat("ReadServiceModule IndirectDocumentPrefix3 not found");
@@ -2555,7 +2555,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodCharacteristicsPrefix = typeof(PdszDatabase).GetMethod("CharacteristicsPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodCharacteristicsPrefix = typeof(PsdzDatabase).GetMethod("CharacteristicsPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodCharacteristicsPrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule CharacteristicsPrefix not found");
@@ -2592,28 +2592,28 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodModuleParameterPrefix1 = typeof(PdszDatabase).GetMethod("GetModuleParameterPrefix1", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleParameterPrefix1 = typeof(PsdzDatabase).GetMethod("GetModuleParameterPrefix1", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleParameterPrefix1 == null)
                 {
                     log.ErrorFormat("ReadServiceModule GetModuleParameterPrefix1 not found");
                     return null;
                 }
 
-                MethodInfo methodModuleParameterPostfix1 = typeof(PdszDatabase).GetMethod("GetModuleParameterPostfix1", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleParameterPostfix1 = typeof(PsdzDatabase).GetMethod("GetModuleParameterPostfix1", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleParameterPostfix1 == null)
                 {
                     log.ErrorFormat("ReadServiceModule GetModuleParameterPostfix1 not found");
                     return null;
                 }
 
-                MethodInfo methodModuleParameterPrefix2 = typeof(PdszDatabase).GetMethod("GetModuleParameterPrefix2", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleParameterPrefix2 = typeof(PsdzDatabase).GetMethod("GetModuleParameterPrefix2", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleParameterPrefix2 == null)
                 {
                     log.ErrorFormat("ReadServiceModule GetModuleParameterPrefix2 not found");
                     return null;
                 }
 
-                MethodInfo methodModuleParameterPostfix2 = typeof(PdszDatabase).GetMethod("GetModuleParameterPostfix2", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleParameterPostfix2 = typeof(PsdzDatabase).GetMethod("GetModuleParameterPostfix2", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleParameterPostfix2 == null)
                 {
                     log.ErrorFormat("ReadServiceModule GetModuleParameterPostfix2 not found");
@@ -2629,7 +2629,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodModuleTextPrefix2 = typeof(PdszDatabase).GetMethod("ModuleTextPrefix2", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleTextPrefix2 = typeof(PsdzDatabase).GetMethod("ModuleTextPrefix2", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleTextPrefix2 == null)
                 {
                     log.ErrorFormat("ReadServiceModule ModuleTextPrefix2 not found");
@@ -2643,7 +2643,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodModuleSleepPrefix = typeof(PdszDatabase).GetMethod("ModuleSleepPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleSleepPrefix = typeof(PsdzDatabase).GetMethod("ModuleSleepPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleSleepPrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule ModuleSleepPrefix not found");
@@ -2657,7 +2657,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodModuleClearErrorInfoMemoryPrefix = typeof(PdszDatabase).GetMethod("ModuleClearErrorInfoMemoryPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleClearErrorInfoMemoryPrefix = typeof(PsdzDatabase).GetMethod("ModuleClearErrorInfoMemoryPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleClearErrorInfoMemoryPrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule ModuleClearErrorInfoMemoryPrefix not found");
@@ -2671,7 +2671,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodModuleReadErrorInfoMemoryPrefix = typeof(PdszDatabase).GetMethod("ModuleReadErrorInfoMemoryPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModuleReadErrorInfoMemoryPrefix = typeof(PsdzDatabase).GetMethod("ModuleReadErrorInfoMemoryPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModuleReadErrorInfoMemoryPrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule ModuleReadErrorInfoMemoryPrefix not found");
@@ -2856,7 +2856,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                MethodInfo methodModulePrivateMethodPrefix = typeof(PdszDatabase).GetMethod("ModulePrivateMethodPrefix", BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo methodModulePrivateMethodPrefix = typeof(PsdzDatabase).GetMethod("ModulePrivateMethodPrefix", BindingFlags.NonPublic | BindingFlags.Static);
                 if (methodModulePrivateMethodPrefix == null)
                 {
                     log.ErrorFormat("ReadServiceModule ModulePrivateMethodPrefix not found");
@@ -3797,10 +3797,49 @@ namespace PsdzClient
         {
             try
             {
-                Regex seriesFormulaRegex = new Regex(@"IsValidRuleString\(""(Baureihenverbund|E-Bezeichnung)"",\s*""([a-z0-9\- ]+)""\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                Regex seriesFormulaRegex = new Regex(@"IsValidRuleString\(""(E-Bezeichnung)"",\s*""([a-z0-9\- ]+)""\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                Regex modelSeriesFormulaRegex = new Regex(@"IsValidRuleString\(""(Baureihenverbund)"",\s*""([a-z0-9\- ]+)""\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
                 Regex brandFormulaRegex = new Regex(@"IsValidRuleString\(""(Marke)"",\s*""([a-z0-9\- ]+)""\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
                 Regex dateFormulaRegex = new Regex(@"(RuleNum\(""Baustand""\))\s*([<>=]+)\s*([0-9]+)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                RuleExpression.FormulaConfig formulaConfig = new RuleExpression.FormulaConfig("RuleString", "RuleNum", "IsValidRuleString", "IsValidRuleNum", "|");
+                RuleExpression.FormulaConfig formulaConfig = new RuleExpression.FormulaConfig("RuleString", "RuleNum", "IsValidRuleString", "IsValidRuleNum", "IsFaultRuleValid", null, "|");
+
+                List<string> typeKeys = GetAllTypeKeys();
+                if (typeKeys == null)
+                {
+                    log.ErrorFormat("ExtractEcuCharacteristicsVehicles No TypeKeys");
+                    return null;
+                }
+
+                Dictionary<string, string> seriesDict = new Dictionary<string, string>();
+                foreach (string typeKey in typeKeys)
+                {
+                    List<Characteristics> characteristicsList = GetVehicleIdentByTypeKey(typeKey, false);
+                    if (characteristicsList != null)
+                    {
+                        string series = null;
+                        string modelSeries = null;
+                        foreach (Characteristics characteristics in characteristicsList)
+                        {
+                            if (string.Compare(characteristics.NodeClass, "40128130", StringComparison.OrdinalIgnoreCase) == 0)
+                            {
+                                series = characteristics.EcuTranslation.TextDe;
+                            }
+                            else if (string.Compare(characteristics.NodeClass, "99999999951", StringComparison.OrdinalIgnoreCase) == 0)
+                            {
+                                modelSeries = characteristics.EcuTranslation.TextDe;
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(series) && !string.IsNullOrEmpty(modelSeries))
+                        {
+                            string key = series.ToUpperInvariant();
+                            if (!seriesDict.ContainsKey(key))
+                            {
+                                seriesDict.Add(key, modelSeries);
+                            }
+                        }
+                    }
+                }
 
                 Vehicle vehicle = new Vehicle(clientContext);
                 List<EcuCharacteristicsInfo> vehicleSeriesList = new List<EcuCharacteristicsInfo>();
@@ -3821,6 +3860,7 @@ namespace PsdzClient
                             log.InfoFormat("ExtractEcuCharacteristicsVehicles Rule formula: {0}", ruleFormula);
 
                             HashSet<string> seriesHash = new HashSet<string>();
+                            HashSet<string> modelSeriesHash = new HashSet<string>();
                             HashSet<string> brandHash = new HashSet<string>();
                             string date = null;
                             string dateCompare = null;
@@ -3839,6 +3879,15 @@ namespace PsdzClient
                                     if (match.Groups.Count == 3 && match.Groups[2].Success)
                                     {
                                         seriesHash.Add(match.Groups[2].Value.Trim());
+                                    }
+                                }
+
+                                MatchCollection modelSeriesMatches = modelSeriesFormulaRegex.Matches(formulaPart);
+                                foreach (Match match in modelSeriesMatches)
+                                {
+                                    if (match.Groups.Count == 3 && match.Groups[2].Success)
+                                    {
+                                        modelSeriesHash.Add(match.Groups[2].Value.Trim());
                                     }
                                 }
 
@@ -3865,8 +3914,27 @@ namespace PsdzClient
                             }
 
                             // detect bn type
+                            string prodArt = "P";
+                            foreach (string brand in brandHash)
+                            {
+                                if (brand.ToUpperInvariant().Contains("MOTORRAD"))
+                                {
+                                    prodArt = "M";
+                                }
+                            }
+
+                            // add missing model series
+                            foreach (string series in seriesHash)
+                            {
+                                if (seriesDict.TryGetValue(series.ToUpperInvariant(), out string modelSeries))
+                                {
+                                    modelSeriesHash.Add(modelSeries);
+                                }
+                            }
+
                             HashSet<BNType> bnTypes = new HashSet<BNType>();
                             Vehicle vehicleSeries = new Vehicle(clientContext);
+                            vehicleSeries.Prodart = prodArt;
                             foreach (string series in seriesHash)
                             {
                                 vehicleSeries.Ereihe = series;
@@ -3877,10 +3945,31 @@ namespace PsdzClient
                                 }
                             }
 
-                            BNType? bnTypeSeries = null;
-                            if (bnTypes.Count == 1)
+                            vehicleSeries.Ereihe = null;
+                            foreach (string modelSeries in modelSeriesHash)
                             {
-                                bnTypeSeries = bnTypes.First();
+                                vehicleSeries.Baureihenverbund = modelSeries;
+                                BNType bnType = DiagnosticsBusinessData.Instance.GetBNType(vehicleSeries);
+                                if (bnType != BNType.UNKNOWN)
+                                {
+                                    bnTypes.Add(bnType);
+                                }
+                            }
+
+                            BNType? bnTypeSeries = null;
+                            switch (bnTypes.Count)
+                            {
+                                case 0:
+                                    log.InfoFormat("ExtractEcuCharacteristicsVehicles Series: {0}, No BnTypes found", seriesHash.ToStringItems());
+                                    break;
+
+                                case 1:
+                                    bnTypeSeries = bnTypes.First();
+                                    break;
+
+                                default:
+                                    log.InfoFormat("ExtractEcuCharacteristicsVehicles Series: {0}, BnTypes: {1}", seriesHash.ToStringItems(), bnTypes.ToStringItems());
+                                    break;
                             }
 
                             log.InfoFormat("ExtractEcuCharacteristicsVehicles Sgbd: {0}, Brand: {1}, Series: {2}, BnType: {3}, Date: {4} {5}",
@@ -3912,10 +4001,25 @@ namespace PsdzClient
                         }
                     }
 
+                    List<KeyValuePair<string, string>> seriesPair = new List<KeyValuePair<string, string>>();
                     foreach (string series in ecuCharacteristicsInfo.SeriesList)
                     {
-                        string key = series.ToUpperInvariant();
-                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoAdd = new VehicleStructsBmw.VehicleSeriesInfo(key, brSgbd, bnTypeName, ecuCharacteristicsInfo.BrandList, ecuList, ecuCharacteristicsInfo.Date, ecuCharacteristicsInfo.DateCompare);
+                        string modelSeries = null;
+                        if (seriesDict.TryGetValue(series.ToUpperInvariant(), out string value))
+                        {
+                            modelSeries = value;
+                        }
+
+                        seriesPair.AddIfNotContains(new KeyValuePair<string, string>(series, modelSeries));
+                    }
+
+                    foreach (KeyValuePair<string, string> keyValuePair in seriesPair)
+                    {
+                        string series = keyValuePair.Key;
+                        string modelSeries = keyValuePair.Value;
+                        string key = series;
+
+                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoAdd = new VehicleStructsBmw.VehicleSeriesInfo(key, modelSeries, brSgbd, bnTypeName, ecuCharacteristicsInfo.BrandList, ecuList, ecuCharacteristicsInfo.Date, ecuCharacteristicsInfo.DateCompare);
 
                         if (sgbdDict.TryGetValue(key, out List<VehicleStructsBmw.VehicleSeriesInfo> vehicleSeriesInfoList))
                         {
@@ -4029,7 +4133,7 @@ namespace PsdzClient
                 rulesInfoData = new VehicleStructsBmw.RulesInfoData(versionInfo, faultRulesDict, ecuFuncRulesDict, diagObjectRulesDict);
                 if (!SaveFaultRulesClass(rulesInfoData, rulesCsFile))
                 {
-                    log.InfoFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo SaveFaultRulesFunction failed");
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo SaveFaultRulesFunction failed");
                     return false;
                 }
 
@@ -4093,6 +4197,7 @@ namespace PsdzClient
 
                 SerializableDictionary<string, VehicleStructsBmw.RuleInfo> diagObjectRulesDict = new SerializableDictionary<string, VehicleStructsBmw.RuleInfo>();
                 Vehicle vehicle = new Vehicle(clientContext);
+                List<string> subRuleIDs = new List<string>();
                 foreach (SwiInfoObj infoObject in completeInfoObjects)
                 {
                     string infoObjId = infoObject.Id;
@@ -4103,7 +4208,7 @@ namespace PsdzClient
                             XepRule xepRule = GetRuleById(infoObjId);
                             if (xepRule != null)
                             {
-                                string ruleFormula = xepRule.GetRuleFormula(vehicle);
+                                string ruleFormula = xepRule.GetRuleFormula(vehicle, null, subRuleIDs);
                                 if (!string.IsNullOrEmpty(ruleFormula))
                                 {
                                     diagObjectRulesDict.Add(infoObjId, new VehicleStructsBmw.RuleInfo(infoObjId, ruleFormula));
@@ -4122,7 +4227,7 @@ namespace PsdzClient
                                 XepRule xepRule = GetRuleById(diagObjId);
                                 if (xepRule != null)
                                 {
-                                    string ruleFormula = xepRule.GetRuleFormula(vehicle);
+                                    string ruleFormula = xepRule.GetRuleFormula(vehicle, null, subRuleIDs);
                                     if (!string.IsNullOrEmpty(ruleFormula))
                                     {
                                         diagObjectRulesDict.Add(diagObjId, new VehicleStructsBmw.RuleInfo(diagObjId, ruleFormula));
@@ -4131,6 +4236,12 @@ namespace PsdzClient
                             }
                         }
                     }
+                }
+
+                if (!AddSubRules(vehicle, diagObjectRulesDict, subRuleIDs))
+                {
+                    log.ErrorFormat("ExtractDiagObjRulesInfo AddSubRules failed");
+                    return null;
                 }
 
                 return diagObjectRulesDict;
@@ -4154,6 +4265,38 @@ namespace PsdzClient
                     return false;
                 }
 
+                List<string> ruleNames = new List<string>();
+                if (!ExtractRuleNames(rulesInfoData.FaultRuleDict, ruleNames))
+                {
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo ExtractRuleNames FaultRuleDict failed");
+                    return false;
+                }
+
+                if (!ExtractRuleNames(rulesInfoData.EcuFuncRuleDict, ruleNames))
+                {
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo ExtractRuleNames EcuFuncRuleDict failed");
+                    return false;
+                }
+
+                if (!ExtractRuleNames(rulesInfoData.DiagObjectRuleDict, ruleNames))
+                {
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo ExtractRuleNames DiagObjectRuleDict failed");
+                    return false;
+                }
+
+                StringBuilder sbRuleNames = new StringBuilder();
+                foreach (string ruleName in ruleNames)
+                {
+                    if (sbRuleNames.Length > 0)
+                    {
+                        sbRuleNames.Append(", ");
+                    }
+
+                    sbRuleNames.Append("\"");
+                    sbRuleNames.Append(VehicleInfoBmw.RemoveNonAsciiChars(ruleName));
+                    sbRuleNames.Append("\"");
+                }
+
                 DbInfo dbInfo = GetDbInfo();
                 if (dbInfo == null)
                 {
@@ -4173,12 +4316,15 @@ namespace PsdzClient
                 StringBuilder sb = new StringBuilder();
                 sb.Append(
 $@"using BmwFileReader;
+using System.Collections.Generic;
 
 public class RulesInfo
 {{
     public const string DatabaseVersion = ""{dbInfo.Version}"";
 
     public const string DatabaseDate = ""{dbInfo.DateTime.ToString(CultureInfo.InvariantCulture)}"";
+
+    public static List<string> RuleNames = new List<string> {{ {sbRuleNames} }};
 
     public RuleEvalBmw RuleEvalClass {{ get; private set; }}
 
@@ -4371,21 +4517,31 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
                 }
 
                 Vehicle vehicle = new Vehicle(clientContext);
+                List<string> subRuleIDs = new List<string>();
                 SerializableDictionary<string, VehicleStructsBmw.RuleInfo> ruleDict = new SerializableDictionary<string, VehicleStructsBmw.RuleInfo>();
                 foreach (EcuFunctionStructs.EcuFaultCode ecuFaultCode in ecuFaultCodeList)
                 {
                     if (ecuFaultCode.Relevance.ConvertToInt() > 0)
                     {
-                        XepRule xepRule = GetRuleById(ecuFaultCode.Id);
-                        if (xepRule != null)
+                        if (!ruleDict.ContainsKey(ecuFaultCode.Id))
                         {
-                            string ruleFormula = xepRule.GetRuleFormula(vehicle);
-                            if (!string.IsNullOrEmpty(ruleFormula))
+                            XepRule xepRule = GetRuleById(ecuFaultCode.Id);
+                            if (xepRule != null)
                             {
-                                ruleDict.Add(ecuFaultCode.Id, new VehicleStructsBmw.RuleInfo(ecuFaultCode.Id, ruleFormula));
+                                string ruleFormula = xepRule.GetRuleFormula(vehicle, null, subRuleIDs);
+                                if (!string.IsNullOrEmpty(ruleFormula))
+                                {
+                                    ruleDict.Add(ecuFaultCode.Id, new VehicleStructsBmw.RuleInfo(ecuFaultCode.Id, ruleFormula));
+                                }
                             }
                         }
                     }
+                }
+
+                if (!AddSubRules(vehicle, ruleDict, subRuleIDs))
+                {
+                    log.ErrorFormat("ExtractFaultRulesInfo AddSubRules failed");
+                    return null;
                 }
 
                 return ruleDict;
@@ -4415,6 +4571,7 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
                 }
 
                 Vehicle vehicle = new Vehicle(clientContext);
+                List<string> subRuleIDs = new List<string>();
                 SerializableDictionary<string, VehicleStructsBmw.RuleInfo> ruleDict = new SerializableDictionary<string, VehicleStructsBmw.RuleInfo>();
                 foreach (string ecuFixedFuncId in ecuFixedFuncList)
                 {
@@ -4425,7 +4582,7 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
                             XepRule xepRule = GetRuleById(ecuFixedFuncId);
                             if (xepRule != null)
                             {
-                                string ruleFormula = xepRule.GetRuleFormula(vehicle);
+                                string ruleFormula = xepRule.GetRuleFormula(vehicle, null, subRuleIDs);
                                 if (!string.IsNullOrEmpty(ruleFormula))
                                 {
                                     ruleDict.Add(ecuFixedFuncId, new VehicleStructsBmw.RuleInfo(ecuFixedFuncId, ruleFormula));
@@ -4435,12 +4592,78 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
                     }
                 }
 
+                if (!AddSubRules(vehicle, ruleDict, subRuleIDs))
+                {
+                    log.ErrorFormat("ExtractEcuFuncRulesInfo AddSubRules failed");
+                    return null;
+                }
+
                 return ruleDict;
             }
             catch (Exception e)
             {
                 log.ErrorFormat("ExtractEcuFuncRulesInfo Exception: '{0}'", e.Message);
                 return null;
+            }
+        }
+
+        public bool AddSubRules(Vehicle vehicle, SerializableDictionary<string, VehicleStructsBmw.RuleInfo> ruleDict, List<string> subRuleIDs)
+        {
+            try
+            {
+                foreach (string subRule in subRuleIDs)
+                {
+                    if (!ruleDict.ContainsKey(subRule))
+                    {
+                        XepRule xepRule = GetRuleById(subRule);
+                        if (xepRule != null)
+                        {
+                            string ruleFormula = xepRule.GetRuleFormula(vehicle, null, subRuleIDs);
+                            if (!string.IsNullOrEmpty(ruleFormula))
+                            {
+                                ruleDict.Add(subRule, new VehicleStructsBmw.RuleInfo(subRule, ruleFormula));
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                log.ErrorFormat("AddSubRules Exception: '{0}'", e.Message);
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool ExtractRuleNames(SerializableDictionary<string, VehicleStructsBmw.RuleInfo> ruleDict, List<string> ruleNames)
+        {
+            try
+            {
+                Regex formulaNameRegex = new Regex(@"(RuleString|RuleNum|IsValidRuleString|IsValidRuleNum)\(""([^""]+)""", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                foreach (KeyValuePair<string, VehicleStructsBmw.RuleInfo> keyValuePair in ruleDict)
+                {
+                    string ruleFormula = keyValuePair.Value.RuleFormula;
+                    MatchCollection nameMatches = formulaNameRegex.Matches(ruleFormula);
+                    foreach (Match match in nameMatches)
+                    {
+                        if (match.Groups.Count == 3 && match.Groups[2].Success)
+                        {
+                            string name = match.Groups[2].Value.Trim();
+                            if (!ruleNames.Contains(name))
+                            {
+                                ruleNames.Add(name);
+                            }
+                        }
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                log.ErrorFormat("ExtractRuleNames Exception: '{0}'", e.Message);
+                return false;
             }
         }
     }

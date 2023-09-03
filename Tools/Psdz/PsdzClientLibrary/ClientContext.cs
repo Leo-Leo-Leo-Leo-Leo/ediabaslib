@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,12 +12,36 @@ namespace PsdzClient
     public class ClientContext : IDisposable
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(ClientContext));
+        private static bool _enablePsdzMultiSession;
         private bool _disposed;
 
-        public PdszDatabase Database { get; set; }
+        public PsdzDatabase Database { get; set; }
         public CharacteristicExpression.EnumBrand SelectedBrand { get; set; }
         public string OutletCountry { get; set; }
         public string Language { get; set; }
+        public bool ProtectionVehicleService { get; set; }
+
+        static ClientContext()
+        {
+            _enablePsdzMultiSession = false;
+            string swiVersion = PsdzDatabase.GetSwiVersion();
+            if (!string.IsNullOrEmpty(swiVersion))
+            {
+                string[] swiParts = swiVersion.Split('.');
+                if (swiParts.Length >= 2)
+                {
+                    if (long.TryParse(swiParts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out long value1) &&
+                        long.TryParse(swiParts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out long value2))
+                    {
+                        long version = value1 * 10000 + value2;
+                        if (version >= 40039)
+                        {
+                            _enablePsdzMultiSession = true;
+                        }
+                    }
+                }
+            }
+        }
 
         public ClientContext()
         {
@@ -24,6 +49,7 @@ namespace PsdzClient
             SelectedBrand = CharacteristicExpression.EnumBrand.BMWBMWiMINI;
             OutletCountry = string.Empty;
             Language = "En";
+            ProtectionVehicleService = true;
         }
 
         public static ClientContext GetClientContext(Vehicle vehicle)
@@ -49,7 +75,7 @@ namespace PsdzClient
             return null;
         }
 
-        public static PdszDatabase GetDatabase(Vehicle vehicle)
+        public static PsdzDatabase GetDatabase(Vehicle vehicle)
         {
             ClientContext clientContext = GetClientContext(vehicle);
             if (clientContext == null)
@@ -94,7 +120,24 @@ namespace PsdzClient
                 return string.Empty;
             }
 
-            return clientContext.OutletCountry;
+            if (!string.IsNullOrEmpty(clientContext.OutletCountry))
+            {
+                return clientContext.OutletCountry.ToUpperInvariant();
+            }
+
+            return clientContext.Language.ToUpperInvariant();
+        }
+
+        public static bool GetProtectionVehicleService(Vehicle vehicle)
+        {
+            ClientContext clientContext = GetClientContext(vehicle);
+            if (clientContext == null)
+            {
+                log.ErrorFormat("GetProtectionVehicleService ClientContext is null");
+                return false;
+            }
+
+            return clientContext.ProtectionVehicleService;
         }
 
         public static string GetLanguage(Vehicle vehicle)
@@ -113,6 +156,11 @@ namespace PsdzClient
             }
 
             return clientContext.Language;
+        }
+
+        public static bool EnablePsdzMultiSession()
+        {
+            return _enablePsdzMultiSession;
         }
 
         public void Dispose()

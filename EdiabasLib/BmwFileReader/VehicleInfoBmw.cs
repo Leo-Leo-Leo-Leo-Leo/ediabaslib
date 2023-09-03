@@ -158,12 +158,13 @@ namespace BmwFileReader
                 int index = 0;
                 foreach (string itemName in ItemNames)
                 {
-                    if (index >= typeKeyList.Count)
+                    string itemValue = string.Empty;
+                    if (index < typeKeyList.Count)
                     {
-                        break;
+                        itemValue = typeKeyList[index] ?? string.Empty;
                     }
 
-                    propertyDict.TryAdd(itemName, typeKeyList[index] ?? string.Empty);
+                    propertyDict.TryAdd(itemName, itemValue);
                     index++;
                 }
 
@@ -171,11 +172,30 @@ namespace BmwFileReader
             }
         }
 
+        public class VinRangeInfo
+        {
+            public VinRangeInfo(string typeKey, string prodYear, string prodMonth, string releaseState, string gearBox)
+            {
+                TypeKey = typeKey;
+                ProdYear = prodYear;
+                ProdMonth = prodMonth;
+                ReleaseState = releaseState;
+                GearBox = gearBox;
+            }
+
+            public string TypeKey { get; }
+            public string ProdYear { get; }
+            public string ProdMonth { get; }
+            public string ReleaseState { get; }
+            public string GearBox { get; }
+        }
+
         private static TypeKeyInfo _typeKeyInfo;
 #endif
 
         public const string ResultUnknown = "UNBEK";
         public const string VehicleTypeName = "E-Bezeichnung";
+        public const string BrandName = "Marke";
 
         private static VehicleStructsBmw.VehicleSeriesInfoData _vehicleSeriesInfoData;
         private static VehicleStructsBmw.RulesInfoData _rulesInfoData;
@@ -564,7 +584,7 @@ namespace BmwFileReader
             }
         }
 
-        public static string GetTypeKeyFromVin(string vin, EdiabasNet ediabas, string databaseDir)
+        public static VinRangeInfo GetRangeInfoFromVin(string vin, EdiabasNet ediabas, string databaseDir)
         {
             ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Type key from VIN: {0}", vin ?? "No VIN");
             if (vin == null)
@@ -612,14 +632,44 @@ namespace BmwFileReader
                                         {
                                             break;
                                         }
+
+                                        bool isComment = line.StartsWith("#");
+                                        if (isComment)
+                                        {
+                                            continue;
+                                        }
+
                                         string[] lineArray = line.Split(',');
-                                        if (lineArray.Length == 3 &&
+                                        if (lineArray.Length >= 3 &&
                                             lineArray[0].Length == 7 && lineArray[1].Length == 7)
                                         {
                                             if (string.Compare(serialNumber, lineArray[0], StringComparison.OrdinalIgnoreCase) >= 0 &&
                                                 string.Compare(serialNumber, lineArray[1], StringComparison.OrdinalIgnoreCase) <= 0)
                                             {
-                                                return lineArray[2];
+                                                string typeKey = lineArray[2];
+
+                                                string prodYear = null;
+                                                string prodMonth = null;
+                                                if (lineArray.Length >= 5)
+                                                {
+                                                    prodYear = lineArray[3];
+                                                    prodMonth = lineArray[4];
+                                                }
+
+                                                string releaseState = null;
+                                                if (lineArray.Length >= 6)
+                                                {
+                                                    releaseState = lineArray[5];
+                                                }
+
+                                                string gearBox = null;
+                                                if (lineArray.Length >= 7)
+                                                {
+                                                    gearBox = lineArray[6];
+                                                }
+
+                                                VinRangeInfo vinRangeInfo = new VinRangeInfo(typeKey, prodYear, prodMonth, releaseState, gearBox);
+                                                return vinRangeInfo;
                                             }
                                         }
                                     }
@@ -647,11 +697,11 @@ namespace BmwFileReader
             }
         }
 
-        public static Dictionary<string, string> GetVehiclePropertiesFromVin(string vin, EdiabasNet ediabas, string databaseDir, out string typeKey)
+        public static Dictionary<string, string> GetVehiclePropertiesFromVin(string vin, EdiabasNet ediabas, string databaseDir, out VinRangeInfo vinRangeInfo)
         {
             ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle properties from VIN: {0}", vin ?? "No VIN");
-            typeKey = GetTypeKeyFromVin(vin, ediabas, databaseDir);
-            if (typeKey == null)
+            vinRangeInfo = GetRangeInfoFromVin(vin, ediabas, databaseDir);
+            if (vinRangeInfo == null)
             {
                 return null;
             }
@@ -667,7 +717,7 @@ namespace BmwFileReader
                 return null;
             }
 
-            Dictionary<string, string> propertyDict = _typeKeyInfo.GetTypeKeyProperties(typeKey);
+            Dictionary<string, string> propertyDict = _typeKeyInfo.GetTypeKeyProperties(vinRangeInfo.TypeKey);
             if (propertyDict == null)
             {
                 ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "No type key properties present");
@@ -678,10 +728,10 @@ namespace BmwFileReader
         }
 #endif
 
-        // from: RheingoldCoreFramework.dll BMW.Rheingold.CoreFramework.DatabaseProvider.FA.ExtractEreihe
-        public static string GetVehicleTypeFromBrName(string brName, EdiabasNet ediabas)
+        // ToDo: Check on update ExtractEreihe
+        public static string GetVehicleSeriesFromBrName(string brName, EdiabasNet ediabas)
         {
-            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle type from BR name: {0}", brName ?? "No name");
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "GetVehicleSeriesFromBrName: {0}", brName ?? "No name");
             if (brName == null)
             {
                 return null;
@@ -690,10 +740,7 @@ namespace BmwFileReader
             {
                 return null;
             }
-            if (brName.Length != 4)
-            {
-                return null;
-            }
+#if Android
             if (brName.EndsWith("_", StringComparison.Ordinal))
             {
                 string vehicleType = brName.TrimEnd('_');
@@ -719,6 +766,43 @@ namespace BmwFileReader
                 }
             }
             return brName.Substring(0, 1) + brName.Substring(2, 2);
+#else
+            PsdzClient.Core.FA fa = new PsdzClient.Core.FA
+            {
+                BR = brName
+            };
+
+            string vehicleSeries = fa.ExtractEreihe();
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "GetVehicleSeriesFromBrName: {0}", vehicleSeries ?? string.Empty);
+            return vehicleSeries;
+#endif
+        }
+
+        // ToDo: Check on update ExtractType
+        public static string GetVehicleTypeFromStdFa(string standardFa, EdiabasNet ediabas)
+        {
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "GetVehicleTypeFromStdFa: {0}", standardFa ?? "No FA");
+#if Android
+            if (!string.IsNullOrEmpty(standardFa))
+            {
+                Match match = Regex.Match(standardFa, "\\*(?<TYPE>\\w{4})");
+                if (match.Success)
+                {
+                    return match.Groups["TYPE"]?.Value;
+                }
+            }
+
+            return null;
+#else
+            PsdzClient.Core.FA fa = new PsdzClient.Core.FA
+            {
+                STANDARD_FA = standardFa
+            };
+
+            string vehicleType = fa.ExtractType();
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "GetVehicleTypeFromStdFa: {0}", vehicleType ?? string.Empty);
+            return vehicleType;
+#endif
         }
 
         public static DateTime? ConvertConstructionDate(string cDateStr)
@@ -758,17 +842,19 @@ namespace BmwFileReader
             return vehicleSeriesInfoData.Version;
         }
 
-        public static VehicleStructsBmw.VehicleSeriesInfo GetVehicleSeriesInfo(string series, DateTime? cDate, EdiabasNet ediabas)
+        public static VehicleStructsBmw.VehicleSeriesInfo GetVehicleSeriesInfo(string series, string constructionYear, string constructionstMonth, EdiabasNet ediabas)
         {
-            string cDateStr = "No date";
             long dateValue = -1;
-            if (cDate.HasValue)
+            if (!string.IsNullOrEmpty(constructionYear) && !string.IsNullOrEmpty(constructionstMonth))
             {
-                cDateStr = cDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                dateValue = cDate.Value.Year * 100 + cDate.Value.Month;
+                if (Int32.TryParse(constructionYear, NumberStyles.Integer, CultureInfo.InvariantCulture, out Int32 year) &&
+                    Int32.TryParse(constructionstMonth, NumberStyles.Integer, CultureInfo.InvariantCulture, out Int32 month))
+                {
+                    dateValue = year * 100 + month;
+                }
             }
 
-            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle series info from vehicle series: {0}, CDate: {1}", series ?? "No series", cDateStr);
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle series info from vehicle series: {0}, date: {1}", series ?? "No series", dateValue);
             if (series == null)
             {
                 return null;
@@ -862,7 +948,7 @@ namespace BmwFileReader
                 case 'J':
                 case 'U':
                     ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Using fallback from first letter");
-                    return new VehicleStructsBmw.VehicleSeriesInfo(series, "F01", "BN2020");
+                    return new VehicleStructsBmw.VehicleSeriesInfo(series, null, "F01", "BN2020");
             }
 
             ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "No vehicle series info found");

@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.ServiceModel;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -181,12 +182,16 @@ namespace PsdzClient.Core
             }
         }
 
+        [XmlIgnore]
+        [IgnoreDataMember]
+        public string DisplayGwsz => base.Gwsz.ToMileageDisplayFormat(IsNewFaultMemoryActive);
+
         public string SetVINRangeTypeFromVINRanges()
         {
-            PdszDatabase database = ClientContext.GetDatabase(this);
+            PsdzDatabase database = ClientContext.GetDatabase(this);
             if (database != null && !"XXXXXXX".Equals(this.VIN7) && !string.IsNullOrEmpty(this.VIN7) && !this.VIN7.Equals(this.vinRangeTypeLastResolvedType, StringComparison.OrdinalIgnoreCase))
             {
-                PdszDatabase.VinRanges vinRangesByVin = database.GetVinRangesByVin17(this.VINType, this.VIN7, false);
+                PsdzDatabase.VinRanges vinRangesByVin = database.GetVinRangesByVin17(this.VINType, this.VIN7, IsVehicleWithOnlyVin7());
 				if (vinRangesByVin != null)
 				{
                     this.vinRangeTypeLastResolvedType = this.VIN7;
@@ -283,6 +288,7 @@ namespace PsdzClient.Core
                 return null;
             }
         }
+
         // ToDo: Check on update
         public string GMType
         {
@@ -309,26 +315,36 @@ namespace PsdzClient.Core
                         switch (text[3])
                         {
                             case 'A':
-                                return text2 + "1";
+                                text2 += "1";
+                                break;
                             case 'B':
-                                return text2 + "2";
+                                text2 += "2";
+                                break;
                             case 'C':
-                                return text2 + "3";
+                                text2 += "3";
+                                break;
                             case 'D':
-                                return text2 + "4";
+                                text2 += "4";
+                                break;
                             case 'E':
-                                return text2 + "5";
+                                text2 += "5";
+                                break;
                             case 'F':
-                                return text2 + "6";
+                                text2 += "6";
+                                break;
                             case 'G':
-                                return text2 + "7";
+                                text2 += "7";
+                                break;
                             case 'H':
-                                return text2 + "8";
+                                text2 += "8";
+                                break;
                             default:
                                 return text;
                             case 'J':
-                                return text2 + "9";
+                                text2 += "9";
+                                break;
                         }
+                        return text2;
                     }
                 }
                 catch (Exception)
@@ -710,7 +726,7 @@ namespace PsdzClient.Core
         public ITransmissionDataType TransmissionDataType { get; private set; }
 
         [XmlIgnore]
-        public PdszDatabase.BatteryEnum BatteryType
+        public PsdzDatabase.BatteryEnum BatteryType
         {
             get
             {
@@ -761,21 +777,6 @@ namespace PsdzClient.Core
         }
 
         // ToDo: Check on update
-        public override void OnPropertyChanged(string propertyName)
-        {
-            base.OnPropertyChanged(propertyName);
-            switch (propertyName)
-            {
-                case "Gwsz":
-                    base.OnPropertyChanged("DisplayGwsz");
-                    break;
-                case "SerialGearBox":
-                    base.OnPropertyChanged("SerialGearBox7");
-                    break;
-            }
-        }
-
-        // ToDo: Check on update
         public string GetFSCfromUpdateIndex(string updateIndex, string huVariante)
         {
             string[] source = new string[2] { "HU_MGU", "ENAVEVO" };
@@ -809,7 +810,6 @@ namespace PsdzClient.Core
                 return "-";
             }
         }
-
         public object Clone()
         {
             return MemberwiseClone();
@@ -841,6 +841,8 @@ namespace PsdzClient.Core
         {
             switch (base.Ereihe)
             {
+                default:
+                    return false;
                 case "247":
                 case "K599":
                 case "248":
@@ -859,8 +861,6 @@ namespace PsdzClient.Core
                 case "E189":
                 case "K589":
                     return true;
-                default:
-                    return false;
             }
         }
 
@@ -1433,7 +1433,7 @@ namespace PsdzClient.Core
 
         public bool getISTACharacteristics(decimal id, out string value, long datavalueId, ValidationRuleInternalResults internalResult)
 		{
-            PdszDatabase.CharacteristicRoots characteristicRootsById = ClientContext.GetDatabase(this)?.GetCharacteristicRootsById(id.ToString(CultureInfo.InvariantCulture));
+            PsdzDatabase.CharacteristicRoots characteristicRootsById = ClientContext.GetDatabase(this)?.GetCharacteristicRootsById(id.ToString(CultureInfo.InvariantCulture));
 			if (characteristicRootsById != null)
 			{
 				return new VehicleCharacteristicVehicleHelper(this).GetISTACharacteristics(characteristicRootsById, out value, id, this, datavalueId, internalResult);
@@ -1596,6 +1596,8 @@ namespace PsdzClient.Core
                 case "PL5-ALT":
                 case "PL3-ALT":
                     return false;
+                default:
+                    return null;
                 case "PL5":
                 case "PL2":
                 case "PL3":
@@ -1606,8 +1608,6 @@ namespace PsdzClient.Core
                 case "PLLI":
                 case "PLLU":
                     return true;
-                default:
-                    return null;
             }
         }
 
@@ -1692,6 +1692,9 @@ namespace PsdzClient.Core
                                 obj = text2;
                                 break;
                             }
+                        default:
+                            //Log.Error("VehicleHelper.getResultAs<T>", "Unknown resultName '{0}' found!", resultName);
+                            break;
                         case "/Result/EWortListe":
                             {
                                 string text = string.Empty;
@@ -1703,9 +1706,6 @@ namespace PsdzClient.Core
                                 obj = text;
                                 break;
                             }
-                        default:
-                            //Log.Error("VehicleHelper.getResultAs<T>", "Unknown resultName '{0}' found!", resultName);
-                            break;
                     }
                     if (obj != null)
                     {
@@ -2150,7 +2150,7 @@ namespace PsdzClient.Core
 
 		private bool withLfpBattery;
 
-        private PdszDatabase.BatteryEnum batteryType;
+        private PsdzDatabase.BatteryEnum batteryType;
 
         private bool isClosingOperationActive;
 

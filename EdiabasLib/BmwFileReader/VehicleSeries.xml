@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <VehicleSeriesInfoDataXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <TimeStamp>2022-11-01 17:19:06</TimeStamp>
+  <TimeStamp>2023-09-02 01:03:12</TimeStamp>
   <Version>
-    <Version>4.37.40</Version>
-    <Date>2022-09-20T10:39:47</Date>
+    <Version>4.39.20</Version>
+    <Date>2022-11-30T09:17:30</Date>
   </Version>
   <VehicleSeriesDict>
     <item>
@@ -14,6 +14,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G05</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -29,6 +30,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F96</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -44,6 +46,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F95</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -59,6 +62,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G06</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -74,6 +78,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G07</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -89,6 +94,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G18</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -104,6 +110,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>I12</Series>
+            <ModelSeries>I001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW i</BrandList>
@@ -119,6 +126,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>I15</Series>
+            <ModelSeries>I001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW i</BrandList>
@@ -134,6 +142,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>I01</Series>
+            <ModelSeries>I001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW i</BrandList>
@@ -150,7 +159,6 @@
           <VSI>
             <Series>J29</Series>
             <BrSgbd>F01</BrSgbd>
-            <BnType>BN2020</BnType>
             <BrandList>TOYOTA</BrandList>
           </VSI>
         </ArrayOfVSI>
@@ -164,6 +172,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F40</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -179,6 +188,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F44</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -194,6 +204,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR11</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -209,6 +220,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR12</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -224,6 +236,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR21</Series>
+            <ModelSeries>RR21</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -239,6 +252,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR22</Series>
+            <ModelSeries>RR21</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -254,6 +268,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR31</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -269,6 +284,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F20</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -284,6 +300,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F21</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -299,6 +316,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F22</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -314,6 +332,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F23</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -329,6 +348,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F30</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -344,6 +364,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F31</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -359,6 +380,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F32</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -374,6 +396,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F33</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -389,6 +412,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F34</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -404,6 +428,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F35</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -419,6 +444,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F36</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -434,6 +460,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F80</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -449,6 +476,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F82</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -464,6 +492,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F83</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -479,6 +508,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F87</Series>
+            <ModelSeries>F020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -494,6 +524,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F52</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -511,6 +542,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F60</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -528,6 +560,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F46</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -545,6 +578,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F45</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -562,6 +596,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F55</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -579,6 +614,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F48</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -596,6 +632,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F54</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -613,6 +650,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F57</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -630,6 +668,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F49</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -647,6 +686,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F39</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -664,6 +704,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>M13</Series>
+            <ModelSeries>M013</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -681,6 +722,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F56</Series>
+            <ModelSeries>F056</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -698,6 +740,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G32</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -713,6 +756,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G30</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -728,6 +772,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G11</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -743,6 +788,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G12</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -758,6 +804,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G31</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -773,6 +820,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G38</Series>
+            <ModelSeries>S15C</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -788,6 +836,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F90</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -803,6 +852,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G14</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -818,6 +868,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G15</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -833,6 +884,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F91</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -848,6 +900,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F92</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -863,6 +916,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F93</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -878,6 +932,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G16</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -893,6 +948,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G01</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -908,6 +964,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G02</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -923,6 +980,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F97</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -938,6 +996,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G08</Series>
+            <ModelSeries>S15C</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -953,6 +1012,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F98</Series>
+            <ModelSeries>S15A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -968,6 +1028,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G29</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -983,6 +1044,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F15</Series>
+            <ModelSeries>F025</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -998,6 +1060,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F16</Series>
+            <ModelSeries>F025</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1013,6 +1076,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F85</Series>
+            <ModelSeries>F025</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1028,6 +1092,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F86</Series>
+            <ModelSeries>F025</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1043,6 +1108,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F26</Series>
+            <ModelSeries>F025</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1058,6 +1124,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F25</Series>
+            <ModelSeries>F025</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1073,6 +1140,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR4</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -1088,6 +1156,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR5</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -1103,6 +1172,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR6</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -1118,6 +1188,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E90</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1132,6 +1203,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E93</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1146,6 +1218,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E84</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1160,6 +1233,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E87</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1174,6 +1248,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E81</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1188,6 +1263,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E92</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1202,6 +1278,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E82</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1216,6 +1293,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E91</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1230,6 +1308,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E88</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1244,20 +1323,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E89</Series>
-            <BrSgbd>E89X</BrSgbd>
-            <BrandList>BMW PKW</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>E89X</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>E89X</Series>
+            <ModelSeries>E89X</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1272,6 +1338,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>M12</Series>
+            <ModelSeries>M012</ModelSeries>
             <BrSgbd>E89X</BrSgbd>
             <BrandList>BMW PKW</BrandList>
           </VSI>
@@ -1286,6 +1353,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E60</Series>
+            <ModelSeries>E060</ModelSeries>
             <BrSgbd>E60</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1301,6 +1369,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E61</Series>
+            <ModelSeries>E060</ModelSeries>
             <BrSgbd>E60</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1316,6 +1385,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E63</Series>
+            <ModelSeries>E060</ModelSeries>
             <BrSgbd>E60</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1331,6 +1401,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E64</Series>
+            <ModelSeries>E060</ModelSeries>
             <BrSgbd>E60</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1346,6 +1417,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R55</Series>
+            <ModelSeries>R056</ModelSeries>
             <BrSgbd>R56</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -1361,6 +1433,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R56</Series>
+            <ModelSeries>R056</ModelSeries>
             <BrSgbd>R56</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -1376,6 +1449,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R57</Series>
+            <ModelSeries>R056</ModelSeries>
             <BrSgbd>R56</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -1391,6 +1465,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R58</Series>
+            <ModelSeries>R056</ModelSeries>
             <BrSgbd>R56</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -1406,6 +1481,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R59</Series>
+            <ModelSeries>R056</ModelSeries>
             <BrSgbd>R56</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -1421,6 +1497,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R60</Series>
+            <ModelSeries>R056</ModelSeries>
             <BrSgbd>R56</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -1436,6 +1513,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R61</Series>
+            <ModelSeries>R056</ModelSeries>
             <BrSgbd>R56</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -1451,6 +1529,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E72</Series>
+            <ModelSeries>E070</ModelSeries>
             <BrSgbd>E70</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1466,6 +1545,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E65</Series>
+            <ModelSeries>E065</ModelSeries>
             <BrSgbd>E65</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1481,6 +1561,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E66</Series>
+            <ModelSeries>E065</ModelSeries>
             <BrSgbd>E65</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1496,6 +1577,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E67</Series>
+            <ModelSeries>E065</ModelSeries>
             <BrSgbd>E65</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1511,6 +1593,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E68</Series>
+            <ModelSeries>E065</ModelSeries>
             <BrSgbd>E65</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -1526,6 +1609,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E83</Series>
+            <ModelSeries>E083</ModelSeries>
             <BrSgbd>ZCS_ALL</BrSgbd>
             <BnType>IBUS</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -2084,6 +2168,16 @@
               <Name>LKM</Name>
               <GroupSgbd>D_00f5|d_szm</GroupSgbd>
             </EcuList>
+            <EcuList>
+              <DiagAddr>155</DiagAddr>
+              <Name>SPMFT</Name>
+              <GroupSgbd>D_SPMFT</GroupSgbd>
+            </EcuList>
+            <EcuList>
+              <DiagAddr>81</DiagAddr>
+              <Name>SPMBT</Name>
+              <GroupSgbd>D_SPMBT</GroupSgbd>
+            </EcuList>
           </VSI>
         </ArrayOfVSI>
       </value>
@@ -2096,6 +2190,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E85</Series>
+            <ModelSeries>E085</ModelSeries>
             <BrSgbd>ZCS_ALL</BrSgbd>
             <BnType>IBUS</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -2383,6 +2478,16 @@
               <DiagAddr>245</DiagAddr>
               <Name>LKM</Name>
               <GroupSgbd>D_00f5|d_szm</GroupSgbd>
+            </EcuList>
+            <EcuList>
+              <DiagAddr>1</DiagAddr>
+              <Name>ACSM</Name>
+              <GroupSgbd>D_SIM</GroupSgbd>
+            </EcuList>
+            <EcuList>
+              <DiagAddr>115</DiagAddr>
+              <Name>CID</Name>
+              <GroupSgbd>D_CID</GroupSgbd>
             </EcuList>
           </VSI>
         </ArrayOfVSI>
@@ -2396,6 +2501,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E86</Series>
+            <ModelSeries>E085</ModelSeries>
             <BrSgbd>ZCS_ALL</BrSgbd>
             <BnType>IBUS</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -2683,6 +2789,16 @@
               <DiagAddr>245</DiagAddr>
               <Name>LKM</Name>
               <GroupSgbd>D_00f5|d_szm</GroupSgbd>
+            </EcuList>
+            <EcuList>
+              <DiagAddr>1</DiagAddr>
+              <Name>ACSM</Name>
+              <GroupSgbd>D_SIM</GroupSgbd>
+            </EcuList>
+            <EcuList>
+              <DiagAddr>115</DiagAddr>
+              <Name>CID</Name>
+              <GroupSgbd>D_CID</GroupSgbd>
             </EcuList>
           </VSI>
         </ArrayOfVSI>
@@ -4126,6 +4242,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R50</Series>
+            <ModelSeries>R050</ModelSeries>
             <BrSgbd>ZCS_ALL</BrSgbd>
             <BnType>IBUS</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -4203,11 +4320,6 @@
               <DiagAddr>156</DiagAddr>
               <Name>CVM</Name>
               <GroupSgbd>D_009c</GroupSgbd>
-            </EcuList>
-            <EcuList>
-              <DiagAddr>155</DiagAddr>
-              <Name>CVM</Name>
-              <GroupSgbd>D_009b</GroupSgbd>
             </EcuList>
             <EcuList>
               <DiagAddr>112</DiagAddr>
@@ -4401,6 +4513,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R52</Series>
+            <ModelSeries>R050</ModelSeries>
             <BrSgbd>ZCS_ALL</BrSgbd>
             <BnType>IBUS</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -4478,11 +4591,6 @@
               <DiagAddr>156</DiagAddr>
               <Name>CVM</Name>
               <GroupSgbd>D_009c</GroupSgbd>
-            </EcuList>
-            <EcuList>
-              <DiagAddr>155</DiagAddr>
-              <Name>CVM</Name>
-              <GroupSgbd>D_009b</GroupSgbd>
             </EcuList>
             <EcuList>
               <DiagAddr>112</DiagAddr>
@@ -4676,6 +4784,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>R53</Series>
+            <ModelSeries>R050</ModelSeries>
             <BrSgbd>ZCS_ALL</BrSgbd>
             <BnType>IBUS</BnType>
             <BrandList>MINI PKW</BrandList>
@@ -4753,11 +4862,6 @@
               <DiagAddr>156</DiagAddr>
               <Name>CVM</Name>
               <GroupSgbd>D_009c</GroupSgbd>
-            </EcuList>
-            <EcuList>
-              <DiagAddr>155</DiagAddr>
-              <Name>CVM</Name>
-              <GroupSgbd>D_009b</GroupSgbd>
             </EcuList>
             <EcuList>
               <DiagAddr>112</DiagAddr>
@@ -4951,6 +5055,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR1</Series>
+            <ModelSeries>RR01</ModelSeries>
             <BrSgbd>RR1</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -4959,6 +5064,7 @@
           </VSI>
           <VSI>
             <Series>RR1</Series>
+            <ModelSeries>RR01</ModelSeries>
             <BrSgbd>RR1_2020</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -4976,6 +5082,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR2</Series>
+            <ModelSeries>RR01</ModelSeries>
             <BrSgbd>RR1</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -4984,6 +5091,7 @@
           </VSI>
           <VSI>
             <Series>RR2</Series>
+            <ModelSeries>RR01</ModelSeries>
             <BrSgbd>RR1_2020</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -5001,6 +5109,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>RR3</Series>
+            <ModelSeries>RR01</ModelSeries>
             <BrSgbd>RR1</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -5009,6 +5118,7 @@
           </VSI>
           <VSI>
             <Series>RR3</Series>
+            <ModelSeries>RR01</ModelSeries>
             <BrSgbd>RR1_2020</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>ROLLS-ROYCE PKW</BrandList>
@@ -5026,6 +5136,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F01</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5041,6 +5152,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F02</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5056,6 +5168,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F03</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5071,6 +5184,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F04</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5086,6 +5200,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F06</Series>
+            <ModelSeries>F010</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5101,6 +5216,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F07</Series>
+            <ModelSeries>F001</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5116,6 +5232,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F10</Series>
+            <ModelSeries>F010</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5131,6 +5248,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F11</Series>
+            <ModelSeries>F010</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5146,6 +5264,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F12</Series>
+            <ModelSeries>F010</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5161,6 +5280,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F13</Series>
+            <ModelSeries>F010</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5176,6 +5296,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F18</Series>
+            <ModelSeries>F010</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5191,6 +5312,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G20</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5206,6 +5328,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G21</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5221,6 +5344,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G22</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5236,6 +5360,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G23</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5251,6 +5376,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G42</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5266,6 +5392,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G28</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5281,6 +5408,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G26</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5296,6 +5424,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G80</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5311,6 +5440,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G82</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5326,6 +5456,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G83</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5341,6 +5472,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G87</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5356,6 +5488,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G81</Series>
+            <ModelSeries>S18A</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5371,73 +5504,10 @@
         <ArrayOfVSI>
           <VSI>
             <Series>I20</Series>
+            <ModelSeries>I020</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW i</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>U06</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>U06</Series>
-            <BrSgbd>F01</BrSgbd>
-            <BnType>BN2020</BnType>
-            <BrandList>BMW PKW</BrandList>
-            <BrandList>MINI PKW</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>U11</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>U11</Series>
-            <BrSgbd>F01</BrSgbd>
-            <BnType>BN2020</BnType>
-            <BrandList>BMW PKW</BrandList>
-            <BrandList>MINI PKW</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>U12</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>U12</Series>
-            <BrSgbd>F01</BrSgbd>
-            <BnType>BN2020</BnType>
-            <BrandList>BMW PKW</BrandList>
-            <BrandList>MINI PKW</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>U10</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>U10</Series>
-            <BrSgbd>F01</BrSgbd>
-            <BnType>BN2020</BnType>
-            <BrandList>BMW PKW</BrandList>
-            <BrandList>MINI PKW</BrandList>
           </VSI>
         </ArrayOfVSI>
       </value>
@@ -5482,6 +5552,73 @@
         <ArrayOfVSI>
           <VSI>
             <Series>F78</Series>
+            <BrSgbd>F01</BrSgbd>
+            <BnType>BN2020</BnType>
+            <BrandList>BMW PKW</BrandList>
+            <BrandList>MINI PKW</BrandList>
+          </VSI>
+        </ArrayOfVSI>
+      </value>
+    </item>
+    <item>
+      <key>
+        <string>U06</string>
+      </key>
+      <value>
+        <ArrayOfVSI>
+          <VSI>
+            <Series>U06</Series>
+            <ModelSeries>U006</ModelSeries>
+            <BrSgbd>F01</BrSgbd>
+            <BnType>BN2020</BnType>
+            <BrandList>BMW PKW</BrandList>
+            <BrandList>MINI PKW</BrandList>
+          </VSI>
+        </ArrayOfVSI>
+      </value>
+    </item>
+    <item>
+      <key>
+        <string>U11</string>
+      </key>
+      <value>
+        <ArrayOfVSI>
+          <VSI>
+            <Series>U11</Series>
+            <ModelSeries>U006</ModelSeries>
+            <BrSgbd>F01</BrSgbd>
+            <BnType>BN2020</BnType>
+            <BrandList>BMW PKW</BrandList>
+            <BrandList>MINI PKW</BrandList>
+          </VSI>
+        </ArrayOfVSI>
+      </value>
+    </item>
+    <item>
+      <key>
+        <string>U12</string>
+      </key>
+      <value>
+        <ArrayOfVSI>
+          <VSI>
+            <Series>U12</Series>
+            <ModelSeries>U006</ModelSeries>
+            <BrSgbd>F01</BrSgbd>
+            <BnType>BN2020</BnType>
+            <BrandList>BMW PKW</BrandList>
+            <BrandList>MINI PKW</BrandList>
+          </VSI>
+        </ArrayOfVSI>
+      </value>
+    </item>
+    <item>
+      <key>
+        <string>U10</string>
+      </key>
+      <value>
+        <ArrayOfVSI>
+          <VSI>
+            <Series>U10</Series>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5562,6 +5699,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E70</Series>
+            <ModelSeries>E070</ModelSeries>
             <BrSgbd>E70</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5577,51 +5715,10 @@
         <ArrayOfVSI>
           <VSI>
             <Series>E71</Series>
+            <ModelSeries>E070</ModelSeries>
             <BrSgbd>E70</BrSgbd>
             <BnType>BN2000</BnType>
             <BrandList>BMW PKW</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>K001</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>K001</Series>
-            <BrSgbd>X_K001</BrSgbd>
-            <BrandList>BMW MOTORRAD</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>KS01</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>KS01</Series>
-            <BrSgbd>X_K001</BrSgbd>
-            <BrandList>BMW MOTORRAD</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>KE01</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>KE01</Series>
-            <BrSgbd>X_K001</BrSgbd>
-            <BrandList>BMW MOTORRAD</BrandList>
           </VSI>
         </ArrayOfVSI>
       </value>
@@ -5634,6 +5731,7 @@
         <ArrayOfVSI>
           <VSI>
             <Series>G70</Series>
+            <ModelSeries>G070</ModelSeries>
             <BrSgbd>F01</BrSgbd>
             <BnType>BN2020</BnType>
             <BrandList>BMW PKW</BrandList>
@@ -5733,42 +5831,16 @@
     </item>
     <item>
       <key>
-        <string>K024</string>
+        <string>G09</string>
       </key>
       <value>
         <ArrayOfVSI>
           <VSI>
-            <Series>K024</Series>
-            <BrSgbd>MRK24</BrSgbd>
-            <BrandList>BMW MOTORRAD</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>KH24</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>KH24</Series>
-            <BrSgbd>MRK24</BrSgbd>
-            <BrandList>BMW MOTORRAD</BrandList>
-          </VSI>
-        </ArrayOfVSI>
-      </value>
-    </item>
-    <item>
-      <key>
-        <string>K01X</string>
-      </key>
-      <value>
-        <ArrayOfVSI>
-          <VSI>
-            <Series>K01X</Series>
-            <BrSgbd>MRK24</BrSgbd>
-            <BrandList>BMW MOTORRAD</BrandList>
+            <Series>G09</Series>
+            <ModelSeries>S18A</ModelSeries>
+            <BrSgbd>F01</BrSgbd>
+            <BnType>BN2020</BnType>
+            <BrandList>BMW PKW</BrandList>
           </VSI>
         </ArrayOfVSI>
       </value>

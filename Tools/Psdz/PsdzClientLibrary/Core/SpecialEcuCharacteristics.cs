@@ -24,6 +24,9 @@ namespace PsdzClient.Core
             HashSet<int> hashSet2 = new HashSet<int>();
             switch (vecInfo.Motor)
             {
+                default:
+                    hashSet.Add(18);
+                    break;
                 case "M73":
                     hashSet.Add(16);
                     hashSet.Add(20);
@@ -34,9 +37,6 @@ namespace PsdzClient.Core
                     hashSet.Add(19);
                     break;
                 case "M57":
-                    hashSet.Add(18);
-                    break;
-                default:
                     hashSet.Add(18);
                     break;
             }
@@ -112,6 +112,9 @@ namespace PsdzClient.Core
             HashSet<int> hashSet = new HashSet<int>();
             switch (vecInfo.Motor)
             {
+                default:
+                    hashSet.Add(18);
+                    break;
                 case "M73":
                     hashSet.Add(16);
                     hashSet.Add(20);
@@ -126,9 +129,6 @@ namespace PsdzClient.Core
                     break;
                 case "M43":
                 case "M52":
-                    hashSet.Add(18);
-                    break;
-                default:
                     hashSet.Add(18);
                     break;
             }
@@ -219,20 +219,24 @@ namespace PsdzClient.Core
             }
             HashSet<int> hashSet = new HashSet<int>();
             HashSet<int> hashSet2 = new HashSet<int>();
-            switch (vecInfo.Motor)
+            string motor = vecInfo.Motor;
+            if (!(motor == "M67"))
             {
-                case "M73":
+                if (!(motor == "M73"))
+                {
+                    hashSet.Add(18);
+                }
+                else
+                {
                     hashSet.Add(16);
                     hashSet.Add(20);
                     hashSet.Add(34);
-                    break;
-                case "M67":
-                    hashSet.Add(18);
-                    hashSet.Add(19);
-                    break;
-                default:
-                    hashSet.Add(18);
-                    break;
+                }
+            }
+            else
+            {
+                hashSet.Add(18);
+                hashSet.Add(19);
             }
             if (GearboxUtility.HasVehicleGearboxECU(vecInfo))
             {
@@ -310,22 +314,26 @@ namespace PsdzClient.Core
                 return;
             }
             HashSet<int> hashSet = new HashSet<int>();
-            switch (vecInfo.Motor)
+            string motor = vecInfo.Motor;
+            if (!(motor == "M67"))
             {
-                case "M73":
+                if (!(motor == "M73"))
+                {
+                    hashSet.Add(18);
+                }
+                else
+                {
                     hashSet.Add(16);
                     hashSet.Add(18);
                     hashSet.Add(19);
                     hashSet.Add(20);
                     hashSet.Add(34);
-                    break;
-                case "M67":
-                    hashSet.Add(18);
-                    hashSet.Add(19);
-                    break;
-                default:
-                    hashSet.Add(18);
-                    break;
+                }
+            }
+            else
+            {
+                hashSet.Add(18);
+                hashSet.Add(19);
             }
             if (GearboxUtility.HasVehicleGearboxECU(vecInfo))
             {
@@ -384,6 +392,9 @@ namespace PsdzClient.Core
             HashSet<int> hashSet = new HashSet<int>();
             switch (vecInfo.Motor)
             {
+                default:
+                    hashSet.Add(18);
+                    break;
                 case "M73":
                     hashSet.Add(16);
                     hashSet.Add(20);
@@ -394,9 +405,6 @@ namespace PsdzClient.Core
                     hashSet.Add(19);
                     break;
                 case "M57":
-                    hashSet.Add(18);
-                    break;
-                default:
                     hashSet.Add(18);
                     break;
             }
@@ -459,6 +467,9 @@ namespace PsdzClient.Core
             HashSet<int> hashSet = new HashSet<int>();
             switch (vecInfo.Motor)
             {
+                default:
+                    hashSet.Add(18);
+                    break;
                 case "M73":
                     hashSet.Add(16);
                     hashSet.Add(20);
@@ -469,9 +480,6 @@ namespace PsdzClient.Core
                     hashSet.Add(19);
                     break;
                 case "M57":
-                    hashSet.Add(18);
-                    break;
-                default:
                     hashSet.Add(18);
                     break;
             }
@@ -641,7 +649,8 @@ namespace PsdzClient.Core
             {
                 hashSet.Add(240);
             }
-            if (vecInfo.hasSA("265") && ((vecInfo.Ereihe == "R50" && "W10".Equals(vecInfo.Motor, StringComparison.OrdinalIgnoreCase) && vecInfo.BaustandsJahr == "2001" && int.Parse(vecInfo.BaustandsMonat) >= 3 && int.Parse(vecInfo.BaustandsMonat) >= 12) || (vecInfo.Ereihe == "R52" && "W10".Equals(vecInfo.Motor, StringComparison.OrdinalIgnoreCase) && (int.Parse(vecInfo.BaustandsJahr) >= 2008 || (vecInfo.BaustandsJahr == "2007" && int.Parse(vecInfo.BaustandsMonat) >= 9))) || (vecInfo.Ereihe == "R53" && "W11".Equals(vecInfo.Motor, StringComparison.OrdinalIgnoreCase) && vecInfo.BaustandsJahr == "2001" && int.Parse(vecInfo.BaustandsMonat) == 9)))
+            // [UH] Fix: replaced BaustandsJahr by Modelljahr and BaustandsMonat by Modellmonat
+            if (vecInfo.hasSA("265") && ((vecInfo.Ereihe == "R50" && "W10".Equals(vecInfo.Motor, StringComparison.OrdinalIgnoreCase) && vecInfo.Modelljahr == "2001" && int.Parse(vecInfo.Modellmonat) >= 3 && int.Parse(vecInfo.Modellmonat) >= 12) || (vecInfo.Ereihe == "R52" && "W10".Equals(vecInfo.Motor, StringComparison.OrdinalIgnoreCase) && (int.Parse(vecInfo.Modelljahr) >= 2008 || (vecInfo.Modelljahr == "2007" && int.Parse(vecInfo.Modellmonat) >= 9))) || (vecInfo.Ereihe == "R53" && "W11".Equals(vecInfo.Motor, StringComparison.OrdinalIgnoreCase) && vecInfo.Modelljahr == "2001" && int.Parse(vecInfo.Modellmonat) == 9)))
             {
                 hashSet.Add(112);
             }
@@ -851,7 +860,7 @@ namespace PsdzClient.Core
             }
             HashSet<int> sgList = new HashSet<int>();
             HashSet<int> hashSet = new HashSet<int>();
-            if (vecInfo.BrandName == BrandName.ROSENBAUER || "A67".Equals(vecInfo.Ereihe) || "V98".Equals(vecInfo.Ereihe))
+            if ("A67".Equals(vecInfo.Ereihe) || "V98".Equals(vecInfo.Ereihe))
             {
                 hashSet.Add(96);
             }
@@ -904,6 +913,7 @@ namespace PsdzClient.Core
         {
             if (vecInfo == null)
             {
+                //Log.Warning(GetType().Name + ".CalculateECUConfiguration()", "vecInfo was null");
                 return;
             }
             HashSet<int> hashSet = new HashSet<int>();
@@ -1025,6 +1035,9 @@ namespace PsdzClient.Core
             }
             switch (vecInfo.Motor)
             {
+                default:
+                    hashSet.Add(18);
+                    break;
                 case "M73":
                     hashSet.Add(16);
                     hashSet.Add(20);
@@ -1035,9 +1048,6 @@ namespace PsdzClient.Core
                     hashSet.Add(19);
                     break;
                 case "M57":
-                    hashSet.Add(18);
-                    break;
-                default:
                     hashSet.Add(18);
                     break;
             }

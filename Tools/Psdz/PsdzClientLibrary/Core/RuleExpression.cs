@@ -12,12 +12,14 @@ namespace PsdzClient.Core
 	{
         public class FormulaConfig
         {
-            public FormulaConfig(string getStringFunc, string getLongFunc, string checkStringFunc, string checkLongFunc, string operatorSeparator = null)
+            public FormulaConfig(string getStringFunc, string getLongFunc, string checkStringFunc, string checkLongFunc, string ruleValidFunc, List<string> subRuleIds = null, string operatorSeparator = null)
             {
                 GetStringFunc = getStringFunc;
                 GetLongFunc = getLongFunc;
                 CheckStringFunc = checkStringFunc;
                 CheckLongFunc = checkLongFunc;
+                RuleValidFunc = ruleValidFunc;
+                SubRuleIds = subRuleIds;
                 OperatorSeparator = operatorSeparator;
             }
 
@@ -25,6 +27,8 @@ namespace PsdzClient.Core
             public string GetLongFunc { get; private set; }
             public string CheckStringFunc { get; private set; }
             public string CheckLongFunc { get; private set; }
+            public string RuleValidFunc { get; private set; }
+            public List<string> SubRuleIds { get; private set; }
             public string OperatorSeparator { get; private set; }
         }
 
@@ -63,6 +67,7 @@ namespace PsdzClient.Core
             MISSING_VARIANT
         }
 
+        // ToDo: Check on update
         public enum ESymbolType
         {
             Unknown,
@@ -83,6 +88,7 @@ namespace PsdzClient.Core
             VariableExpression
         }
 
+        // [UH] vec added
         // ToDo: Check on update
         public static RuleExpression Deserialize(Stream ms, Vehicle vec)
         {

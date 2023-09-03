@@ -20,6 +20,7 @@ namespace BMW.Rheingold.CoreFramework.Contracts.Vehicle
         UNKNOWN
     }
 
+    // ToDo: Check on update
     [AuthorAPI(SelectableTypeDeclaration = true)]
     public enum BNType
     {
@@ -30,15 +31,10 @@ namespace BMW.Rheingold.CoreFramework.Contracts.Vehicle
         BN2020_MOTORBIKE,
         BNK01X_MOTORBIKE,
         BEV2010,
-        BN2000_MORGAN,
-        BN2000_WIESMANN,
-        BN2000_RODING,
-        BN2000_PGO,
-        BN2000_GIBBS,
-        BN2020_CAMPAGNA,
         UNKNOWN
     }
 
+    // ToDo: Check on update
     [AuthorAPI(SelectableTypeDeclaration = true)]
     public enum BrandName
     {
@@ -54,24 +50,9 @@ namespace BMW.Rheingold.CoreFramework.Contracts.Vehicle
         BMWMGmbHPKW,
         [XmlEnum("BMW USA PKW")]
         BMWUSAPKW,
-        HUSQVARNA,
-        WIESMANN,
-        MORGAN,
-        RODING,
-        PGO,
-        GIBBS,
         [XmlEnum("BMW i")]
         BMWi,
-        TOYOTA,
-        CAMPAGNA,
-        ZINORO,
-        YANMAR,
-        BRILLIANCE,
-        VAILLANT,
-        ROSENBAUER,
-        KARMA,
-        TORQEEDO,
-        WORKHORSE
+        TOYOTA
     }
 
     [AuthorAPI(SelectableTypeDeclaration = true)]

@@ -19,7 +19,7 @@ namespace PsdzClient.Core
             internalResult = new ValidationRuleInternalResults();
         }
 
-        public bool GetISTACharacteristics(PdszDatabase.CharacteristicRoots characteristicRoots, out string value, decimal id, Vehicle vec, long dataValueId, ValidationRuleInternalResults internalResult)
+        public bool GetISTACharacteristics(PsdzDatabase.CharacteristicRoots characteristicRoots, out string value, decimal id, Vehicle vec, long dataValueId, ValidationRuleInternalResults internalResult)
         {
             this.characteristicRoots = characteristicRoots;
             characteristicId = id;
@@ -110,6 +110,7 @@ namespace PsdzClient.Core
             return database.LookupVehicleCharIdByName(vehicle.Modellmonat, null) == (decimal)datavalueId;
         }
 
+        // ToDo: Check on update
         protected override bool ComputeBrandName(params object[] parameters)
         {
             characteristicValue = vehicle.Marke;
@@ -229,16 +230,10 @@ namespace PsdzClient.Core
 
         protected override bool ComputeEreihe(params object[] parameters)
         {
-            characteristicValue = vehicle.Ereihe;
-            if (vehicle.BrandName == BrandName.RODING)
             {
-                return database.LookupVehicleCharIdByName("E89", 40128130) == (decimal)datavalueId;
+                characteristicValue = vehicle.Ereihe;
+                return database.LookupVehicleCharIdByName(vehicle.Ereihe, 40128130) == (decimal)datavalueId;
             }
-            if (vehicle.BrandName == BrandName.GIBBS)
-            {
-                return database.LookupVehicleCharIdByName("K40", 40128130) == (decimal)datavalueId;
-            }
-            return database.LookupVehicleCharIdByName(vehicle.Ereihe, 40128130) == (decimal)datavalueId;
         }
 
         protected override bool ComputeGetriebe(params object[] parameters)
@@ -358,14 +353,6 @@ namespace PsdzClient.Core
         protected override bool ComputeProduktlinie(params object[] parameters)
         {
             characteristicValue = vehicle.Produktlinie;
-            if (vehicle.BrandName == BrandName.RODING)
-            {
-                return database.LookupVehicleCharIdByName("PL2", 40039952514L) == (decimal)datavalueId;
-            }
-            if (vehicle.BrandName == BrandName.GIBBS)
-            {
-                return database.LookupVehicleCharIdByName("K", 40039952514L) == (decimal)datavalueId;
-            }
             if (vehicle.BrandName == BrandName.TOYOTA)
             {
                 decimal num2 = database.LookupVehicleCharIdByName(vehicle.Produktlinie, 40039952514L);
@@ -404,11 +391,6 @@ namespace PsdzClient.Core
 
         protected override bool ComputeVerkaufsBezeichnung(params object[] parameters)
         {
-            if (vehicle.BrandName == BrandName.GIBBS)
-            {
-                characteristicValue = "K 1300 S";
-                return database.LookupVehicleCharIdByName("K 1300 S", 40122114) == (decimal)datavalueId;
-            }
             characteristicValue = vehicle.VerkaufsBezeichnung;
             return database.LookupVehicleCharIdByName(vehicle.VerkaufsBezeichnung, 40122114) == (decimal)datavalueId;
         }
@@ -469,11 +451,11 @@ namespace PsdzClient.Core
         }
 
         //private IDatabaseProvider dbConnector;
-        PdszDatabase database;
+        PsdzDatabase database;
 
 		private string characteristicValue;
 
-		private PdszDatabase.CharacteristicRoots characteristicRoots;
+		private PsdzDatabase.CharacteristicRoots characteristicRoots;
 
 		private decimal characteristicId;
 

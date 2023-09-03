@@ -76,7 +76,7 @@
 \nSie können gerne mitwirken oder Probleme melden.
 \nEine detailierte Dokumentation kann auch auf dieser Webseite gefunden werden.
 \n\nÄnderungen in dieser Version:\n</string>
-  <string name="version_last_changes">- Erste einfache BMW Service Funktionen ergänzt.\n- Kleinere Probleme behoben</string>
+  <string name="version_last_changes">- Option zur Motorraderkennung ergänzt.\n- DeepL Übersetzung.\n- Erste einfache BMW Service Funktionen ergänzt.\n- Kleinere Probleme behoben</string>
   <string name="app_info_message">Deep OBD für BMW und VAG\nVersion: {0}\nId: {1}</string>
   <string formatted="false" name="vag_mode_info">Der VAG Modus ist noch experimentell und nur für Fahrzeuge bis {0}.\nEs wird ein &lt;a href=\'https://github.com/uholeschak/ediabaslib/blob/master/docs/Replacement_firmware_for_ELM327.md\'&gt;Deep OBD Adapter&lt;/a&gt; mit mindestens Firmwareversion 0.11 benötigt.\nIm Moment werden nur die Protokolle KWP2000, KWP1281, TP2.0 und UDS unterstützt.\nFür den neuen VAG Modus müssen die Konfiguration neu generiert werden.\nEs ist möglich den alten VAG Modus wieder in den globalen Einstellungen wählen.</string>
 
@@ -227,19 +227,23 @@
   <string name="menu_translation_yandex_key">Einstellungen Übersetzung</string>
   <string name="menu_translation_clear_cache">Übersetzungscache löschen</string>
 
-  <!-- Yandex key -->
-  <string name="yandex_api_key_title">Einstellungen Übersetzung</string>
-  <string name="yandex_key_desc">Für eine automatische Übersetzung mit {0} wird eine kostenloser API Key und Account benötigt, der eine begrenzte Anzahl an Übersetzungen pro Tag erlaubt.\nMit den folgenden Schaltflächen loggen Sie sich in Ihren Account ein um eine Key zu erzeugen oder Ihre bestehenden anzuzeigen.\nKopieren Sie den Key aus dem Browser und fügen Sie Ihn in das untere Feld mit der Einfügen Schaltfläche ein.\nUm den Key zu kopieren drücken und halten Sie das erste Wort, erweitern den Bereich und wählen Sie anschließend kopieren.</string>
-  <string name="yandex_key_copy_title">API Key kopieren</string>
-  <string name="button_yandex_key_create">API Key erzeugen</string>
-  <string name="button_yandex_key_get">API Keys anzeigen</string>
-  <string name="yandex_key_paste_title">API Key</string>
-  <string name="button_yandex_key_paste">API Key einfügen</string>
+  <!-- Translate Key -->
+  <string name="trans_api_key_title">Einstellungen Übersetzung</string>
+  <string name="trans_caption_translator">Übersetzer</string>
+  <string name="trans_translator_yandex">Yandex.Translate</string>
+  <string name="trans_translator_ibm">IBM Watson</string>
+  <string name="trans_translator_deepl">DeepL</string>
+  <string name="trans_key_desc">Für eine automatische Übersetzung mit {0} wird eine (kostenloser) API Key und Account benötigt, der eine begrenzte Anzahl an Übersetzungen pro Tag erlaubt.\nMit den folgenden Schaltflächen loggen Sie sich in Ihren Account ein um eine Key zu erzeugen oder Ihre bestehenden anzuzeigen.\nKopieren Sie den Key aus dem Browser und fügen Sie Ihn in das untere Feld mit der Einfügen Schaltfläche ein.\nUm den Key zu kopieren drücken und halten Sie das erste Wort, erweitern den Bereich und wählen Sie anschließend kopieren.</string>
+  <string name="trans_key_copy_title">API Key kopieren</string>
+  <string name="button_api_key_create">API Key erzeugen</string>
+  <string name="button_api_key_get">API Keys anzeigen</string>
+  <string name="trans_key_paste_title">API Key</string>
+  <string name="button_api_key_paste">API Key einfügen</string>
   <string name="api_url_paste_title">API URL</string>
   <string name="button_api_url_paste">API URL einfügen</string>
-  <string name="yandex_key_test_title">Translate</string>
-  <string name="button_yandex_key_test">Übersetzung testen</string>
-  <string name="button_yandex_key_test_failed">Übersetzung fehlgeschlagen</string>
+  <string name="trans_key_test_title">Translate</string>
+  <string name="button_api_key_test">Übersetzung testen</string>
+  <string name="button_api_key_test_failed">Übersetzung fehlgeschlagen</string>
 
   <!--  DeviceListActivity -->
   <string name="scanning">Nach Geräten suchen ...</string>
@@ -386,6 +390,7 @@
   <!-- Translator selection -->
   <string name="select_translator_yantex">Yantex.Translate</string>
   <string name="select_translator_ibm">IBM Watson</string>
+  <string name="select_translator_deepl">DeepL</string>
 
   <!-- Bluetooth -->
   <string name="mtc_disconnect_warn">Für eine stabile Kommunikation mit dem Adapter wird empfohlen, irgendein zuätzliches Smartphone mit dem Radio zu koppeln.\nWollen Sie trotzdem fortfahren?</string>
@@ -436,11 +441,6 @@
   <string name="settings_caption_theme">Theme</string>
   <string name="settings_theme_dark">Dunkel</string>
   <string name="settings_theme_light">Hell</string>
-  <string name="settings_caption_translator">Übersetzer</string>
-  <string name="settings_translator_yandex">Yandex.Translate</string>
-  <string name="settings_translator_ibm">IBM Watson</string>
-  <string name="settings_caption_translator_login">Übersetzer aktiv halten</string>
-  <string name="settings_translator_login">Den IBM Watson Api Key ein mal pro Tag aktiv halten.</string>
   <string name="settings_caption_title_bar">Titelzeile</string>
   <string name="settings_auto_hide_title_bar">Titelzeile auf Hauptseite bei Verbindung automatisch ausblenden (mit Lang-Klick und Loslassen anzeigen)</string>
   <string name="settings_suppress_title_bar">Nicht verwendete Titelzeilen unterdrücken (mit Wischgeste anzeigen)</string>
@@ -574,7 +574,7 @@
   <string name="xml_tool_no_mwtab">Es wurden keine Datentabellen für diese ECU gefunden</string>
   <string name="xml_tool_select_sgbd">Fahrzeugtyp auswählen</string>
   <string name="xml_tool_no_response">Keine Antwort vom Fahrzeug</string>
-  <string name="xml_tool_no_response_manual">Keine Antwort vom Fahrzeug.\nBei K-LINE Fahrzeugen wird ein USB oder Deep OBD Adapter benötigt.\nHier finden Sie eine Liste der <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>unterstützten Adapter</a>.\nWollen Sie auf <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>manuelle Konfiguration</a> umschalten?</string>
+  <string name="xml_tool_no_response_manual">Keine Antwort vom Fahrzeug.\nBei Motorrädern sollten Sie die Motorräder erkennen Option im Menü aktivieren.\nBei K-LINE Fahrzeugen wird ein USB oder Deep OBD Adapter benötigt.\nHier finden Sie eine Liste der <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>unterstützten Adapter</a>.\nWollen Sie auf <a href='https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md'>manuelle Konfiguration</a> umschalten?</string>
   <string name="xml_tool_no_response_adapter">Keine Antwort vom Fahrzeug.\nWollen Sie die Adapter-Verbindung überprüfen?</string>
   <string name="xml_tool_no_response_raw">Keine Antwort vom Fahrzeug.\nDer direkte Kommunikationsmodus is aktiv und könnte die Ursache des Problems sein.\nWollen sie einen anderen Adapter wählen?</string>
   <string name="xml_tool_read_jobs_failed">Jobs lesen fehlgeschlagen</string>
@@ -604,6 +604,7 @@
 
   <!-- XML Tool Options Menu -->
   <string name="menu_xml_tool_add_errors_page">Fehlerseite hinzufügen</string>
+  <string name="menu_xml_tool_detect_motorbikes">Motorräder erkennen</string>
   <string name="menu_xml_tool_cfg_type">Konfiguration</string>
 
   <!-- XML Tool Edit Menu -->
@@ -808,6 +809,7 @@
   <string name="can_adapter_select_fw_file">Firmware auswählen</string>
   <string name="button_can_adapter_read">Lesen</string>
   <string name="button_can_adapter_write">Schreiben</string>
+  <string name="button_can_adapter_close">Schließen</string>
   <string name="button_can_adapter_can_auto">Automatisch</string>
   <string name="button_can_adapter_can_500">D-CAN (ab 3/2007)</string>
   <string name="button_can_adapter_can_100">K-CAN (kein Standard)</string>

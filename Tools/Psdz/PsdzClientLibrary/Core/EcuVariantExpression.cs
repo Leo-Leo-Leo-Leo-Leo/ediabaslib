@@ -26,7 +26,7 @@ namespace PsdzClient.Core
 			{
 				if (string.IsNullOrEmpty(this.variantName))
 				{
-                    PdszDatabase.EcuVar ecuVariantById = ClientContext.GetDatabase(this.vecInfo)?.GetEcuVariantById(this.value.ToString(CultureInfo.InvariantCulture));
+                    PsdzDatabase.EcuVar ecuVariantById = ClientContext.GetDatabase(this.vecInfo)?.GetEcuVariantById(this.value.ToString(CultureInfo.InvariantCulture));
 					if (ecuVariantById != null)
 					{
 						this.variantName = ecuVariantById.Name;
@@ -44,12 +44,12 @@ namespace PsdzClient.Core
 		public override bool Evaluate(Vehicle vec, IFFMDynamicResolver ffmResolver, ValidationRuleInternalResults internalResult)
         {
             this.vecInfo = vec;
-            PdszDatabase database = ClientContext.GetDatabase(this.vecInfo);
+            PsdzDatabase database = ClientContext.GetDatabase(this.vecInfo);
             if (database == null)
             {
                 return false;
             }
-            PdszDatabase.EcuVar ecuVariantById = database.GetEcuVariantById(this.value.ToString(CultureInfo.InvariantCulture));
+            PsdzDatabase.EcuVar ecuVariantById = database.GetEcuVariantById(this.value.ToString(CultureInfo.InvariantCulture));
 			if (ecuVariantById == null)
 			{
 				return false;
@@ -88,13 +88,9 @@ namespace PsdzClient.Core
 				{
 					return true;
 				}
-				bool flag;
-				if (!(flag = (vec.getECUbyECU_SGBD(this.VariantName) != null)) && "EWS3".Equals(this.VariantName, StringComparison.OrdinalIgnoreCase) && vec.BNType == BNType.BN2000_PGO)
-				{
-					//Log.Info("EcuVariantExpression.Evaluate()", "check for EWS3 => EWS3P", Array.Empty<object>());
-					flag = true;
-				}
-				return flag;
+                bool flag = vec.getECUbyECU_SGBD(VariantName) != null;
+                // Log.Debug("EcuVariantExpression.Evaluate()", "EcuVariantId: {0} (original rule: {1})  result: {2}", value, VariantName, flag);
+                return flag;
 			}
 		}
 
@@ -129,7 +125,7 @@ namespace PsdzClient.Core
 
         public override string ToFormula(FormulaConfig formulaConfig)
         {
-            PdszDatabase.EcuVar ecuVariantById = ClientContext.GetDatabase(this.vecInfo)?.GetEcuVariantById(this.value.ToString(CultureInfo.InvariantCulture));
+            PsdzDatabase.EcuVar ecuVariantById = ClientContext.GetDatabase(this.vecInfo)?.GetEcuVariantById(this.value.ToString(CultureInfo.InvariantCulture));
             
             StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.Append(FormulaSeparator(formulaConfig));

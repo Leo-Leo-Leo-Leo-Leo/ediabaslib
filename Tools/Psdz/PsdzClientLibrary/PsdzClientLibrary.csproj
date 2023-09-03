@@ -76,6 +76,7 @@
     </Reference>
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Management" />
     <Reference Include="System.Memory, Version=4.0.1.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Memory.4.5.5\lib\net461\System.Memory.dll</HintPath>
     </Reference>
@@ -281,7 +282,7 @@
     <Compile Include="DetectVehicle.cs" />
     <Compile Include="Core\DiagnosticsBusinessData.cs" />
     <Compile Include="Core\Container\HeaderAdapter.cs" />
-    <Compile Include="PdszDatabase.cs" />
+    <Compile Include="PsdzDatabase.cs" />
     <Compile Include="Programming\AsamJobInputDictionary.cs" />
     <Compile Include="Programming\BindingDetailsStatus.cs" />
     <Compile Include="Programming\BusEnumMapper.cs" />

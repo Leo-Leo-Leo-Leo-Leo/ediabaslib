@@ -22,7 +22,7 @@ namespace PsdzClient.Core
 
 		public override bool Evaluate(Vehicle vec, IFFMDynamicResolver ffmResolver, ValidationRuleInternalResults internalResult)
 		{
-            PdszDatabase database = ClientContext.GetDatabase(vec);
+            PsdzDatabase database = ClientContext.GetDatabase(vec);
             if (database == null)
             {
                 return false;
@@ -36,7 +36,7 @@ namespace PsdzClient.Core
 			{
 				return false;
 			}
-            PdszDatabase.Equipment equipmentById = database.GetEquipmentById(this.value.ToString(CultureInfo.InvariantCulture));
+            PsdzDatabase.Equipment equipmentById = database.GetEquipmentById(this.value.ToString(CultureInfo.InvariantCulture));
 			if (equipmentById == null)
 			{
 				return false;
@@ -56,11 +56,11 @@ namespace PsdzClient.Core
 #if false
 					if (ffmResolver != null && flag3)
 					{
-						ObservableCollectionEx<IXepInfoObject> infoObjectsByDiagObjectControlId = DatabaseProviderFactory.Instance.GetInfoObjectsByDiagObjectControlId(this.value, vec, ffmResolver, true, null);
+                        List<SwiInfoObj> infoObjectsByDiagObjectControlId = database.GetInfoObjectsByDiagObjectControlId(this.value.ToString(CultureInfo.InvariantCulture), vec, ffmResolver, true, null);
 						if (infoObjectsByDiagObjectControlId != null && infoObjectsByDiagObjectControlId.Count != 0)
 						{
 							bool? flag4 = ffmResolver.Resolve(this.value, infoObjectsByDiagObjectControlId.First<IXepInfoObject>());
-							vec.AddOrUpdateFFM(new FFMResult(equipmentById.ID, equipmentById.NAME, "FFMResolver", flag4, false));
+							vec.AddOrUpdateFFM(new FFMResult(equipmentById.Id, equipmentById.Name, "FFMResolver", flag4, false));
 							if (flag4 != null)
 							{
 								result = flag4.Value;
@@ -121,15 +121,19 @@ namespace PsdzClient.Core
 
         public override string ToFormula(FormulaConfig formulaConfig)
         {
-            PdszDatabase.Equipment equipmentById = ClientContext.GetDatabase(this.vecInfo)?.GetEquipmentById(this.value.ToString(CultureInfo.InvariantCulture));
+            PsdzDatabase.Equipment equipmentById = ClientContext.GetDatabase(this.vecInfo)?.GetEquipmentById(this.value.ToString(CultureInfo.InvariantCulture));
             StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.Append(FormulaSeparator(formulaConfig));
-            stringBuilder.Append(formulaConfig.CheckStringFunc);
-            stringBuilder.Append("(\"Equipment\", ");
-            stringBuilder.Append("\"");
+            stringBuilder.Append(formulaConfig.RuleValidFunc);
+            stringBuilder.Append("(\"");
             if (equipmentById != null)
             {
-                stringBuilder.Append(equipmentById.Name);
+                string ruleId = this.value.ToString(CultureInfo.InvariantCulture);
+                stringBuilder.Append(ruleId);
+                if (formulaConfig.SubRuleIds != null && !formulaConfig.SubRuleIds.Contains(ruleId))
+                {
+                    formulaConfig.SubRuleIds.Add(ruleId);
+                }
             }
             stringBuilder.Append("\")");
             stringBuilder.Append(FormulaSeparator(formulaConfig));

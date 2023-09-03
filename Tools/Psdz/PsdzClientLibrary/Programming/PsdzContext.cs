@@ -4,9 +4,11 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
 using BMW.Rheingold.Programming.API;
 using BMW.Rheingold.Programming.Common;
+using BMW.Rheingold.Psdz;
 using BMW.Rheingold.Psdz.Model;
 using BMW.Rheingold.Psdz.Model.Ecu;
 using BMW.Rheingold.Psdz.Model.Svb;
@@ -558,13 +560,12 @@ namespace PsdzClient.Programming
             VecInfo.ILevelWerk = !string.IsNullOrEmpty(IstufeShipment) ? IstufeShipment : DetectVehicle.ILevelShip;
             VecInfo.ILevel = !string.IsNullOrEmpty(IstufeCurrent) ? IstufeCurrent: DetectVehicle.ILevelCurrent;
             VecInfo.VIN17 = DetectVehicle.Vin;
+
             if (DetectVehicle.ConstructDate != null)
             {
                 VecInfo.Modelljahr = DetectVehicle.ConstructYear;
                 VecInfo.Modellmonat = DetectVehicle.ConstructMonth;
                 VecInfo.Modelltag = "01";
-                VecInfo.ProductionDate = DetectVehicle.ConstructDate.Value;
-                VecInfo.ProductionDateSpecified = true;
 
                 if (string.IsNullOrEmpty(VecInfo.BaustandsJahr) || string.IsNullOrEmpty(VecInfo.BaustandsMonat))
                 {
@@ -586,16 +587,44 @@ namespace PsdzClient.Programming
                 }
             }
 
-            VecInfo.Ereihe = DetectVehicle.Series;
-            VecInfo.SetVINRangeTypeFromVINRanges();
+            PsdzDatabase.VinRanges vinRangesByVin = programmingService.PsdzDatabase.GetVinRangesByVin17(VecInfo.VINType, VecInfo.VIN7, VecInfo.IsVehicleWithOnlyVin7());
+            if (vinRangesByVin != null)
+            {
+                VecInfo.VINRangeType = vinRangesByVin.TypeKey;
+                if (string.IsNullOrEmpty(VecInfo.Modellmonat) || string.IsNullOrEmpty(VecInfo.Modelljahr))
+                {
+                    if (!string.IsNullOrEmpty(vinRangesByVin.ProductionYear) && !string.IsNullOrEmpty(vinRangesByVin.ProductionMonth))
+                    {
+                        VecInfo.Modelljahr = vinRangesByVin.ProductionYear;
+                        VecInfo.Modellmonat = vinRangesByVin.ProductionMonth.PadLeft(2, '0');
+                        VecInfo.Modelltag = "01";
 
+                        if (VecInfo.Modelljahr.Length == 4)
+                        {
+                            VecInfo.BaustandsJahr = VecInfo.Modelljahr.Substring(2, 2);
+                            VecInfo.BaustandsMonat = VecInfo.Modellmonat;
+                        }
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(VecInfo.Modellmonat) && !string.IsNullOrEmpty(VecInfo.Modelljahr))
+            {
+                VecInfo.ProductionDate = DateTime.ParseExact(string.Format(CultureInfo.InvariantCulture, "{0}.{1}",
+                    VecInfo.Modellmonat, VecInfo.Modelljahr), "MM.yyyy", new CultureInfo("de-DE"));
+                VecInfo.ProductionDateSpecified = true;
+            }
+
+            VecInfo.Ereihe = DetectVehicle.Series;
+
+            ClientContext clientContext = ClientContext.GetClientContext(VecInfo);
+            SetFa(programmingService);
             CharacteristicExpression.EnumBrand brand = CharacteristicExpression.EnumBrand.BMWBMWiMINI;
             if (VecInfo.IsMotorcycle())
             {
                 brand = CharacteristicExpression.EnumBrand.BMWMotorrad;
             }
 
-            ClientContext clientContext = ClientContext.GetClientContext(VecInfo);
             if (clientContext != null)
             {
                 clientContext.SelectedBrand = brand;
@@ -604,7 +633,7 @@ namespace PsdzClient.Programming
             for (int i = 0; i < 2; i++)
             {
                 ObservableCollection<ECU> EcuList = new ObservableCollection<ECU>();
-                foreach (PdszDatabase.EcuInfo ecuInfo in DetectVehicle.EcuList)
+                foreach (PsdzDatabase.EcuInfo ecuInfo in DetectVehicle.EcuList)
                 {
                     IEcuObj ecuObj = programmingObjectBuilder.Build(ecuInfo.PsdzEcu);
                     ECU ecu = programmingObjectBuilder.Build(ecuObj);
@@ -631,20 +660,22 @@ namespace PsdzClient.Programming
                 VecInfo.ECU = EcuList;
             }
 
-            List<PdszDatabase.Characteristics> characteristicsList = programmingService.PdszDatabase.GetVehicleCharacteristics(VecInfo);
+            List<PsdzDatabase.Characteristics> characteristicsList = programmingService.PsdzDatabase.GetVehicleCharacteristics(VecInfo);
             if (characteristicsList == null)
             {
                 return false;
             }
             VehicleCharacteristicIdent vehicleCharacteristicIdent = new VehicleCharacteristicIdent();
 
-            foreach (PdszDatabase.Characteristics characteristics in characteristicsList)
+            foreach (PsdzDatabase.Characteristics characteristics in characteristicsList)
             {
                 if (!vehicleCharacteristicIdent.AssignVehicleCharacteristic(characteristics.RootNodeClass, VecInfo, characteristics))
                 {
                     return false;
                 }
             }
+
+            UpdateSALocalizedItems(programmingService, clientContext);
 
             IDiagnosticsBusinessData service = DiagnosticsBusinessData.Instance;
             VecInfo.BNType = DiagnosticsBusinessData.Instance.GetBNType(VecInfo);
@@ -659,8 +690,8 @@ namespace PsdzClient.Programming
             }
 
             VecInfo.BNMixed = VehicleLogistics.getBNMixed(VecInfo.Ereihe, VecInfo.FA);
-            VecInfo.BatteryType = PdszDatabase.ResolveBatteryType(VecInfo);
-            VecInfo.WithLfpBattery = VecInfo.BatteryType == PdszDatabase.BatteryEnum.LFP;
+            VecInfo.BatteryType = PsdzDatabase.ResolveBatteryType(VecInfo);
+            VecInfo.WithLfpBattery = VecInfo.BatteryType == PsdzDatabase.BatteryEnum.LFP;
             VecInfo.MainSeriesSgbd = VehicleLogistics.getBrSgbd(VecInfo);
             VecInfo.MainSeriesSgbdAdditional = service.GetMainSeriesSgbdAdditional(VecInfo);
             EcuCharacteristics = VehicleLogistics.GetCharacteristics(VecInfo);
@@ -689,12 +720,12 @@ namespace PsdzClient.Programming
             }
         }
 
-        public List<PdszDatabase.EcuInfo> GetEcuList(bool individualOnly = false)
+        public List<PsdzDatabase.EcuInfo> GetEcuList(bool individualOnly = false)
         {
-            List<PdszDatabase.EcuInfo> ecuList = new List<PdszDatabase.EcuInfo>();
+            List<PsdzDatabase.EcuInfo> ecuList = new List<PsdzDatabase.EcuInfo>();
             try
             {
-                foreach (PdszDatabase.EcuInfo ecuInfo in DetectVehicle.EcuList)
+                foreach (PsdzDatabase.EcuInfo ecuInfo in DetectVehicle.EcuList)
                 {
                     if (individualOnly)
                     {
@@ -715,6 +746,172 @@ namespace PsdzClient.Programming
             }
 
             return ecuList;
+        }
+
+        public bool SetFa(ProgrammingService programmingService)
+        {
+            try
+            {
+                if (VecInfo.FA.AlreadyDone)
+                {
+                    return true;
+                }
+
+                if (string.IsNullOrEmpty(VecInfo.FA.LACK))
+                {
+                    VecInfo.FA.LACK = DetectVehicle.Paint;
+                }
+
+                if (string.IsNullOrEmpty(VecInfo.FA.POLSTER))
+                {
+                    VecInfo.FA.POLSTER = DetectVehicle.Upholstery;
+                }
+
+                if (string.IsNullOrEmpty(VecInfo.FA.STANDARD_FA))
+                {
+                    VecInfo.FA.STANDARD_FA = DetectVehicle.StandardFa;
+                }
+
+                if (string.IsNullOrEmpty(VecInfo.FA.TYPE))
+                {
+                    VecInfo.FA.TYPE = DetectVehicle.TypeKey;
+                }
+
+                if (VecInfo.FA.SA.Count == 0 && VecInfo.FA.HO_WORT.Count == 0 &&
+                    VecInfo.FA.E_WORT.Count == 0 && VecInfo.FA.ZUSBAU_WORT.Count == 0)
+                {
+                    foreach (string salapa in DetectVehicle.Salapa)
+                    {
+                        VecInfo.FA.SA.AddIfNotContains(salapa);
+                    }
+
+                    foreach (string hoWord in DetectVehicle.HoWords)
+                    {
+                        VecInfo.FA.HO_WORT.AddIfNotContains(hoWord);
+                    }
+
+                    foreach (string eWord in DetectVehicle.EWords)
+                    {
+                        VecInfo.FA.E_WORT.AddIfNotContains(eWord);
+                    }
+
+                    foreach (string zbWord in DetectVehicle.ZbWords)
+                    {
+                        VecInfo.FA.ZUSBAU_WORT.AddIfNotContains(zbWord);
+                    }
+
+                    OverrideVehicleCharacteristics(programmingService);
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool UpdateSALocalizedItems(ProgrammingService programmingService, ClientContext clientContext)
+        {
+            try
+            {
+                if (clientContext == null)
+                {
+                    return false;
+                }
+
+                if (string.IsNullOrEmpty(VecInfo.Prodart) || VecInfo.BrandName == null)
+                {
+                    return false;
+                }
+
+                string language = clientContext.Language;
+                string prodArt = PsdzDatabase.GetProdArt(VecInfo);
+
+                FillSaLocalizedItems(programmingService, language, DetectVehicle.Salapa, prodArt);
+                FillSaLocalizedItems(programmingService, language, DetectVehicle.HoWords, prodArt);
+                FillSaLocalizedItems(programmingService, language, DetectVehicle.EWords, prodArt);
+                FillSaLocalizedItems(programmingService, language, DetectVehicle.ZbWords, prodArt);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public void FillSaLocalizedItems(ProgrammingService programmingService, string language, List<string> source, string prodArt)
+        {
+            foreach (string text in source)
+            {
+                string key = FormatConverter.FillWithZeros(text, 4);
+                if (VecInfo.FA.SaLocalizedItems.FirstOrDefault(x => x.Id == key) == null)
+                {
+                    PsdzDatabase.SaLaPa saLaPa = programmingService.PsdzDatabase.GetSaLaPaByProductTypeAndSalesKey(prodArt, key);
+                    if (saLaPa != null)
+                    {
+                        VecInfo.FA.SaLocalizedItems.Add(new LocalizedSAItem(key, saLaPa.EcuTranslation.GetTitle(language)));
+                    }
+                }
+            }
+        }
+
+        public bool OverrideVehicleCharacteristics(ProgrammingService programmingService)
+        {
+            try
+            {
+                if (VecInfo == null)
+                {
+                    return false;
+                }
+
+                if (!string.IsNullOrEmpty(VecInfo.VINRangeType))
+                {
+                    List<Tuple<string, string>> transmissionSaByTypeKey = programmingService.PsdzDatabase.GetTransmissionSaByTypeKey(VecInfo.VINRangeType);
+                    if (transmissionSaByTypeKey == null)
+                    {
+                        return false;
+                    }
+
+                    if (!transmissionSaByTypeKey.Any(sa => VecInfo.hasSA(sa.Item1)))
+                    {
+                        List<Tuple<string, string>> list = transmissionSaByTypeKey.Where(sa => sa.Item2 == "T").ToList();
+                        if (list.Count == 1)
+                        {
+                            string text = list.First().Item1;
+                            if (string.IsNullOrEmpty(text))
+                            {
+                                VecInfo.FA.SA.Add(text);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+
+        public string GetLocalizedSaString()
+        {
+            StringBuilder sb = new StringBuilder();
+            if (VecInfo.FA != null && VecInfo.FA.SaLocalizedItems.Count > 0)
+            {
+                foreach (LocalizedSAItem saLocalized in VecInfo.FA.SaLocalizedItems)
+                {
+                    if (saLocalized != null)
+                    {
+                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "SA={0}, Title='{1}'", saLocalized.Id, saLocalized.Title));
+                    }
+                }
+            }
+
+            return sb.ToString();
         }
 
         private bool _disposed;

@@ -84,7 +84,7 @@ namespace PsdzClient.Programming
 
         public class OptionsItem
         {
-            public OptionsItem(PdszDatabase.SwiRegisterEnum swiRegisterEnum,PdszDatabase.SwiAction swiAction, ClientContext clientContext)
+            public OptionsItem(PsdzDatabase.SwiRegisterEnum swiRegisterEnum,PsdzDatabase.SwiAction swiAction, ClientContext clientContext)
             {
                 Init();
                 SwiRegisterEnum = swiRegisterEnum;
@@ -92,7 +92,7 @@ namespace PsdzClient.Programming
                 ClientContext = clientContext;
             }
 
-            public OptionsItem(PdszDatabase.SwiRegisterEnum swiRegisterEnum, PdszDatabase.EcuInfo ecuInfo, IEcuLogisticsEntry ecuLogisticsEntry, ClientContext clientContext)
+            public OptionsItem(PsdzDatabase.SwiRegisterEnum swiRegisterEnum, PsdzDatabase.EcuInfo ecuInfo, IEcuLogisticsEntry ecuLogisticsEntry, ClientContext clientContext)
             {
                 Init();
                 SwiRegisterEnum = swiRegisterEnum;
@@ -107,11 +107,11 @@ namespace PsdzClient.Programming
                 Invalid = false;
             }
 
-            public PdszDatabase.SwiRegisterEnum SwiRegisterEnum { get; private set; }
+            public PsdzDatabase.SwiRegisterEnum SwiRegisterEnum { get; private set; }
 
-            public PdszDatabase.SwiAction SwiAction { get; private set; }
+            public PsdzDatabase.SwiAction SwiAction { get; private set; }
 
-            public PdszDatabase.EcuInfo EcuInfo { get; private set; }
+            public PsdzDatabase.EcuInfo EcuInfo { get; private set; }
 
             public IEcuLogisticsEntry EcuLogisticsEntry { get; private set; }
 
@@ -156,7 +156,7 @@ namespace PsdzClient.Programming
 
         public class OptionType
         {
-            public OptionType(string name, PdszDatabase.SwiRegisterEnum swiRegisterEnum)
+            public OptionType(string name, PsdzDatabase.SwiRegisterEnum swiRegisterEnum)
             {
                 Name = name;
                 SwiRegisterEnum = swiRegisterEnum;
@@ -165,15 +165,15 @@ namespace PsdzClient.Programming
 
             public string Name { get; private set; }
 
-            public PdszDatabase.SwiRegisterEnum SwiRegisterEnum { get; private set; }
+            public PsdzDatabase.SwiRegisterEnum SwiRegisterEnum { get; private set; }
 
-            public PdszDatabase.SwiRegister SwiRegister { get; set; }
+            public PsdzDatabase.SwiRegister SwiRegister { get; set; }
 
             public ClientContext ClientContext { get; set; }
 
             public override string ToString()
             {
-                PdszDatabase.SwiRegister swiRegister = SwiRegister;
+                PsdzDatabase.SwiRegister swiRegister = SwiRegister;
                 if (swiRegister != null)
                 {
                     return swiRegister.EcuTranslation.GetTitle(ClientContext?.Language);
@@ -212,10 +212,10 @@ namespace PsdzClient.Programming
         public delegate void ProgressDelegate(int percent, bool marquee, string message = null);
         public event ProgressDelegate ProgressEvent;
 
-        public delegate void UpdateOptionsDelegate(Dictionary<PdszDatabase.SwiRegisterEnum, List<OptionsItem>> optionsDict);
+        public delegate void UpdateOptionsDelegate(Dictionary<PsdzDatabase.SwiRegisterEnum, List<OptionsItem>> optionsDict);
         public event UpdateOptionsDelegate UpdateOptionsEvent;
 
-        public delegate void UpdateOptionSelectionsDelegate(PdszDatabase.SwiRegisterEnum? swiRegisterEnum);
+        public delegate void UpdateOptionSelectionsDelegate(PsdzDatabase.SwiRegisterEnum? swiRegisterEnum);
         public event UpdateOptionSelectionsDelegate UpdateOptionSelectionsEvent;
 
         public delegate bool ShowMessageDelegate(CancellationTokenSource cts, string message, bool okBtn, bool wait);
@@ -227,13 +227,13 @@ namespace PsdzClient.Programming
         private static readonly ILog log = LogManager.GetLogger(typeof(ProgrammingJobs));
         private OptionType[] _optionTypes =
         {
-            new OptionType("Coding", PdszDatabase.SwiRegisterEnum.VehicleModificationCodingConversion),
-            new OptionType("Coding back", PdszDatabase.SwiRegisterEnum.VehicleModificationCodingBackConversion),
-            new OptionType("Modification", PdszDatabase.SwiRegisterEnum.VehicleModificationConversion),
-            new OptionType("Modification back", PdszDatabase.SwiRegisterEnum.VehicleModificationBackConversion),
-            new OptionType("Retrofit", PdszDatabase.SwiRegisterEnum.VehicleModificationRetrofitting),
-            new OptionType("Before replacement", PdszDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement),
-            new OptionType("After replacement", PdszDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement),
+            new OptionType("Coding", PsdzDatabase.SwiRegisterEnum.VehicleModificationCodingConversion),
+            new OptionType("Coding back", PsdzDatabase.SwiRegisterEnum.VehicleModificationCodingBackConversion),
+            new OptionType("Modification", PsdzDatabase.SwiRegisterEnum.VehicleModificationConversion),
+            new OptionType("Modification back", PsdzDatabase.SwiRegisterEnum.VehicleModificationBackConversion),
+            new OptionType("Retrofit", PsdzDatabase.SwiRegisterEnum.VehicleModificationRetrofitting),
+            new OptionType("Before replacement", PsdzDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement),
+            new OptionType("After replacement", PsdzDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement),
         };
         public OptionType[] OptionTypes => _optionTypes;
 
@@ -262,7 +262,7 @@ namespace PsdzClient.Programming
         public ProgrammingService ProgrammingService { get; private set; }
         public List<OptionsItem> SelectedOptions { get; set; }
         public bool DisableTalFlash { get; set; }
-        public PdszDatabase.SwiRegisterGroup RegisterGroup { get; set; }
+        public PsdzDatabase.SwiRegisterGroup RegisterGroup { get; set; }
         public IntPtr ParentWindowHandle { get; set; }
 
         private PsdzContext _psdzContext;
@@ -305,8 +305,8 @@ namespace PsdzClient.Programming
             }
         }
 
-        private Dictionary<PdszDatabase.SwiRegisterEnum, List<OptionsItem>> _optionsDict;
-        public Dictionary<PdszDatabase.SwiRegisterEnum, List<OptionsItem>> OptionsDict
+        private Dictionary<PsdzDatabase.SwiRegisterEnum, List<OptionsItem>> _optionsDict;
+        public Dictionary<PsdzDatabase.SwiRegisterEnum, List<OptionsItem>> OptionsDict
         {
             get
             {
@@ -417,7 +417,7 @@ namespace PsdzClient.Programming
                     UpdateStatus(sbResult.ToString());
                 }
 
-                if (PdszDatabase.RestartRequired)
+                if (PsdzDatabase.RestartRequired)
                 {
                     sbResult.AppendLine(Strings.AppRestartRequired);
                     UpdateStatus(sbResult.ToString());
@@ -430,8 +430,9 @@ namespace PsdzClient.Programming
                 }
                 else
                 {
+                    log.InfoFormat(CultureInfo.InvariantCulture, "Starting programming service MultiSession={0}", ClientContext.EnablePsdzMultiSession());
                     ProgrammingService = new ProgrammingService(istaFolder, _dealerId);
-                    ClientContext.Database = ProgrammingService.PdszDatabase;
+                    ClientContext.Database = ProgrammingService.PsdzDatabase;
                     if (ServiceInitializedEvent != null)
                     {
                         ServiceInitializedEvent.Invoke(ProgrammingService);
@@ -455,9 +456,9 @@ namespace PsdzClient.Programming
                     };
 
                     bool executeDirect = _executionMode == ExecutionMode.GenerateModulesDirect;
-                    if (ProgrammingService.PdszDatabase.IsExecutable())
+                    if (ProgrammingService.PsdzDatabase.IsExecutable())
                     {
-                        if (!ProgrammingService.PdszDatabase.SaveVehicleSeriesInfo(ClientContext))
+                        if (!ProgrammingService.PsdzDatabase.SaveVehicleSeriesInfo(ClientContext))
                         {
                             log.ErrorFormat("SaveVehicleSeriesInfo failed");
                             sbResult.AppendLine(Strings.GenerateInfoFilesFailed);
@@ -465,7 +466,7 @@ namespace PsdzClient.Programming
                             return false;
                         }
 
-                        if (!ProgrammingService.PdszDatabase.SaveFaultRulesInfo(ClientContext))
+                        if (!ProgrammingService.PsdzDatabase.SaveFaultRulesInfo(ClientContext))
                         {
                             log.ErrorFormat("SaveFaultRulesInfo failed");
                             sbResult.AppendLine(Strings.GenerateInfoFilesFailed);
@@ -497,7 +498,7 @@ namespace PsdzClient.Programming
 
                             int failCountService = -1;
                             int lastProgressService = 100;
-                            bool resultService = ProgrammingService.PdszDatabase.GenerateServiceModuleData((startConvert, progress, failures) =>
+                            bool resultService = ProgrammingService.PsdzDatabase.GenerateServiceModuleData((startConvert, progress, failures) =>
                             {
                                 if (startConvert)
                                 {
@@ -578,18 +579,18 @@ namespace PsdzClient.Programming
                         }
                     }
 
-                    if (PdszDatabase.RestartRequired)
+                    if (PsdzDatabase.RestartRequired)
                     {
                         sbResult.AppendLine(Strings.AppRestartRequired);
                         UpdateStatus(sbResult.ToString());
                         return false;
                     }
 #if false
-                    List<PdszDatabase.SwiDiagObj> diagObjsNodeClass = ProgrammingService.PdszDatabase.GetInfoObjectsTreeForNodeclassName(
-                        PdszDatabase.DiagObjServiceRoot, null, new List<string> { AblFilter });
+                    List<PsdzDatabase.SwiDiagObj> diagObjsNodeClass = ProgrammingService.PsdzDatabase.GetInfoObjectsTreeForNodeclassName(
+                        PsdzDatabase.DiagObjServiceRoot, null, new List<string> { PsdzDatabase.AblFilter });
                     if (diagObjsNodeClass != null)
                     {
-                        foreach (PdszDatabase.SwiDiagObj swiDiagObj in diagObjsNodeClass)
+                        foreach (PsdzDatabase.SwiDiagObj swiDiagObj in diagObjsNodeClass)
                         {
                             log.InfoFormat("GetInfoObjectsTreeForNodeclassName all InfoObject: {0}", swiDiagObj.InfoObjectsCount);
                             log.Info(swiDiagObj.ToString(ClientContext.Language));
@@ -619,7 +620,7 @@ namespace PsdzClient.Programming
                         }
 
                         int failCountTest = -1;
-                        bool resultTest = ProgrammingService.PdszDatabase.GenerateTestModuleData((startConvert, progress, failures) =>
+                        bool resultTest = ProgrammingService.PsdzDatabase.GenerateTestModuleData((startConvert, progress, failures) =>
                         {
                             if (startConvert)
                             {
@@ -649,7 +650,7 @@ namespace PsdzClient.Programming
                             return false;
                         }, checkOnlyTest && !executeDirect);
 
-                        if (!resultTest && !ProgrammingService.PdszDatabase.IsExecutable())
+                        if (!resultTest && !ProgrammingService.PsdzDatabase.IsExecutable())
                         {
                             log.ErrorFormat("No test module data present");
                             sbResult.AppendLine(Strings.TestModuleDataMissing);
@@ -709,7 +710,7 @@ namespace PsdzClient.Programming
                     }
 
                     bool resultEcuCharacteristics = true;
-                    if (!ProgrammingService.PdszDatabase.GenerateEcuCharacteristicsData())
+                    if (!ProgrammingService.PsdzDatabase.GenerateEcuCharacteristicsData())
                     {
                         log.ErrorFormat("GenerateEcuCharacteristicsData failed");
                         resultEcuCharacteristics = false;
@@ -719,7 +720,7 @@ namespace PsdzClient.Programming
 
                     if (!resultEcuCharacteristics)
                     {
-                        if (!ProgrammingService.PdszDatabase.IsExecutable())
+                        if (!ProgrammingService.PsdzDatabase.IsExecutable())
                         {
                             log.ErrorFormat("No test module data present");
                             sbResult.AppendLine(Strings.TestModuleDataMissing);
@@ -734,14 +735,14 @@ namespace PsdzClient.Programming
                     }
                 }
 
-                if (PdszDatabase.RestartRequired)
+                if (PsdzDatabase.RestartRequired)
                 {
                     sbResult.AppendLine(Strings.AppRestartRequired);
                     UpdateStatus(sbResult.ToString());
                     return false;
                 }
 
-                if (!PsdzServiceStarter.IsServerInstanceRunning())
+                if (!PsdzServiceStarter.IsThisServerInstanceRunning())
                 {
                     log.InfoFormat(CultureInfo.InvariantCulture, "Starting host");
                     if (!ProgrammingService.StartPsdzServiceHost())
@@ -758,7 +759,7 @@ namespace PsdzClient.Programming
                 sbResult.AppendLine(Strings.HostStarted);
                 UpdateStatus(sbResult.ToString());
 
-                ProgrammingService.PdszDatabase.ResetXepRules();
+                ProgrammingService.PsdzDatabase.ResetXepRules();
                 return true;
             }
             catch (Exception ex)
@@ -770,7 +771,7 @@ namespace PsdzClient.Programming
             }
             finally
             {
-                if (!PsdzServiceStarter.IsServerInstanceRunning())
+                if (!PsdzServiceStarter.IsThisServerInstanceRunning())
                 {
                     if (ProgrammingService != null)
                     {
@@ -789,7 +790,7 @@ namespace PsdzClient.Programming
                 sbResult.AppendLine(Strings.HostStopping);
                 UpdateStatus(sbResult.ToString());
 
-                if (ProgrammingService == null && PsdzServiceStarter.IsServerInstanceRunning())
+                if (ProgrammingService == null && PsdzServiceStarter.IsThisServerInstanceRunning())
                 {
                     ProgrammingService = new ProgrammingService(istaFolder, _dealerId);
                 }
@@ -846,12 +847,21 @@ namespace PsdzClient.Programming
                     return false;
                 }
 
-                PdszDatabase.DbInfo dbInfo = ProgrammingService.PdszDatabase.GetDbInfo();
+                PsdzDatabase.DbInfo dbInfo = ProgrammingService.PsdzDatabase.GetDbInfo();
                 if (dbInfo != null)
                 {
                     log.InfoFormat(CultureInfo.InvariantCulture, "DbInfo: {0}", dbInfo.ToString());
 
                     sbResult.AppendLine(string.Format(CultureInfo.InvariantCulture, Strings.DbInfo, dbInfo.Version, dbInfo.DateTime.ToShortDateString()));
+                    UpdateStatus(sbResult.ToString());
+                }
+
+                string swiVersion = PsdzDatabase.GetSwiVersion();
+                if (!string.IsNullOrEmpty(swiVersion))
+                {
+                    log.InfoFormat(CultureInfo.InvariantCulture, "SWI Version: {0}", swiVersion);
+
+                    sbResult.AppendLine(string.Format(CultureInfo.InvariantCulture, Strings.SwiVersion, swiVersion));
                     UpdateStatus(sbResult.ToString());
                 }
 
@@ -914,7 +924,7 @@ namespace PsdzClient.Programming
                     enetConnection = new EdInterfaceEnet.EnetConnection(interfaceType, IPAddress.Parse(ipAddress));
                 }
 
-                PsdzContext.DetectVehicle = new DetectVehicle(ProgrammingService.PdszDatabase, ecuPath, enetConnection, useIcom, addTimeout);
+                PsdzContext.DetectVehicle = new DetectVehicle(ProgrammingService.PsdzDatabase, ecuPath, enetConnection, useIcom, addTimeout);
                 DetectVehicle.DetectResult detectResult = PsdzContext.DetectVehicle.DetectVehicleBmwFast(() =>
                 {
                     if (cts != null)
@@ -977,7 +987,7 @@ namespace PsdzClient.Programming
                     PsdzContext.DetectVehicle.ILevelCurrent ?? string.Empty));
 
                 log.InfoFormat(CultureInfo.InvariantCulture, "Ecus: {0}", PsdzContext.DetectVehicle.EcuList.Count());
-                foreach (PdszDatabase.EcuInfo ecuInfo in PsdzContext.DetectVehicle.EcuList)
+                foreach (PsdzDatabase.EcuInfo ecuInfo in PsdzContext.DetectVehicle.EcuList)
                 {
                     log.InfoFormat(CultureInfo.InvariantCulture, " Ecu: Name={0}, Addr={1}, Sgdb={2}, Group={3}",
                         ecuInfo.Name, ecuInfo.Address, ecuInfo.Sgbd, ecuInfo.Grp);
@@ -1038,24 +1048,30 @@ namespace PsdzClient.Programming
                     UpdateStatus(sbResult.ToString());
                     return false;
                 }
+
+                string saString = PsdzContext.GetLocalizedSaString();
+                if (!string.IsNullOrEmpty(saString))
+                {
+                    log.Info("Localized SaLaPa:" + Environment.NewLine + saString);
+                }
 #if false
                 for (int type = 0; type < 1; type++)
                 {
-                    ProgrammingService.PdszDatabase.UseIsAtLeastOnePathToRootValid = type == 0;
-                    List<PdszDatabase.SwiDiagObj> diagObjsNodeClass = ProgrammingService.PdszDatabase.GetInfoObjectsTreeForNodeclassName(
-                        PdszDatabase.DiagObjServiceRoot, vehicle, new List<string> { AblFilter }, true);
+                    ProgrammingService.PsdzDatabase.UseIsAtLeastOnePathToRootValid = type == 0;
+                    List<PsdzDatabase.SwiDiagObj> diagObjsNodeClass = ProgrammingService.PsdzDatabase.GetInfoObjectsTreeForNodeclassName(
+                        PsdzDatabase.DiagObjServiceRoot, vehicle, new List<string> { PsdzDatabase.AblFilter }, true);
                     if (diagObjsNodeClass != null)
                     {
-                        foreach (PdszDatabase.SwiDiagObj swiDiagObj in diagObjsNodeClass)
+                        foreach (PsdzDatabase.SwiDiagObj swiDiagObj in diagObjsNodeClass)
                         {
                             log.InfoFormat("GetInfoObjectsTreeForNodeclassName for vehicle InfoObject: {0}, OneRoot={1}",
-                                swiDiagObj.InfoObjectsCount, ProgrammingService.PdszDatabase.UseIsAtLeastOnePathToRootValid);
+                                swiDiagObj.InfoObjectsCount, ProgrammingService.PsdzDatabase.UseIsAtLeastOnePathToRootValid);
                             log.Info(swiDiagObj.ToString(ClientContext.Language));
                         }
                     }
                 }
 
-                ProgrammingService.PdszDatabase.UseIsAtLeastOnePathToRootValid = true;
+                ProgrammingService.PsdzDatabase.UseIsAtLeastOnePathToRootValid = true;
 #endif
                 if (!CheckVoltage(cts, sbResult, true))
                 {
@@ -1593,7 +1609,7 @@ namespace PsdzClient.Programming
                         CacheClearRequired = true;
                         cts?.Token.ThrowIfCancellationRequested();
 
-                        if (RegisterGroup == PdszDatabase.SwiRegisterGroup.HwDeinstall)
+                        if (RegisterGroup == PsdzDatabase.SwiRegisterGroup.HwDeinstall)
                         {
                             PsdzContext.Tal = null;
                             if (!backupFailed)
@@ -1601,7 +1617,7 @@ namespace PsdzClient.Programming
                                 PsdzContext.SaveIDRFilesToPuk();
                             }
 
-                            RegisterGroup = PdszDatabase.SwiRegisterGroup.HwInstall;
+                            RegisterGroup = PsdzDatabase.SwiRegisterGroup.HwInstall;
                             UpdateOperationState();
                             RestoreOperationState();
                             SaveOperationState();
@@ -1632,7 +1648,7 @@ namespace PsdzClient.Programming
                             }
                             else
                             {
-                                if (RegisterGroup != PdszDatabase.SwiRegisterGroup.HwInstall)
+                                if (RegisterGroup != PsdzDatabase.SwiRegisterGroup.HwInstall)
                                 {
                                     break;
                                 }
@@ -1828,13 +1844,13 @@ namespace PsdzClient.Programming
 
                         if (!talExecutionFailed)
                         {
-                            if (RegisterGroup == PdszDatabase.SwiRegisterGroup.HwInstall)
+                            if (RegisterGroup == PsdzDatabase.SwiRegisterGroup.HwInstall)
                             {
                                 ResetOperationState();
                             }
                             // finally reset TAL
                             PsdzContext.Tal = null;
-                            RegisterGroup = PdszDatabase.SwiRegisterGroup.Modification;
+                            RegisterGroup = PsdzDatabase.SwiRegisterGroup.Modification;
                             UpdateOptions(null);
                         }
                         else
@@ -1880,23 +1896,23 @@ namespace PsdzClient.Programming
 
                 bool bModifyFa = operationType == OperationType.BuildTalModFa;
                 List<int> diagAddrList = new List<int>();
-                RegisterGroup = PdszDatabase.SwiRegisterGroup.Modification;
+                RegisterGroup = PsdzDatabase.SwiRegisterGroup.Modification;
                 if (bModifyFa)
                 {
                     foreach (OptionsItem optionsItem in SelectedOptions)
                     {
-                        PdszDatabase.SwiRegisterGroup swiRegisterGroup = PdszDatabase.GetSwiRegisterGroup(optionsItem.SwiRegisterEnum);
+                        PsdzDatabase.SwiRegisterGroup swiRegisterGroup = PsdzDatabase.GetSwiRegisterGroup(optionsItem.SwiRegisterEnum);
                         switch (swiRegisterGroup)
                         {
-                            case PdszDatabase.SwiRegisterGroup.HwDeinstall:
-                            case PdszDatabase.SwiRegisterGroup.HwInstall:
+                            case PsdzDatabase.SwiRegisterGroup.HwDeinstall:
+                            case PsdzDatabase.SwiRegisterGroup.HwInstall:
                             {
                                 if (optionsItem.EcuInfo == null)
                                 {
                                     break;
                                 }
 
-                                if (RegisterGroup == PdszDatabase.SwiRegisterGroup.Modification)
+                                if (RegisterGroup == PsdzDatabase.SwiRegisterGroup.Modification)
                                 {
                                     RegisterGroup = swiRegisterGroup;
                                 }
@@ -1921,7 +1937,7 @@ namespace PsdzClient.Programming
 
                 switch (RegisterGroup)
                 {
-                    case PdszDatabase.SwiRegisterGroup.HwDeinstall:
+                    case PsdzDatabase.SwiRegisterGroup.HwDeinstall:
                         psdzTalFilter = ProgrammingService.Psdz.ObjectBuilder.DefineFilterForAllEcus(ProgrammingUtils.EnabledTaCategories, TalFilterOptions.MustNot, psdzTalFilter);
                         psdzTalFilter = ProgrammingService.Psdz.ObjectBuilder.DefineFilterForAllEcus(new[] { TaCategories.IdBackup }, TalFilterOptions.Allowed, psdzTalFilter);
                         break;
@@ -1946,7 +1962,7 @@ namespace PsdzClient.Programming
 
                 switch (RegisterGroup)
                 {
-                    case PdszDatabase.SwiRegisterGroup.HwInstall:
+                    case PsdzDatabase.SwiRegisterGroup.HwInstall:
                         UpdateTalFilterForSelectedEcus(new[] { TaCategories.CdDeploy }, diagAddrList.ToArray(), TalFilterOptions.Must);
                         if (bModifyFa)
                         {
@@ -1956,7 +1972,7 @@ namespace PsdzClient.Programming
                         UpdateTalFilterTalForECUsWithIDRClassicState(diagAddrList.ToArray());
                         break;
 
-                    case PdszDatabase.SwiRegisterGroup.HwDeinstall:
+                    case PsdzDatabase.SwiRegisterGroup.HwDeinstall:
                         UpdateTalFilterForSelectedEcus(new[] { TaCategories.HwDeinstall }, diagAddrList.ToArray(), TalFilterOptions.Must);
                         break;
 
@@ -2037,7 +2053,7 @@ namespace PsdzClient.Programming
                     PsdzContext.SetFaTarget(psdzFa);
                 }
 
-                ProgrammingService.PdszDatabase.ResetXepRules();
+                ProgrammingService.PsdzDatabase.ResetXepRules();
 
                 IEnumerable<IPsdzIstufe> psdzIstufes = ProgrammingService.Psdz.LogicService.GetPossibleIntegrationLevel(PsdzContext.FaTarget);
                 if (psdzIstufes == null)
@@ -2150,12 +2166,12 @@ namespace PsdzClient.Programming
                 PsdzContext.SetSvtActual(psdzSvt);
                 cts?.Token.ThrowIfCancellationRequested();
 
-                ProgrammingService.PdszDatabase.LinkSvtEcus(PsdzContext.DetectVehicle.EcuList, psdzSvt);
-                List<PdszDatabase.EcuInfo> individualEcus = PsdzContext.GetEcuList(true);
+                ProgrammingService.PsdzDatabase.LinkSvtEcus(PsdzContext.DetectVehicle.EcuList, psdzSvt);
+                List<PsdzDatabase.EcuInfo> individualEcus = PsdzContext.GetEcuList(true);
                 if (individualEcus != null)
                 {
                     log.InfoFormat(CultureInfo.InvariantCulture, "Individual Ecus: {0}", individualEcus.Count());
-                    foreach (PdszDatabase.EcuInfo ecuInfo in individualEcus)
+                    foreach (PsdzDatabase.EcuInfo ecuInfo in individualEcus)
                     {
                         if (ecuInfo != null)
                         {
@@ -2164,7 +2180,7 @@ namespace PsdzClient.Programming
                     }
                 }
 
-                ProgrammingService.PdszDatabase.GetEcuVariants(PsdzContext.DetectVehicle.EcuList);
+                ProgrammingService.PsdzDatabase.GetEcuVariants(PsdzContext.DetectVehicle.EcuList);
                 if (!PsdzContext.UpdateVehicle(ProgrammingService))
                 {
                     sbResult.AppendLine(Strings.UpdateVehicleDataFailed);
@@ -2172,11 +2188,11 @@ namespace PsdzClient.Programming
                     return false;
                 }
 
-                ProgrammingService.PdszDatabase.ResetXepRules();
+                ProgrammingService.PsdzDatabase.ResetXepRules();
                 log.InfoFormat(CultureInfo.InvariantCulture, "Getting ECU variants");
-                ProgrammingService.PdszDatabase.GetEcuVariants(PsdzContext.DetectVehicle.EcuList, PsdzContext.VecInfo);
+                ProgrammingService.PsdzDatabase.GetEcuVariants(PsdzContext.DetectVehicle.EcuList, PsdzContext.VecInfo);
                 log.InfoFormat(CultureInfo.InvariantCulture, "Ecu variants: {0}", PsdzContext.DetectVehicle.EcuList.Count());
-                foreach (PdszDatabase.EcuInfo ecuInfo in PsdzContext.DetectVehicle.EcuList)
+                foreach (PsdzDatabase.EcuInfo ecuInfo in PsdzContext.DetectVehicle.EcuList)
                 {
                     if (ecuInfo != null)
                     {
@@ -2189,33 +2205,33 @@ namespace PsdzClient.Programming
                 {
                     CheckVoltage(cts, sbResult, false, true);
 
-                    ProgrammingService.PdszDatabase.ReadSwiRegister(PsdzContext.VecInfo);
-                    if (ProgrammingService.PdszDatabase.SwiRegisterTree != null)
+                    ProgrammingService.PsdzDatabase.ReadSwiRegister(PsdzContext.VecInfo);
+                    if (ProgrammingService.PsdzDatabase.SwiRegisterTree != null)
                     {
-                        string treeText = ProgrammingService.PdszDatabase.SwiRegisterTree.ToString(clientContext.Language);
+                        string treeText = ProgrammingService.PsdzDatabase.SwiRegisterTree.ToString(clientContext.Language);
                         if (!string.IsNullOrEmpty(treeText))
                         {
                             log.Info(Environment.NewLine + "Swi tree:" + Environment.NewLine + treeText);
                         }
 
-                        Dictionary<PdszDatabase.SwiRegisterEnum, List<OptionsItem>> optionsDict = new Dictionary<PdszDatabase.SwiRegisterEnum, List<OptionsItem>>();
+                        Dictionary<PsdzDatabase.SwiRegisterEnum, List<OptionsItem>> optionsDict = new Dictionary<PsdzDatabase.SwiRegisterEnum, List<OptionsItem>>();
                         foreach (OptionType optionType in _optionTypes)
                         {
-                            PdszDatabase.SwiRegisterEnum swiRegisterEnum = optionType.SwiRegisterEnum;
+                            PsdzDatabase.SwiRegisterEnum swiRegisterEnum = optionType.SwiRegisterEnum;
                             optionType.ClientContext = clientContext;
-                            optionType.SwiRegister = ProgrammingService.PdszDatabase.FindNodeForRegister(swiRegisterEnum);
+                            optionType.SwiRegister = ProgrammingService.PsdzDatabase.FindNodeForRegister(swiRegisterEnum, PsdzContext.VecInfo);
 
                             switch (swiRegisterEnum)
                             {
-                                case PdszDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement:
-                                case PdszDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement:
+                                case PsdzDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement:
+                                case PsdzDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement:
                                 {
-                                    bool individualOnly = swiRegisterEnum == PdszDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement;
-                                    List<PdszDatabase.EcuInfo> ecuList = PsdzContext.GetEcuList(individualOnly);
+                                    bool individualOnly = swiRegisterEnum == PsdzDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement;
+                                    List<PsdzDatabase.EcuInfo> ecuList = PsdzContext.GetEcuList(individualOnly);
                                     if (ecuList != null)
                                     {
                                         List<OptionsItem> optionsItems = new List<OptionsItem>();
-                                        foreach (PdszDatabase.EcuInfo ecuInfo in ecuList)
+                                        foreach (PsdzDatabase.EcuInfo ecuInfo in ecuList)
                                         {
                                             IEcuLogisticsEntry ecuLogisticsEntry = PsdzContext.GetEcuLogisticsEntry((int) ecuInfo.Address);
                                             optionsItems.Add(new OptionsItem(swiRegisterEnum, ecuInfo, ecuLogisticsEntry, clientContext));
@@ -2227,22 +2243,22 @@ namespace PsdzClient.Programming
 
                                 default:
                                 {
-                                    List<PdszDatabase.SwiAction> swiActions = ProgrammingService.PdszDatabase.GetSwiActionsForRegister(swiRegisterEnum, true);
+                                    List<PsdzDatabase.SwiAction> swiActions = ProgrammingService.PsdzDatabase.GetSwiActionsForRegister(swiRegisterEnum, true, PsdzContext.VecInfo);
                                     if (swiActions != null)
                                     {
                                         log.InfoFormat(CultureInfo.InvariantCulture, "Swi actions: {0}", optionType.Name ?? string.Empty);
                                         List<OptionsItem> optionsItems = new List<OptionsItem>();
-                                        foreach (PdszDatabase.SwiAction swiAction in swiActions)
+                                        foreach (PsdzDatabase.SwiAction swiAction in swiActions)
                                         {
                                             bool testModuleValid = false;
                                             if (swiAction.SwiInfoObjs != null)
                                             {
-                                                foreach (PdszDatabase.SwiInfoObj infoInfoObj in swiAction.SwiInfoObjs)
+                                                foreach (PsdzDatabase.SwiInfoObj infoInfoObj in swiAction.SwiInfoObjs)
                                                 {
-                                                    if (infoInfoObj.LinkType == PdszDatabase.SwiInfoObj.SwiActionDatabaseLinkType.SwiActionActionSelectionLink)
+                                                    if (infoInfoObj.LinkType == PsdzDatabase.SwiInfoObj.SwiActionDatabaseLinkType.SwiActionActionSelectionLink)
                                                     {
                                                         string moduleName = infoInfoObj.ModuleName;
-                                                        PdszDatabase.TestModuleData testModuleData = ProgrammingService.PdszDatabase.GetTestModuleData(moduleName);
+                                                        PsdzDatabase.TestModuleData testModuleData = ProgrammingService.PsdzDatabase.GetTestModuleData(moduleName);
                                                         if (testModuleData != null)
                                                         {
                                                             testModuleValid = true;
@@ -2376,7 +2392,7 @@ namespace PsdzClient.Programming
                 IPsdzTalFilter talFilterFlash = new PsdzTalFilter();
                 switch (RegisterGroup)
                 {
-                    case PdszDatabase.SwiRegisterGroup.HwDeinstall:
+                    case PsdzDatabase.SwiRegisterGroup.HwDeinstall:
                         talFilterFlash = ProgrammingService.Psdz.ObjectBuilder.DefineFilterForSelectedEcus(new[] { TaCategories.HwInstall, TaCategories.HwDeinstall }, diagAddrList.ToArray(), TalFilterOptions.Must, talFilterFlash);
                         break;
                 }
@@ -2571,10 +2587,10 @@ namespace PsdzClient.Programming
                 }
                 cts?.Token.ThrowIfCancellationRequested();
 
-                if (bModifyFa && RegisterGroup != PdszDatabase.SwiRegisterGroup.HwDeinstall && programmingActionsSum.Contains(ProgrammingActionType.Programming))
+                if (bModifyFa && RegisterGroup != PsdzDatabase.SwiRegisterGroup.HwDeinstall && programmingActionsSum.Contains(ProgrammingActionType.Programming))
                 {
                     PsdzContext.Tal = null;
-                    RegisterGroup = PdszDatabase.SwiRegisterGroup.Modification;
+                    RegisterGroup = PsdzDatabase.SwiRegisterGroup.Modification;
                     log.ErrorFormat(CultureInfo.InvariantCulture, "Modify FA TAL contains programming actions, TAL flash disabled: {0}", DisableTalFlash);
                     if (ShowMessageEvent != null && !DisableTalFlash)
                     {
@@ -2602,7 +2618,7 @@ namespace PsdzClient.Programming
                 if (psdzBackupTal == null)
                 {
                     PsdzContext.Tal = null;
-                    RegisterGroup = PdszDatabase.SwiRegisterGroup.Modification;
+                    RegisterGroup = PsdzDatabase.SwiRegisterGroup.Modification;
                     sbResult.AppendLine(Strings.TalGenerationFailed);
                     UpdateStatus(sbResult.ToString());
                     return false;
@@ -2652,7 +2668,7 @@ namespace PsdzClient.Programming
                 if (psdzRestorePrognosisTal == null)
                 {
                     PsdzContext.Tal = null;
-                    RegisterGroup = PdszDatabase.SwiRegisterGroup.Modification;
+                    RegisterGroup = PsdzDatabase.SwiRegisterGroup.Modification;
                     sbResult.AppendLine(Strings.TalRestoreGenerationFailed);
                     UpdateStatus(sbResult.ToString());
                     return false;
@@ -2676,7 +2692,7 @@ namespace PsdzClient.Programming
                 if (operationType != OperationType.ExecuteTal)
                 {
                     PsdzContext.Tal = null;
-                    RegisterGroup = PdszDatabase.SwiRegisterGroup.Modification;
+                    RegisterGroup = PsdzDatabase.SwiRegisterGroup.Modification;
                 }
                 return false;
             }
@@ -2743,18 +2759,18 @@ namespace PsdzClient.Programming
             }
 
             PsdzContext.SetFaTarget(PsdzContext.FaActual);
-            ProgrammingService.PdszDatabase.ResetXepRules();
+            ProgrammingService.PsdzDatabase.ResetXepRules();
 
             foreach (OptionsItem optionsItem in SelectedOptions)
             {
                 if (optionsItem.SwiAction?.SwiInfoObjs != null)
                 {
-                    foreach (PdszDatabase.SwiInfoObj infoInfoObj in optionsItem.SwiAction.SwiInfoObjs)
+                    foreach (PsdzDatabase.SwiInfoObj infoInfoObj in optionsItem.SwiAction.SwiInfoObjs)
                     {
-                        if (infoInfoObj.LinkType == PdszDatabase.SwiInfoObj.SwiActionDatabaseLinkType.SwiActionActionSelectionLink)
+                        if (infoInfoObj.LinkType == PsdzDatabase.SwiInfoObj.SwiActionDatabaseLinkType.SwiActionActionSelectionLink)
                         {
                             string moduleName = infoInfoObj.ModuleName;
-                            PdszDatabase.TestModuleData testModuleData = ProgrammingService.PdszDatabase.GetTestModuleData(moduleName);
+                            PsdzDatabase.TestModuleData testModuleData = ProgrammingService.PsdzDatabase.GetTestModuleData(moduleName);
                             if (testModuleData == null)
                             {
                                 log.ErrorFormat(CultureInfo.InvariantCulture, "UpdateTargetFa GetTestModuleData failed for: {0}", moduleName);
@@ -2765,7 +2781,7 @@ namespace PsdzClient.Programming
                                 optionsItem.Invalid = false;
                                 if (!string.IsNullOrEmpty(testModuleData.ModuleRef))
                                 {
-                                    PdszDatabase.SwiInfoObj swiInfoObj = ProgrammingService.PdszDatabase.GetInfoObjectByControlId(testModuleData.ModuleRef, infoInfoObj.LinkType);
+                                    PsdzDatabase.SwiInfoObj swiInfoObj = ProgrammingService.PsdzDatabase.GetInfoObjectByControlId(testModuleData.ModuleRef, infoInfoObj.LinkType);
                                     if (swiInfoObj == null)
                                     {
                                         log.ErrorFormat(CultureInfo.InvariantCulture, "UpdateTargetFa No info object: {0}", testModuleData.ModuleRef);
@@ -2794,7 +2810,7 @@ namespace PsdzClient.Programming
 
                                 IPsdzFa psdzFaTarget = ProgrammingService.Psdz.ObjectBuilder.BuildFa(ifaTarget, PsdzContext.FaActual.Vin);
                                 PsdzContext.SetFaTarget(psdzFaTarget);
-                                ProgrammingService.PdszDatabase.ResetXepRules();
+                                ProgrammingService.PsdzDatabase.ResetXepRules();
                             }
                         }
                     }
@@ -2971,7 +2987,7 @@ namespace PsdzClient.Programming
                 return true;
             }
 
-            if (optionsItem.SwiRegisterEnum == PdszDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement)
+            if (optionsItem.SwiRegisterEnum == PsdzDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement)
             {
                 if (optionsItem.EcuInfo == null)
                 {
@@ -3069,11 +3085,11 @@ namespace PsdzClient.Programming
             List<int> diagAddrList = null;
             switch (RegisterGroup)
             {
-                case PdszDatabase.SwiRegisterGroup.HwInstall:
+                case PsdzDatabase.SwiRegisterGroup.HwInstall:
                     operation = OperationStateData.OperationEnum.HwInstall;
                     break;
 
-                case PdszDatabase.SwiRegisterGroup.HwDeinstall:
+                case PsdzDatabase.SwiRegisterGroup.HwDeinstall:
                     operation = OperationStateData.OperationEnum.HwDeinstall;
                     break;
             }
@@ -3106,15 +3122,15 @@ namespace PsdzClient.Programming
                 return false;
             }
 
-            PdszDatabase.SwiRegisterEnum? swiRegisterEnum = null;
+            PsdzDatabase.SwiRegisterEnum? swiRegisterEnum = null;
             switch (OperationState.Operation)
             {
                 case OperationStateData.OperationEnum.HwInstall:
-                    swiRegisterEnum = PdszDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement;
+                    swiRegisterEnum = PsdzDatabase.SwiRegisterEnum.EcuReplacementAfterReplacement;
                     break;
 
                 case OperationStateData.OperationEnum.HwDeinstall:
-                    swiRegisterEnum = PdszDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement;
+                    swiRegisterEnum = PsdzDatabase.SwiRegisterEnum.EcuReplacementBeforeReplacement;
                     break;
             }
 
@@ -3174,7 +3190,7 @@ namespace PsdzClient.Programming
             {
                 PsdzContext = new PsdzContext(istaFolder);
                 DisableTalFlash = false;
-                RegisterGroup = PdszDatabase.SwiRegisterGroup.Modification;
+                RegisterGroup = PsdzDatabase.SwiRegisterGroup.Modification;
                 OptionsDict = null;
                 OperationState = new OperationStateData();
             }
@@ -3201,17 +3217,17 @@ namespace PsdzClient.Programming
             UpdateStatusEvent?.Invoke(message);
         }
 
-        private void UpdateOptions(Dictionary<PdszDatabase.SwiRegisterEnum, List<OptionsItem>> optionsDict)
+        private void UpdateOptions(Dictionary<PsdzDatabase.SwiRegisterEnum, List<OptionsItem>> optionsDict)
         {
             OptionsDict = optionsDict;
             UpdateOptionsEvent?.Invoke(optionsDict);
         }
 
-        private void UpdateOptionSelections(PdszDatabase.SwiRegisterEnum? swiRegisterEnum = null)
+        private void UpdateOptionSelections(PsdzDatabase.SwiRegisterEnum? swiRegisterEnum = null)
         {
             if (swiRegisterEnum != null)
             {
-                RegisterGroup = PdszDatabase.GetSwiRegisterGroup(swiRegisterEnum.Value);
+                RegisterGroup = PsdzDatabase.GetSwiRegisterGroup(swiRegisterEnum.Value);
             }
 
             UpdateOptionSelectionsEvent?.Invoke(swiRegisterEnum);

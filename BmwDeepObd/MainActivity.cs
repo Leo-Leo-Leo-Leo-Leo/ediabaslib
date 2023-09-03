@@ -266,11 +266,11 @@ namespace BmwDeepObd
                 CopyFromAppDst = ActivityCommon.CopyFromAppDst;
                 UsbFirmwareFileName = ActivityCommon.UsbFirmwareFileName;
                 EnableTranslation = ActivityCommon.EnableTranslation;
-                EnableTranslateLogin = ActivityCommon.EnableTranslateLogin;
                 YandexApiKey = ActivityCommon.YandexApiKey;
                 IbmTranslatorApiKey = ActivityCommon.IbmTranslatorApiKey;
                 IbmTranslatorUrl = ActivityCommon.IbmTranslatorUrl;
-                Translator = !string.IsNullOrWhiteSpace(ActivityCommon.YandexApiKey) ? ActivityCommon.TranslatorType.YandexTranslate : ActivityCommon.SelectedTranslator;
+                DeeplApiKey = ActivityCommon.DeeplApiKey;
+                Translator = ActivityCommon.SelectedTranslator;
                 ShowBatteryVoltageWarning = ActivityCommon.ShowBatteryVoltageWarning;
                 BatteryWarnings = ActivityCommon.BatteryWarnings;
                 BatteryWarningVoltage = ActivityCommon.BatteryWarningVoltage;
@@ -332,6 +332,8 @@ namespace BmwDeepObd
                 StorageRequirementsAccepted = instanceData.StorageRequirementsAccepted;
                 XmlEditorPackageName = instanceData.XmlEditorPackageName ?? string.Empty;
                 XmlEditorClassName = instanceData.XmlEditorClassName ?? string.Empty;
+                DataLogActive = instanceData.DataLogActive;
+                DataLogAppend = instanceData.DataLogAppend;
                 if (storage)
                 {
                     RecentConfigFiles = ActivityCommon.GetRecentConfigList();
@@ -385,10 +387,10 @@ namespace BmwDeepObd
             [XmlElement("CopyFromAppDst")] public string CopyFromAppDst { get; set; }
             [XmlElement("UsbFirmwareFile")] public string UsbFirmwareFileName { get; set; }
             [XmlElement("EnableTranslation")] public bool EnableTranslation { get; set; }
-            [XmlElement("EnableTranslateLogin")] public bool EnableTranslateLogin { get; set; }
             [XmlElement("YandexApiKey")] public string YandexApiKey { get; set; }
             [XmlElement("IbmTranslatorApiKey")] public string IbmTranslatorApiKey { get; set; }
             [XmlElement("IbmTranslatorUrl")] public string IbmTranslatorUrl { get; set; }
+            [XmlElement("DeeplApiKey")] public string DeeplApiKey { get; set; }
             [XmlElement("Translator")] public ActivityCommon.TranslatorType Translator { get; set; }
             [XmlElement("ShowBatteryVoltageWarning")] public bool ShowBatteryVoltageWarning { get; set; }
             [XmlElement("BatteryWarnings")] public long BatteryWarnings { get; set; }
@@ -432,6 +434,7 @@ namespace BmwDeepObd
         private const long EcuExtractSize = 2600000000;         // extracted ecu files size
         private const string InfoXmlName = "ObbInfo.xml";
         private const string ContentFileName = "Content.xml";
+        private const string TranslationFileNameMain = "TranslationMain.xml";
         private const int MenuGroupRecentId = 1;
         private const int CpuLoadCritical = 70;
         private const int AutoHideTimeout = 3000;
@@ -781,6 +784,7 @@ namespace BmwDeepObd
 
         protected override void OnSaveInstanceState(Bundle outState)
         {
+            StoreTranslation();
             _instanceData.SelectedInterface = _activityCommon.SelectedInterface;
             _instanceData.SelectedEnetIp = _activityCommon.SelectedEnetIp;
             _instanceData.SelectedElmWifiIp = _activityCommon.SelectedElmWifiIp;
@@ -1851,6 +1855,7 @@ namespace BmwDeepObd
 
                 case Resource.Id.menu_translation_clear_cache:
                     _activityCommon.ClearTranslationCache();
+                    StoreTranslation();
                     _translationList = null;
                     _translatedList = null;
                     UpdateOptionsMenu();
@@ -2394,8 +2399,6 @@ namespace BmwDeepObd
         // ReSharper disable once UnusedMethodReturnValue.Local
         private bool UpdateCheck()
         {
-            TranslateLogin();
-
             long updateCheckDelay = ActivityCommon.UpdateCheckDelay;
             bool serialCheck = ActivityCommon.IsSerialNumberCheckRequired();
             if (serialCheck)
@@ -2446,29 +2449,6 @@ namespace BmwDeepObd
                     });
                 }
             }, _instanceData.UpdateSkipVersion);
-
-            return result;
-        }
-
-        // ReSharper disable once UnusedMethodReturnValue.Local
-        private bool TranslateLogin()
-        {
-            if (!ActivityCommon.EnableTranslateLogin)
-            {
-                _instanceData.TransLoginTimeNext = DateTime.MinValue.Ticks;
-                return false;
-            }
-
-            if (DateTime.Now.Ticks < _instanceData.TransLoginTimeNext)
-            {
-                return false;
-            }
-
-            bool result = _activityCommon.TranslateLogin(success =>
-            {
-                _instanceData.TransLoginTimeNext = DateTime.Now.Ticks + (success ? TimeSpan.TicksPerDay : TimeSpan.TicksPerHour);
-                StoreSettings();
-            });
 
             return result;
         }
@@ -2875,19 +2855,13 @@ namespace BmwDeepObd
                         prefs.GetString("StorageMedia", ActivityCommon.CustomStorageMedia);
                     ActivityCommon.EnableTranslation =
                         prefs.GetBoolean("EnableTranslation", ActivityCommon.EnableTranslation);
-                    ActivityCommon.EnableTranslateLogin =
-                        prefs.GetBoolean("EnableTranslateLogin", ActivityCommon.EnableTranslateLogin);
                     ActivityCommon.YandexApiKey = prefs.GetString("YandexApiKey", ActivityCommon.YandexApiKey);
                     ActivityCommon.IbmTranslatorApiKey =
                         prefs.GetString("IbmTranslatorApiKey", ActivityCommon.IbmTranslatorApiKey);
                     ActivityCommon.IbmTranslatorUrl =
                         prefs.GetString("IbmTranslatorUrl", ActivityCommon.IbmTranslatorUrl);
-                    ActivityCommon.TranslatorType defaultTranslator =
-                        !string.IsNullOrWhiteSpace(ActivityCommon.YandexApiKey)
-                            ? ActivityCommon.TranslatorType.YandexTranslate
-                            : ActivityCommon.SelectedTranslator;
                     _activityCommon.Translator =
-                        (ActivityCommon.TranslatorType) prefs.GetLong("Translator", (int) defaultTranslator);
+                        (ActivityCommon.TranslatorType) prefs.GetLong("Translator", (int)ActivityCommon.SelectedTranslator);
                     ActivityCommon.ShowBatteryVoltageWarning = prefs.GetBoolean("ShowBatteryWarning",
                         ActivityCommon.ShowBatteryVoltageWarning);
                     ActivityCommon.BatteryWarnings = prefs.GetLong("BatteryWarnings", ActivityCommon.BatteryWarnings);
@@ -3224,10 +3198,10 @@ namespace BmwDeepObd
                     ActivityCommon.CopyFromAppDst = storageData.CopyFromAppDst;
                     ActivityCommon.UsbFirmwareFileName = storageData.UsbFirmwareFileName;
                     ActivityCommon.EnableTranslation = storageData.EnableTranslation;
-                    ActivityCommon.EnableTranslateLogin = storageData.EnableTranslateLogin;
                     ActivityCommon.YandexApiKey = storageData.YandexApiKey;
                     ActivityCommon.IbmTranslatorApiKey = storageData.IbmTranslatorApiKey;
                     ActivityCommon.IbmTranslatorUrl = storageData.IbmTranslatorUrl;
+                    ActivityCommon.DeeplApiKey = storageData.DeeplApiKey;
                     _activityCommon.Translator = storageData.Translator;
                     ActivityCommon.ShowBatteryVoltageWarning = storageData.ShowBatteryVoltageWarning;
                     ActivityCommon.BatteryWarnings = storageData.BatteryWarnings;
@@ -3903,6 +3877,7 @@ namespace BmwDeepObd
             _translationList = null;
             _translatedList = null;
 
+            StoreTranslation();
             UpdateCheck();
             if (_instanceData.CommErrorsCount >= ActivityCommon.MinSendCommErrors && responseCount > 0 &&
                 _instanceData.TraceActive && !string.IsNullOrEmpty(_instanceData.TraceDir))
@@ -5612,9 +5587,10 @@ namespace BmwDeepObd
             }
 
             UpdateJobReaderSettings();
-            _activityCommon.ClearTranslationCache();
             _translationList = null;
             _translatedList = null;
+
+            ReadTranslation();
             UpdateDirectories();
             if (!failed)
             {
@@ -5622,6 +5598,58 @@ namespace BmwDeepObd
             }
 
             PostCompileCode();
+        }
+
+        private bool ReadTranslation()
+        {
+            if (_activityCommon == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (ActivityCommon.IsTranslationAvailable() && ActivityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
+                {
+                    string xmlFileDir = Path.GetDirectoryName(_instanceData.ConfigFileName);
+                    if (!string.IsNullOrEmpty(xmlFileDir))
+                    {
+                        return _activityCommon.ReadTranslationCache(Path.Combine(xmlFileDir, TranslationFileNameMain));
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            return false;
+        }
+
+        private bool StoreTranslation()
+        {
+            if (_activityCommon == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (ActivityCommon.IsTranslationAvailable() && ActivityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
+                {
+                    string xmlFileDir = Path.GetDirectoryName(_instanceData.ConfigFileName);
+                    if (!string.IsNullOrEmpty(xmlFileDir))
+                    {
+                        return _activityCommon.StoreTranslationCache(Path.Combine(xmlFileDir, TranslationFileNameMain));
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            return false;
         }
 
         private void UpdateJobReaderSettings()
@@ -7206,6 +7234,7 @@ namespace BmwDeepObd
 
         private void ClearConfiguration()
         {
+            StoreTranslation();
             ActivityCommon.JobReader.Clear();
             _instanceData.ConfigFileName = string.Empty;
             StoreSettings();
@@ -7305,7 +7334,7 @@ namespace BmwDeepObd
         {
             try
             {
-                Intent serverIntent = new Intent(this, typeof(YandexKeyActivity));
+                Intent serverIntent = new Intent(this, typeof(TranslateKeyActivity));
                 StartActivityForResult(serverIntent, (int)ActivityRequest.RequestYandexKey);
             }
             catch (Exception)
@@ -7557,6 +7586,7 @@ namespace BmwDeepObd
                 serverIntent.PutExtra(XmlToolActivity.ExtraElmWifiIp, _activityCommon.SelectedElmWifiIp);
                 serverIntent.PutExtra(XmlToolActivity.ExtraDeepObdWifiIp, _activityCommon.SelectedDeepObdWifiIp);
                 serverIntent.PutExtra(XmlToolActivity.ExtraFileName, _instanceData.ConfigFileName);
+                serverIntent.PutExtra(XmlToolActivity.ExtraMotorbikes, ActivityCommon.JobReader.IsMotorbike);
                 StartActivityForResult(serverIntent, (int)ActivityRequest.RequestXmlTool);
             }
             catch (Exception)
@@ -7587,13 +7617,29 @@ namespace BmwDeepObd
                 }
 
                 Intent serverIntent = new Intent(this, typeof(EdiabasToolActivity));
-                EdiabasToolActivity.IntentTranslateActivty = _activityCommon;
                 serverIntent.PutExtra(EdiabasToolActivity.ExtraInitDir, _instanceData.EcuPath);
                 serverIntent.PutExtra(EdiabasToolActivity.ExtraAppDataDir, _instanceData.AppDataPath);
+                if (!string.IsNullOrEmpty(_instanceData.ConfigFileName))
+                {
+                    try
+                    {
+                        string xmlFileDir = Path.GetDirectoryName(_instanceData.ConfigFileName);
+                        if (!string.IsNullOrEmpty(xmlFileDir))
+                        {
+                            serverIntent.PutExtra(EdiabasToolActivity.ExtraConfigDir, xmlFileDir);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(sgdbFile))
                 {
                     serverIntent.PutExtra(EdiabasToolActivity.ExtraSgbdFile, sgdbFile);
                 }
+
                 serverIntent.PutExtra(EdiabasToolActivity.ExtraInterface, (int)_activityCommon.SelectedInterface);
                 serverIntent.PutExtra(EdiabasToolActivity.ExtraDeviceName, _instanceData.DeviceName);
                 serverIntent.PutExtra(EdiabasToolActivity.ExtraDeviceAddress, _instanceData.DeviceAddress);

@@ -21,13 +21,14 @@ using HarmonyLib;
 using ICSharpCode.SharpZipLib.Core;
 using ICSharpCode.SharpZipLib.Zip;
 using log4net;
+using Microsoft.Win32;
 using PsdzClient.Core;
 using PsdzClient.Core.Container;
 using PsdzClientLibrary;
 
 namespace PsdzClient
 {
-    public partial class PdszDatabase : IDisposable
+    public partial class PsdzDatabase : IDisposable
     {
         public const string DiagObjServiceRoot = "DiagnosticObjectServicefunctionRoot";
         public const string AblFilter = "ABL";
@@ -1251,7 +1252,7 @@ namespace PsdzClient
                 return null;
             }
 
-            public string GetRuleFormula(Vehicle vehicle, RuleExpression.FormulaConfig formulaConfig = null)
+            public string GetRuleFormula(Vehicle vehicle, RuleExpression.FormulaConfig formulaConfig = null, List<string> subRuleIds = null)
             {
                 if (vehicle == null)
                 {
@@ -1265,7 +1266,7 @@ namespace PsdzClient
                     RuleExpression.FormulaConfig formulaConfigCurrent = formulaConfig;
                     if (formulaConfigCurrent == null)
                     {
-                        formulaConfigCurrent = new RuleExpression.FormulaConfig("RuleString", "RuleNum", "IsValidRuleString", "IsValidRuleNum");
+                        formulaConfigCurrent = new RuleExpression.FormulaConfig("RuleString", "RuleNum", "IsValidRuleString", "IsValidRuleNum", "IsFaultRuleValid", subRuleIds);
                     }
                     return ruleExpression.ToFormula(formulaConfigCurrent);
                 }
@@ -1368,7 +1369,7 @@ namespace PsdzClient
         private const string EcuCharacteristicsXmFile = "EcuCharacteristics.xml";
         private const string EcuCharacteristicsZipFile = "EcuCharacteristics.zip";
         private const string ConfigurationContainerXMLPar = "ConfigurationContainerXML";
-        private static readonly ILog log = LogManager.GetLogger(typeof(PdszDatabase));
+        private static readonly ILog log = LogManager.GetLogger(typeof(PsdzDatabase));
 
         // ToDo: Check on update
         private static List<string> engineRootNodeClasses = new List<string>
@@ -1418,18 +1419,18 @@ namespace PsdzClient
         public bool UseIsAtLeastOnePathToRootValid { get; set; }
         public static bool RestartRequired { get; private set; }
 
-        public PdszDatabase(string istaFolder)
+        public PsdzDatabase(string istaFolder)
         {
             if (!Directory.Exists(istaFolder))
             {
-                log.ErrorFormat("PdszDatabase: ISTA path not existing: {0}", istaFolder);
+                log.ErrorFormat("PsdzDatabase: ISTA path not existing: {0}", istaFolder);
                 throw new Exception(string.Format("ISTA path not existing: {0}", istaFolder));
             }
 
             _databasePath = Path.Combine(istaFolder, "SQLiteDBs");
             if (!Directory.Exists(_databasePath))
             {
-                log.ErrorFormat("PdszDatabase: ISTA database path not existing: {0}", _databasePath);
+                log.ErrorFormat("PsdzDatabase: ISTA database path not existing: {0}", _databasePath);
                 throw new Exception(string.Format("ISTA database path not existing: {0}", _databasePath));
             }
 
@@ -1442,14 +1443,14 @@ namespace PsdzClient
                 }
                 catch (Exception e)
                 {
-                    log.InfoFormat("PdszDatabase CreateDirectory Exception: {0}", e.Message);
+                    log.InfoFormat("PsdzDatabase CreateDirectory Exception: {0}", e.Message);
                 }
             }
 
             _testModulePath = Path.Combine(istaFolder, "Testmodule");
             if (!Directory.Exists(_testModulePath))
             {
-                log.ErrorFormat("PdszDatabase: ISTA testmodule path not existing: {0}", _testModulePath);
+                log.ErrorFormat("PsdzDatabase: ISTA testmodule path not existing: {0}", _testModulePath);
                 throw new Exception(string.Format("ISTA testmodule path not existing: {0}", _testModulePath));
             }
 
@@ -1461,11 +1462,11 @@ namespace PsdzClient
 
             if (!Directory.Exists(_frameworkPath))
             {
-                log.ErrorFormat("PdszDatabase: ISTA framework path not existing: {0}", _frameworkPath);
+                log.ErrorFormat("PsdzDatabase: ISTA framework path not existing: {0}", _frameworkPath);
                 throw new Exception(string.Format("ISTA framework path not existing: {0}", _frameworkPath));
             }
 
-            log.InfoFormat("PdszDatabase: ISTA framework path: {0}", _frameworkPath);
+            log.InfoFormat("PsdzDatabase: ISTA framework path: {0}", _frameworkPath);
 
             string databaseFile = Path.Combine(_databasePath, "DiagDocDb.sqlite");
             string connection = "Data Source=\"" + databaseFile + "\";";
@@ -1503,11 +1504,14 @@ namespace PsdzClient
             };
         }
 
-        public static string SwiRegisterEnumerationNameConverter(SwiRegisterEnum swiRegisterEnum)
+        // ToDo: Check on update
+        public static string SwiRegisterEnumerationNameConverter(SwiRegisterEnum swiRegister, Vehicle vehicle)
         {
             string arg;
-            switch (swiRegisterEnum)
+            switch (swiRegister)
             {
+                default:
+                    throw new ArgumentException("Unknown SWI Register!");
                 case SwiRegisterEnum.SoftwareUpdateExtended:
                     arg = "ERWEITERT";
                     break;
@@ -1545,12 +1549,18 @@ namespace PsdzClient
                     arg = "ALLGEMEIN";
                     break;
                 case SwiRegisterEnum.Immediatactions:
-                    arg = "SOFORTMASSNAHMEN";
+                    if (vehicle != null)
+                    {
+                        if (vehicle.IsMotorcycle())
+                        {
+                            arg = "SOFORTMASSNAHMEN_PROGRAMMIERUNG_MOTORRAD";
+                            break;
+                        }
+                    }
+                    arg = "SOFORTMASSNAHMEN_PROGRAMMIERUNG_PKW";
                     break;
-                default:
-                    throw new ArgumentException("Unknown SWI Register!");
             }
-            return string.Format(CultureInfo.InvariantCulture, "REG|{0}", arg);
+            return $"REG|{arg}";
         }
 
         public static SwiRegisterGroup GetSwiRegisterGroup(SwiRegisterEnum swiRegisterEnum)
@@ -1976,9 +1986,9 @@ namespace PsdzClient
             return true;
         }
 
-        public List<SwiAction> GetSwiActionsForRegister(SwiRegisterEnum swiRegisterEnum, bool getChildren)
+        public List<SwiAction> GetSwiActionsForRegister(SwiRegisterEnum swiRegisterEnum, bool getChildren, Vehicle vehicle)
         {
-            SwiRegister swiRegister = FindNodeForRegister(swiRegisterEnum);
+            SwiRegister swiRegister = FindNodeForRegister(swiRegisterEnum, vehicle);
             if (swiRegister == null)
             {
                 return null;
@@ -2015,7 +2025,7 @@ namespace PsdzClient
             return swiActions;
         }
 
-        public SwiRegister FindNodeForRegister(SwiRegisterEnum swiRegisterEnum)
+        public SwiRegister FindNodeForRegister(SwiRegisterEnum swiRegisterEnum, Vehicle vehicle)
         {
             try
             {
@@ -2025,7 +2035,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                string registerId = SwiRegisterEnumerationNameConverter(swiRegisterEnum);
+                string registerId = SwiRegisterEnumerationNameConverter(swiRegisterEnum, vehicle);
                 return FindNodeForRegisterId(SwiRegisterTree, registerId);
             }
             catch (Exception e)
@@ -2224,35 +2234,39 @@ namespace PsdzClient
             {
                 return null;
             }
+
+            if (vehicle == null)
+            {
+                return null;
+            }
+
             List<EcuVar> ecuVars = FindEcuVariantsFromBntn(bnTnName, vehicle, ffmResolver);
             if (ecuVars == null || ecuVars.Count == 0)
             {
                 return null;
             }
 
-            EcuVar ecuVar = ecuVars.FirstOrDefault((EcuVar x) => vehicle.ECU != null && vehicle.ECU.Any((ECU i) => string.Compare(x.Name, i.ECU_SGBD, StringComparison.InvariantCultureIgnoreCase) == 0));
-            if (ecuVar != null)
+            EcuVar ecuVar;
+            if (ecuVars.Count == 1)
             {
-                return ecuVar;
+                ecuVar = ecuVars.FirstOrDefault();
             }
-
-            if (diagAddrAsInt == null)
+            else
             {
-                return null;
-            }
+                ecuVar = ecuVars.FirstOrDefault(x => vehicle.ECU != null && vehicle.ECU.Any(i => string.Compare(x.Name, i.ECU_SGBD, StringComparison.InvariantCultureIgnoreCase) == 0));
+                if (ecuVar == null)
+                {
+                    if (diagAddrAsInt == null)
+                    {
+                        return null;
+                    }
 
-            ObservableCollection<ECU> ecu = vehicle.ECU;
-            ECU ecu2 = (ecu != null) ? ecu.FirstOrDefault(delegate (ECU v)
-            {
-                long id_SG_ADR = v.ID_SG_ADR;
-                int? diagAddrAsInt2 = diagAddrAsInt;
-                long? num = (diagAddrAsInt2 != null) ? new long?((long)diagAddrAsInt2.GetValueOrDefault()) : null;
-                return id_SG_ADR == num.GetValueOrDefault() & num != null;
-            }) : null;
-
-            if (ecu2 != null && !string.IsNullOrEmpty(ecu2.ECU_SGBD))
-            {
-                ecuVar = GetEcuVariantByName(ecu2.ECU_SGBD);
+                    ECU eCU = vehicle.ECU?.FirstOrDefault(v => v.ID_SG_ADR == diagAddrAsInt);
+                    if (eCU != null && !string.IsNullOrEmpty(eCU.ECU_SGBD))
+                    {
+                        ecuVar = GetEcuVariantByName(eCU.ECU_SGBD);
+                    }
+                }
             }
 
             return ecuVar;
@@ -2351,8 +2365,9 @@ namespace PsdzClient
                         while (reader.Read())
                         {
                             EcuPrgVar ecuPrgVarTemp = ReadXepEcuPrgVar(reader);
-                            bool valid = ecuPrgVarTemp != null;
-                            if (vehicle != null && ecuPrgVarTemp != null)
+                            bool valid = true;
+
+                            if (vehicle != null)
                             {
                                 if (!EvaluateXepRulesById(ecuPrgVarTemp.EcuVarId, vehicle, ffmDynamicResolver))
                                 {
@@ -2755,6 +2770,34 @@ namespace PsdzClient
             return null;
         }
 
+        public List<string> GetAllTypeKeys()
+        {
+            log.InfoFormat("GetAllTypeKeys");
+            List<string> typeKeys = new List<string>();
+            try
+            {
+                string sql = @"SELECT DISTINCT(TYPSCHLUESSEL) FROM VINRANGES";
+                using (SQLiteCommand command = new SQLiteCommand(sql, _mDbConnection))
+                {
+                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string typeKey = reader["TYPSCHLUESSEL"].ToString().Trim();
+                            typeKeys.AddIfNotContains(typeKey);
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                log.ErrorFormat("GetAllTypeKeys Exception: '{0}'", e.Message);
+                return null;
+            }
+
+            return typeKeys;
+        }
+
         public List<Characteristics> GetVehicleCharacteristics(Vehicle vehicle)
         {
             List<Characteristics> characteristicsList = GetVehicleCharacteristicsFromDatabase(vehicle, false);
@@ -2784,9 +2827,20 @@ namespace PsdzClient
             return BatteryEnum.PbNew;
         }
 
-        public bool IsVehicleAnAlpina(Vehicle vehicle)
+        public static bool IsVehicleAnAlpina(Vehicle vehicle)
         {
             return vehicle.hasSA("920");
+        }
+
+        // ToDo: Check on update
+        public static string GetProdArt(Vehicle vecInfo)
+        {
+            string result = "P";
+            if (vecInfo != null && ("M".Equals(vecInfo.Prodart) || vecInfo.BrandName == BrandName.BMWMOTORRAD))
+            {
+                result = "M";
+            }
+            return result;
         }
 
         private void HandleAlpinaVehicles(Vehicle vehicle, List<Characteristics> characteristicsList)
@@ -2889,6 +2943,57 @@ namespace PsdzClient
             return saLaPa;
         }
 
+        public List<Tuple<string, string>> GetTransmissionSaByTypeKey(string typekey)
+        {
+            log.InfoFormat("GetTransmissionSaByTypeKey Typekey: {0}", typekey);
+            if (string.IsNullOrEmpty(typekey))
+            {
+                return null;
+            }
+
+            List<Tuple<string, string>> saList = new List<Tuple<string, string>>();
+            try
+            {
+                string typeKeyId = GetTypeKeyId(typekey, false);
+                if (string.IsNullOrEmpty(typeKeyId))
+                {
+                    return null;
+                }
+
+                string sql = string.Format(CultureInfo.InvariantCulture,
+                    @"SELECT SA.Name AS SANAME, LINK.VERB AS VERB FROM STD_TYPEKEY_SA_LINK LINK JOIN XEP_SALAPAS SA ON SA.ID = SALAPA_OID" +
+                    @" WHERE VEHICLETYPE_ID = {0} AND UPPER(SA_GROUP) = 'TRANSMISSION'", typeKeyId);
+                using (SQLiteCommand command = new SQLiteCommand(sql, _mDbConnection))
+                {
+                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string saName = reader["SANAME"].ToString().Trim();
+                            string verb = reader["VERB"].ToString().Trim();
+                            Tuple<string, string> item = new Tuple<string, string>(saName, verb);
+                            saList.Add(item);
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                log.ErrorFormat("GetTransmissionSaByTypeKey Exception: '{0}'", e.Message);
+                return null;
+            }
+
+            if (saList.Count > 1)
+            {
+                log.ErrorFormat("GetTransmissionSaByTypeKey Multipe entries: {0}", saList.Count);
+            }
+            else
+            {
+                log.InfoFormat("GetTransmissionSaByTypeKey Count: {0}", saList.Count);
+            }
+            return saList;
+        }
+
         public SaLaPa GetSaLaPaByProductTypeAndSalesKey(string productType, string salesKey)
         {
             log.InfoFormat("GetSaLaPaByProductTypeAndSalesKey Type: {0}, Key: {1}", productType, salesKey);
@@ -2900,7 +3005,8 @@ namespace PsdzClient
             SaLaPa saLaPa = null;
             try
             {
-                string sql = string.Format(CultureInfo.InvariantCulture, @"SELECT ID, " + DatabaseFunctions.SqlTitleItems + ", NAME, PRODUCT_TYPE FROM XEP_SALAPAS WHERE (NAME = '{0}' AND PRODUCT_TYPE = '{1}')", productType, salesKey);
+                string tmpSalesKey = salesKey.TrimStart('0');
+                string sql = string.Format(CultureInfo.InvariantCulture, @"SELECT ID, " + DatabaseFunctions.SqlTitleItems + ", NAME, PRODUCT_TYPE FROM XEP_SALAPAS WHERE (NAME = '{0}' AND PRODUCT_TYPE = '{1}')", tmpSalesKey, productType);
                 using (SQLiteCommand command = new SQLiteCommand(sql, _mDbConnection))
                 {
                     using (SQLiteDataReader reader = command.ExecuteReader())
@@ -4797,6 +4903,33 @@ namespace PsdzClient
             }
 
             return dbInfo;
+        }
+
+        public static string GetSwiVersion()
+        {
+            log.InfoFormat("GetSwiVersion");
+            string swiVersion = string.Empty;
+            try
+            {
+                RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32);
+                RegistryKey istaKey = baseKey.OpenSubKey(@"SOFTWARE\BMWGroup\ISPI\ISTA");
+                if (istaKey != null)
+                {
+                    string swiData = istaKey.GetValue("SWIData") as string;
+                    if (!string.IsNullOrEmpty(swiData))
+                    {
+                        swiVersion = swiData;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                log.ErrorFormat("GetSwiVersion Exception: '{0}'", e.Message);
+                return null;
+            }
+
+            log.InfoFormat("GetSwiVersion Ver: {0}", swiVersion);
+            return swiVersion;
         }
 
         public bool EvaluateXepRulesById(string id, Vehicle vehicle, IFFMDynamicResolver ffmResolver, string objectId = null)

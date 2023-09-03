@@ -27,7 +27,7 @@ namespace PsdzClient.Core
 				//Log.Warning("EcuGroupExpression.Evaluate()", "vec was null", Array.Empty<object>());
 				return false;
 			}
-			PdszDatabase.EcuGroup ecuGroupById = ClientContext.GetDatabase(vec)?.GetEcuGroupById(this.value.ToString(CultureInfo.InvariantCulture));
+			PsdzDatabase.EcuGroup ecuGroupById = ClientContext.GetDatabase(vec)?.GetEcuGroupById(this.value.ToString(CultureInfo.InvariantCulture));
 			if (ecuGroupById == null || string.IsNullOrEmpty(ecuGroupById.Name))
 			{
 				return false;
@@ -40,12 +40,8 @@ namespace PsdzClient.Core
 			{
 				return true;
 			}
-			bool flag;
-			if (!(flag = (vec.getECUbyECU_GRUPPE(ecuGroupById.Name) != null)) && "d_0044".Equals(ecuGroupById.Name, StringComparison.OrdinalIgnoreCase) && vec.BNType == BNType.BN2000_PGO)
-			{
-				//Log.Info("EcuGroupExpression.Evaluate()", "check for D_0044 (EWS3) => EWS3P", Array.Empty<object>());
-				flag = true;
-			}
+            bool flag = vec.getECUbyECU_GRUPPE(ecuGroupById.Name) != null;
+            //Log.Debug("EcuGroupExpression.Evaluate()", "EcuGroupId: {0} (original rule: {1})  result: {2}", value, ecuGroupById.Name, flag);
 			return flag;
 		}
 
@@ -80,7 +76,7 @@ namespace PsdzClient.Core
 
         public override string ToFormula(FormulaConfig formulaConfig)
         {
-            PdszDatabase.EcuGroup ecuGroupById = ClientContext.GetDatabase(this.vecInfo)?.GetEcuGroupById(this.value.ToString(CultureInfo.InvariantCulture));
+            PsdzDatabase.EcuGroup ecuGroupById = ClientContext.GetDatabase(this.vecInfo)?.GetEcuGroupById(this.value.ToString(CultureInfo.InvariantCulture));
             
             StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.Append(FormulaSeparator(formulaConfig));

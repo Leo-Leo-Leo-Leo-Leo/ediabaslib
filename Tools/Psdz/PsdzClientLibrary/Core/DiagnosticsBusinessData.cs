@@ -63,6 +63,7 @@ namespace PsdzClient.Core
             vecInfo.Sp2021Enabled = vecInfo.Produktlinie.StartsWith("21");
         }
 
+        // ToDo: Check on update
         public string GetMainSeriesSgbd(IVehicle vecInfo)
         {
             switch (vecInfo.BNType)
@@ -88,10 +89,10 @@ namespace PsdzClient.Core
                                     return "E70";
                                 case "PL3-ALT":
                                     return "ZCS_ALL";
-                                case "PL5-ALT":
-                                    return "RR1";
                                 default:
                                     return "F01";
+                                case "PL5-ALT":
+                                    return "RR1";
                             }
                             if (vecInfo.Ereihe == "E38" || vecInfo.Ereihe == "E46" || vecInfo.Ereihe == "E83" || vecInfo.Ereihe == "E85" || vecInfo.Ereihe == "E86" || vecInfo.Ereihe == "E36" || vecInfo.Ereihe == "E39" || vecInfo.Ereihe == "E52" || vecInfo.Ereihe == "E53")
                             {
@@ -127,48 +128,51 @@ namespace PsdzClient.Core
             }
         }
 
+        // ToDo: Check on update
         public string GetMainSeriesSgbdAdditional(IVehicle vecInfo)
         {
+            //Log.Info(Log.CurrentMethod(), "Entering GetMainSeriesSgbdAdditional");
             if (vecInfo.Prodart == "P")
             {
                 if (!string.IsNullOrEmpty(vecInfo.Produktlinie))
                 {
-                    switch (vecInfo.Produktlinie.ToUpper())
+                    string text = vecInfo.Produktlinie.ToUpper();
+                    if (!(text == "PL5-ALT"))
                     {
-                        case "PL6":
-                            if (!vecInfo.C_DATETIME.HasValue)
-                            {
-                                AddServiceCode(string.Empty, 2);
-                                //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
-                                if (vecInfo.Ereihe == "F01" || vecInfo.Ereihe == "F02" || vecInfo.Ereihe == "F03" || vecInfo.Ereihe == "F04" || vecInfo.Ereihe == "F06" || vecInfo.Ereihe == "F07" || vecInfo.Ereihe == "F10" || vecInfo.Ereihe == "F11" || vecInfo.Ereihe == "F12" || vecInfo.Ereihe == "F13" || vecInfo.Ereihe == "F18")
-                                {
-                                    //Log.Info(Log.CurrentMethod(), "Ereihe: " + vecInfo.Ereihe + ", returning F01BN2K");
-                                    return "F01BN2K";
-                                }
-                            }
-                            else if (vecInfo.C_DATETIME < DTimeF01Lci)
-                            {
-                                //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is earlier than DTimeF01Lci");
-                                return "F01BN2K";
-                            }
-                            break;
-                        case "PL5-ALT":
-                            if (!vecInfo.C_DATETIME.HasValue)
-                            {
-                                AddServiceCode(string.Empty, 1);
-                                //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
-                                return "RR1_2020";
-                            }
-                            if (vecInfo.C_DATETIME >= DTimeRR_S2)
-                            {
-                                //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is later than DTimeRR_S2");
-                                return "RR1_2020";
-                            }
-                            break;
-                        default:
+                        if (!(text == "PL6"))
+                        {
                             AddServiceCode(string.Empty, 3);
                             //Log.Info(Log.CurrentMethod(), "Reached default block, produck line: " + vecInfo.Produktlinie);
-                            break;
+                        }
+                        else if (!vecInfo.C_DATETIME.HasValue)
+                        {
+                            AddServiceCode(string.Empty, 2);
+                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
+                            if (vecInfo.Ereihe == "F01" || vecInfo.Ereihe == "F02" || vecInfo.Ereihe == "F03" || vecInfo.Ereihe == "F04" || vecInfo.Ereihe == "F06" || vecInfo.Ereihe == "F07" || vecInfo.Ereihe == "F10" || vecInfo.Ereihe == "F11" || vecInfo.Ereihe == "F12" || vecInfo.Ereihe == "F13" || vecInfo.Ereihe == "F18")
+                            {
+                                //Log.Info(Log.CurrentMethod(), "Ereihe: " + vecInfo.Ereihe + ", returning F01BN2K");
+                                return "F01BN2K";
+                            }
+                        }
+                        else if (vecInfo.C_DATETIME < DTimeF01Lci)
+                        {
+                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is earlier than DTimeF01Lci");
+                            return "F01BN2K";
+                        }
+                    }
+                    else
+                    {
+                        if (!vecInfo.C_DATETIME.HasValue)
+                        {
+                            AddServiceCode(string.Empty, 1);
+                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
+                            return "RR1_2020";
+                        }
+                        if (vecInfo.C_DATETIME >= DTimeRR_S2)
+                        {
+                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is later than DTimeRR_S2");
+                            return "RR1_2020";
+                        }
                     }
                 }
             }
@@ -180,6 +184,7 @@ namespace PsdzClient.Core
             return null;
         }
 
+        // ToDo: Check on update
         public void SpecialTreatmentBasedOnEreihe(string typsnr, IVehicle vecInfo)
         {
             if ((string.Compare(vecInfo.Ereihe, "M12", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "M2_", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "UNBEK", StringComparison.OrdinalIgnoreCase) == 0) && string.Compare(typsnr, "CZ31", StringComparison.OrdinalIgnoreCase) == 0)
@@ -234,6 +239,7 @@ namespace PsdzClient.Core
             }
         }
 
+        // ToDo: Check on update
         public List<int> GetGatewayEcuAdresses(IVehicle vecInfo)
         {
             List<int> list = new List<int>();
@@ -257,15 +263,16 @@ namespace PsdzClient.Core
                                         list.Add(13);
                                     }
                                 }
-                                return list;
                             }
-                            if (!(vecInfo.Ereihe == "E65") && !(vecInfo.Ereihe == "E66") && !(vecInfo.Ereihe == "E67") && !(vecInfo.Ereihe == "E68"))
+                            else if (!(vecInfo.Ereihe == "E65") && !(vecInfo.Ereihe == "E66") && !(vecInfo.Ereihe == "E67") && !(vecInfo.Ereihe == "E68"))
                             {
                                 list.Add(128);
-                                break;
                             }
-                            list.Add(0);
-                            list.Add(1);
+                            else
+                            {
+                                list.Add(0);
+                                list.Add(1);
+                            }
                             break;
                         case "PL4":
                             list.Add(0);
@@ -302,6 +309,7 @@ namespace PsdzClient.Core
                             list.Add(16);
                             list.Add(50);
                             break;
+                        case "35LR":
                         case "35LG":
                             if (vecInfo.Ereihe == "G09")
                             {
@@ -352,6 +360,11 @@ namespace PsdzClient.Core
                                         list.Add(64);
                                     }
                                 }
+                                else if (vecInfo.Ereihe == "RR25")
+                                {
+                                    list.Add(16);
+                                    list.Add(50);
+                                }
                                 else
                                 {
                                     list.Add(16);
@@ -381,7 +394,6 @@ namespace PsdzClient.Core
                             list.Add(128);
                             list.Add(0);
                             break;
-                        case "35LR":
                         case "35LK":
                         case "35LU":
                         case "PLLI":
@@ -389,12 +401,12 @@ namespace PsdzClient.Core
                             list.Add(16);
                             list.Add(64);
                             break;
+                        default:
+                            list.Add(16);
+                            break;
                         case "PL5-ALT":
                             list.Add(0);
                             list.Add(1);
-                            break;
-                        default:
-                            list.Add(16);
                             break;
                     }
                 }
@@ -406,6 +418,9 @@ namespace PsdzClient.Core
                 {
                     switch (vecInfo.Baureihenverbund.ToUpper())
                     {
+                        default:
+                            list.Add(16);
+                            break;
                         case "K01X":
                         case "K024":
                         case "KH24":
@@ -413,9 +428,6 @@ namespace PsdzClient.Core
                         case "KS01":
                         case "KE01":
                             list.Add(18);
-                            break;
-                        default:
-                            list.Add(16);
                             break;
                     }
                 }
@@ -451,6 +463,8 @@ namespace PsdzClient.Core
                         case "E89X":
                         case "RR01":
                             return BNType.BN2000;
+                        default:
+                            return BNType.BN2020;
                         case "U006":
                         case "M013":
                         case "F010":
@@ -468,13 +482,14 @@ namespace PsdzClient.Core
                         case "I020":
                         case "RR21":
                             return BNType.BN2020;
-                        default:
-                            return BNType.BN2020;
                     }
                 }
                 //Log.Warning(Log.CurrentMethod(), "Baureihenverbund is null or empty. BNType will be determined by Ereihe!");
                 switch (vecInfo.Ereihe)
                 {
+                    default:
+                        //Log.Warning(Log.CurrentMethod(), "Ereihe is null or empty. No BNType can be determined!");
+                        return BNType.UNKNOWN;
                     case "E38":
                     case "E39":
                     case "E32":
@@ -486,9 +501,6 @@ namespace PsdzClient.Core
                     case "E53":
                     case "E36":
                         return BNType.IBUS;
-                    default:
-                        //Log.Warning(Log.CurrentMethod(), "Ereihe is null or empty. No BNType can be determined!");
-                        return BNType.UNKNOWN;
                 }
             }
             if (vecInfo.Prodart == "M")
@@ -506,10 +518,10 @@ namespace PsdzClient.Core
                         case "K024":
                         case "KH24":
                             return BNType.BN2000_MOTORBIKE;
-                        case "K01X":
-                            return BNType.BNK01X_MOTORBIKE;
                         default:
                             return BNType.BN2020_MOTORBIKE;
+                        case "K01X":
+                            return BNType.BNK01X_MOTORBIKE;
                     }
                 }
                 //Log.Info(Log.CurrentMethod(), "Baureihenverbund was empty, returning default value.");

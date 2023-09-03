@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using Android.Util;
+using BmwDeepObd;
 using EdiabasLib;
 using Mono.CSharp;
 
@@ -126,6 +127,14 @@ namespace BmwFileReader
                         }
                     }
 
+                    // this should be the dealer languge, replace it with current language
+                    string language = ActivityCommon.GetCurrentLanguage();
+                    if (language.Length > 2)
+                    {
+                        language = language.Substring(0, 2);
+                    }
+                    _propertiesDict.TryAdd("Country".ToUpperInvariant(), new List<string> { language.ToUpperInvariant() });
+
                     if (detectVehicleBmw.BrandList != null && detectVehicleBmw.BrandList.Count > 0)
                     {
                         _propertiesDict.TryAdd("Marke".ToUpperInvariant(), detectVehicleBmw.BrandList);
@@ -140,6 +149,25 @@ namespace BmwFileReader
                     {
                         _propertiesDict.TryAdd("E-Bezeichnung".ToUpperInvariant(), new List<string> { detectVehicleBmw.Series.Trim() });
                     }
+
+                    List<string> salapa = new List<string>();
+                    if (detectVehicleBmw.Salapa != null)
+                    {
+                        salapa.AddRange(detectVehicleBmw.Salapa);
+                    }
+
+                    if (detectVehicleBmw.HoWords != null)
+                    {
+                        salapa.AddRange(detectVehicleBmw.HoWords);
+                    }
+
+                    if (detectVehicleBmw.EWords != null)
+                    {
+                        salapa.AddRange(detectVehicleBmw.EWords);
+                    }
+
+                    _propertiesDict.TryAdd("SALAPA".ToUpperInvariant(), salapa);
+                    _propertiesDict.TryAdd("ProtectionVehicleService".ToUpperInvariant(), new List<string> { "1" });
 
                     if (!string.IsNullOrWhiteSpace(detectVehicleBmw.ConstructYear))
                     {
@@ -173,22 +201,31 @@ namespace BmwFileReader
                         _propertiesDict.TryAdd("Produktionsdatum".ToUpperInvariant(), new List<string> { productionDate });
                     }
 
+                    string iStufe = string.Empty;
+                    string iStufeX = string.Empty;
+                    string br = string.Empty;
+
                     if (!string.IsNullOrWhiteSpace(detectVehicleBmw.ILevelCurrent))
                     {
                         string iLevelTrim = detectVehicleBmw.ILevelCurrent.Trim();
                         string[] levelParts = iLevelTrim.Split("-");
-                        _propertiesDict.Add("IStufe".ToUpperInvariant(), new List<string> { iLevelTrim.Trim() });
+                        iStufe = iLevelTrim;
+
                         if (levelParts.Length == 4 && iLevelTrim.Length == 14)
                         {
                             string iLevelNum = levelParts[1] + levelParts[2] + levelParts[3];
                             if (Int32.TryParse(iLevelNum, NumberStyles.Integer, CultureInfo.InvariantCulture, out int iLevelValue))
                             {
-                                _propertiesDict.Add("IStufeX".ToUpperInvariant(), new List<string> { iLevelValue.ToString(CultureInfo.InvariantCulture) });
+                                iStufeX = iLevelValue.ToString(CultureInfo.InvariantCulture);
                             }
 
-                            _propertiesDict.Add("Baureihenverbund".ToUpperInvariant(), new List<string> { levelParts[0] });
+                            br = levelParts[0];
                         }
                     }
+
+                    _propertiesDict.TryAdd("IStufe".ToUpperInvariant(), new List<string> { iStufe });
+                    _propertiesDict.TryAdd("IStufeX".ToUpperInvariant(), new List<string> { iStufeX });
+                    _propertiesDict.TryAdd("Baureihenverbund".ToUpperInvariant(), new List<string> { br });
 
                     return SetEvalEcuProperties(ecuVariant);
                 }
@@ -213,9 +250,11 @@ namespace BmwFileReader
             {
                 string keyEcuRep = "EcuRepresentative".ToUpperInvariant();
                 string keyEcuClique = "EcuClique".ToUpperInvariant();
+                string keyEcuVariant = "EcuVariant".ToUpperInvariant();
 
                 _propertiesDict.Remove(keyEcuRep);
                 _propertiesDict.Remove(keyEcuClique);
+                _propertiesDict.Remove(keyEcuVariant);
 
                 if (ecuVariant != null)
                 {
@@ -236,6 +275,37 @@ namespace BmwFileReader
 #endif
                         _propertiesDict.Add(keyEcuClique, new List<string> { cliqueName });
                     }
+
+                    string ecuName = ecuVariant.EcuName;
+                    if (!string.IsNullOrEmpty(ecuName))
+                    {
+#if DEBUG
+                        Log.Info(Tag, string.Format("SetEvalEcuProperties '{0}'='{1}'", keyEcuVariant, ecuName));
+#endif
+                        _propertiesDict.Add(keyEcuVariant, new List<string> { ecuName });
+                    }
+#if DEBUG
+                    List<string> missingRules = GetMissingRules();
+                    if (missingRules.Count > 0)
+                    {
+                        StringBuilder sbMissing = new StringBuilder();
+                        foreach (string rule in missingRules)
+                        {
+                            if (sbMissing.Length > 0)
+                            {
+                                sbMissing.Append(", ");
+                            }
+
+                            sbMissing.Append(rule);
+                        }
+
+                        Log.Info(Tag, string.Format("SetEvalEcuProperties Missing rules: {0}", sbMissing));
+                    }
+                    else
+                    {
+                        Log.Info(Tag, "SetEvalEcuProperties All rules present");
+                    }
+#endif
                 }
             }
             catch (Exception)
@@ -244,6 +314,20 @@ namespace BmwFileReader
             }
 
             return true;
+        }
+
+        public List<string> GetMissingRules()
+        {
+            List<string> missingRules = new List<string>();
+            foreach (string ruleName in RulesInfo.RuleNames)
+            {
+                if (!_propertiesDict.ContainsKey(ruleName.ToUpperInvariant()))
+                {
+                    missingRules.Add(ruleName);
+                }
+            }
+
+            return missingRules;
         }
 
         public void RuleNotFound(string id)
@@ -295,12 +379,6 @@ namespace BmwFileReader
             List<string> propertyStrings = GetPropertyStrings(name);
             if (propertyStrings == null)
             {
-#if DEBUG
-                if (logInfo)
-                {
-                    Log.Info(Tag, string.Format("IsValidRuleString {0}: not found", name));
-                }
-#endif
                 return false;
             }
 

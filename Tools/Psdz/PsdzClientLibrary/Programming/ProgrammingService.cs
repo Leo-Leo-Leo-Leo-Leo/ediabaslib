@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
@@ -12,20 +13,20 @@ namespace PsdzClient.Programming
 {
 	public class ProgrammingService : IDisposable
 	{
-		public ProgrammingService(string istaFolder, string dealerId)
+        public ProgrammingService(string istaFolder, string dealerId)
         {
-			this.PsdzLoglevel = PsdzLoglevel.FINE;
+            this.PsdzLoglevel = PsdzLoglevel.FINE;
             this.ProdiasLoglevel = ProdiasLoglevel.ERROR;
-			this.psdzConfig = new PsdzConfig(istaFolder, dealerId);
-			this.psdz = new PsdzServiceWrapper(this.psdzConfig);
-			this.psdz.SetLogLevel(PsdzLoglevel, ProdiasLoglevel);
+            this.psdzConfig = new PsdzConfig(istaFolder, dealerId);
+            this.psdz = new PsdzServiceWrapper(this.psdzConfig);
+            this.psdz.SetLogLevel(PsdzLoglevel, ProdiasLoglevel);
 
             this.EventManager = new ProgrammingEventManager();
-            this.PdszDatabase = new PdszDatabase(istaFolder);
-			PreparePsdzBackupDataPath(istaFolder);
-		}
+            this.PsdzDatabase = new PsdzDatabase(istaFolder);
+            PreparePsdzBackupDataPath(istaFolder);
+        }
 
-		public bool CollectPsdzLog(string targetLogFilePath)
+        public bool CollectPsdzLog(string targetLogFilePath)
 		{
 			if (!this.psdz.IsPsdzInitialized)
 			{
@@ -191,10 +192,10 @@ namespace PsdzClient.Programming
         {
             RemoveListener();
 			this.psdz.Dispose();
-            if (this.PdszDatabase != null)
+            if (this.PsdzDatabase != null)
             {
-                this.PdszDatabase.Dispose();
-                this.PdszDatabase = null;
+                this.PsdzDatabase.Dispose();
+                this.PsdzDatabase = null;
             }
 		}
 
@@ -206,7 +207,7 @@ namespace PsdzClient.Programming
 
         public EcuProgrammingInfos ProgrammingInfos { get; private set; }
 
-        public PdszDatabase PdszDatabase { get; private set; }
+        public PsdzDatabase PsdzDatabase { get; private set; }
 
         public PsdzServiceWrapper Psdz => psdz;
 

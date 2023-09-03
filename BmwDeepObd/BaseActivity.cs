@@ -21,6 +21,13 @@ namespace BmwDeepObd
     {
         public class InstanceDataBase
         {
+            public InstanceDataBase()
+            {
+                LowMemoryShown = false;
+                LongClickShown = false;
+                LastEnetSsid = string.Empty;
+            }
+
             public bool ActionBarVisibilitySet
             {
                 get => _actionBarVisibilitySet;
@@ -40,6 +47,8 @@ namespace BmwDeepObd
             public bool LowMemoryShown { get; set; }
 
             public bool LongClickShown { get; set; }
+
+            public string LastEnetSsid { get; set; }
 
             private bool _actionBarVisibilitySet;
             private bool _actionBarVisible;
@@ -76,6 +85,8 @@ namespace BmwDeepObd
         protected Handler _baseUpdateHandler;
         protected Java.Lang.Runnable _longPressRunnable;
         protected Java.Lang.Runnable _updateMenuRunnable;
+
+        public InstanceDataBase InstanceDataCommon => _instanceDataBase;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {

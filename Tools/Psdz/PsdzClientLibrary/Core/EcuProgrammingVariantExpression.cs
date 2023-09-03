@@ -61,20 +61,33 @@ namespace PsdzClient.Core
         public override string ToFormula(FormulaConfig formulaConfig)
         {
             StringBuilder stringBuilder = new StringBuilder();
-            if (this.programmingVariant != null && this.ecuVariant != null)
+            PsdzDatabase database = ClientContext.GetDatabase(this.vecInfo);
+
+            PsdzDatabase.EcuPrgVar ecuPrgVar = database.GetEcuProgrammingVariantById(this.value.ToString(CultureInfo.InvariantCulture), null, null);
+            PsdzDatabase.EcuVar ecuVar = null;
+            if (ecuPrgVar != null)
             {
-                stringBuilder.Append(formulaConfig.CheckStringFunc);
-                stringBuilder.Append("(\"ProgrammingVariantName\", ");
-                stringBuilder.Append("\"");
-                stringBuilder.Append(this.programmingVariant.Name);
+                ecuVar = database?.GetEcuVariantById(ecuPrgVar.EcuVarId);
+            }
+
+            if (ecuPrgVar != null && ecuVar != null)
+            {
+                stringBuilder.Append(formulaConfig.RuleValidFunc);
+                stringBuilder.Append("(\"");
+                string ruleId = ecuPrgVar.EcuVarId;
+                stringBuilder.Append(ruleId);
+                if (formulaConfig.SubRuleIds != null && !formulaConfig.SubRuleIds.Contains(ruleId))
+                {
+                    formulaConfig.SubRuleIds.Add(ruleId);
+                }
                 stringBuilder.Append("\")");
 
                 stringBuilder.Append(" && ");
 
                 stringBuilder.Append(formulaConfig.CheckStringFunc);
-                stringBuilder.Append("(\"VARIANTE\", ");
+                stringBuilder.Append("(\"EcuVariant\", ");
                 stringBuilder.Append("\"");
-                stringBuilder.Append(this.ecuVariant.Name);
+                stringBuilder.Append(ecuVar.Name);
                 stringBuilder.Append("\")");
             }
             else
@@ -85,7 +98,7 @@ namespace PsdzClient.Core
                 stringBuilder.Append(")");
             }
 
-			return stringBuilder.ToString();
+            return stringBuilder.ToString();
         }
 
 		public override string ToString()
@@ -97,8 +110,8 @@ namespace PsdzClient.Core
 			return string.Format("EcuProgrammingVariant: ID= {0}", this.value);
 		}
 
-		private PdszDatabase.EcuPrgVar programmingVariant;
+		private PsdzDatabase.EcuPrgVar programmingVariant;
 
-		private PdszDatabase.EcuVar ecuVariant;
+		private PsdzDatabase.EcuVar ecuVariant;
 	}
 }
