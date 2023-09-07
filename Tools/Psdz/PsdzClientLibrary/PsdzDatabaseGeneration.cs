@@ -11,20 +11,14 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Xml.Linq;
+using System.Xml;
 using System.Xml.Serialization;
 using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
-using BMW.Rheingold.Psdz.Model;
-using BMW.Rheingold.Psdz.Model.Ecu;
 using BmwFileReader;
 using HarmonyLib;
 using ICSharpCode.SharpZipLib.Core;
 using ICSharpCode.SharpZipLib.Zip;
-using log4net;
-using PsdzClient;
 using PsdzClient.Core;
-using PsdzClient.Core.Container;
-using PsdzClientLibrary;
 
 namespace PsdzClient
 {
@@ -3741,20 +3735,46 @@ namespace PsdzClient
             {
                 VehicleStructsBmw.VehicleSeriesInfoData vehicleSeriesInfoData = null;
                 XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.VehicleSeriesInfoData));
-                string vehicleSeriesFile = Path.Combine(_databaseExtractPath, VehicleStructsBmw.VehicleSeriesXmlFile);
-                try
+                string vehicleSeriesZipFile = Path.Combine(_databaseExtractPath, VehicleStructsBmw.VehicleSeriesZipFile);
+                if (File.Exists(vehicleSeriesZipFile))
                 {
-                    if (File.Exists(vehicleSeriesFile))
+                    try
                     {
-                        using (FileStream fileStream = new FileStream(vehicleSeriesFile, FileMode.Open))
+                        ZipFile zf = null;
+                        try
                         {
-                            vehicleSeriesInfoData = serializer.Deserialize(fileStream) as VehicleStructsBmw.VehicleSeriesInfoData;
+                            FileStream fs = File.OpenRead(vehicleSeriesZipFile);
+                            zf = new ZipFile(fs);
+                            foreach (ZipEntry zipEntry in zf)
+                            {
+                                if (!zipEntry.IsFile)
+                                {
+                                    continue; // Ignore directories
+                                }
+
+                                if (string.Compare(zipEntry.Name, VehicleStructsBmw.VehicleSeriesXmlFile, StringComparison.OrdinalIgnoreCase) == 0)
+                                {
+                                    Stream zipStream = zf.GetInputStream(zipEntry);
+                                    using (TextReader reader = new StreamReader(zipStream))
+                                    {
+                                        vehicleSeriesInfoData = serializer.Deserialize(reader) as VehicleStructsBmw.VehicleSeriesInfoData;
+                                    }
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            if (zf != null)
+                            {
+                                zf.IsStreamOwner = true; // Makes close also shut the underlying stream
+                                zf.Close(); // Ensure we release resources
+                            }
                         }
                     }
-                }
-                catch (Exception e)
-                {
-                    log.ErrorFormat("SaveVehicleSeriesInfo Deserialize Exception: '{0}'", e.Message);
+                    catch (Exception e)
+                    {
+                        log.ErrorFormat("SaveVehicleSeriesInfo Deserialize Exception: '{0}'", e.Message);
+                    }
                 }
 
                 bool dataValid = true;
@@ -3777,10 +3797,42 @@ namespace PsdzClient
                         return false;
                     }
 
-                    log.InfoFormat(CultureInfo.InvariantCulture, "SaveVehicleSeriesInfo Saving: {0}", vehicleSeriesFile);
-                    using (FileStream fileStream = File.Create(vehicleSeriesFile))
+                    log.InfoFormat(CultureInfo.InvariantCulture, "SaveVehicleSeriesInfo Saving: {0}", vehicleSeriesZipFile);
+                    using (MemoryStream memStream = new MemoryStream())
                     {
-                        serializer.Serialize(fileStream, vehicleSeriesInfoData);
+                        XmlWriterSettings settings = new XmlWriterSettings
+                        {
+                            Indent = true,
+                            IndentChars = "\t"
+                        };
+                        using (XmlWriter writer = XmlWriter.Create(memStream, settings))
+                        {
+                            serializer.Serialize(writer, vehicleSeriesInfoData);
+                        }
+                        memStream.Seek(0, SeekOrigin.Begin);
+
+                        FileStream fsOut = File.Create(vehicleSeriesZipFile);
+                        ZipOutputStream zipStream = new ZipOutputStream(fsOut);
+                        zipStream.SetLevel(3);
+
+                        try
+                        {
+                            ZipEntry newEntry = new ZipEntry(VehicleStructsBmw.VehicleSeriesXmlFile)
+                            {
+                                DateTime = DateTime.Now,
+                                Size = memStream.Length
+                            };
+                            zipStream.PutNextEntry(newEntry);
+
+                            byte[] buffer = new byte[4096];
+                            StreamUtils.Copy(memStream, zipStream, buffer);
+                            zipStream.CloseEntry();
+                        }
+                        finally
+                        {
+                            zipStream.IsStreamOwner = true;
+                            zipStream.Close();
+                        }
                     }
                 }
             }
@@ -3810,7 +3862,7 @@ namespace PsdzClient
                     return null;
                 }
 
-                Dictionary<string, string> seriesDict = new Dictionary<string, string>();
+                Dictionary<string, Tuple<string, string, string>> seriesDict = new Dictionary<string, Tuple<string, string, string>>();
                 foreach (string typeKey in typeKeys)
                 {
                     List<Characteristics> characteristicsList = GetVehicleIdentByTypeKey(typeKey, false);
@@ -3818,6 +3870,8 @@ namespace PsdzClient
                     {
                         string series = null;
                         string modelSeries = null;
+                        string productType = null;
+                        string productLine = null;
                         foreach (Characteristics characteristics in characteristicsList)
                         {
                             if (string.Compare(characteristics.NodeClass, "40128130", StringComparison.OrdinalIgnoreCase) == 0)
@@ -3828,14 +3882,22 @@ namespace PsdzClient
                             {
                                 modelSeries = characteristics.EcuTranslation.TextDe;
                             }
+                            else if (string.Compare(characteristics.NodeClass, "40135682", StringComparison.OrdinalIgnoreCase) == 0)
+                            {
+                                productType = characteristics.EcuTranslation.TextDe;
+                            }
+                            else if (string.Compare(characteristics.NodeClass, "40039952514", StringComparison.OrdinalIgnoreCase) == 0)
+                            {
+                                productLine = characteristics.EcuTranslation.TextDe;
+                            }
                         }
 
-                        if (!string.IsNullOrEmpty(series) && !string.IsNullOrEmpty(modelSeries))
+                        if (!string.IsNullOrEmpty(series) && !string.IsNullOrEmpty(modelSeries) && !string.IsNullOrEmpty(productType))
                         {
                             string key = series.ToUpperInvariant();
                             if (!seriesDict.ContainsKey(key))
                             {
-                                seriesDict.Add(key, modelSeries);
+                                seriesDict.Add(key, new Tuple<string, string, string>(modelSeries, productType, productLine));
                             }
                         }
                     }
@@ -3913,28 +3975,21 @@ namespace PsdzClient
                                 }
                             }
 
-                            // detect bn type
-                            string prodArt = "P";
-                            foreach (string brand in brandHash)
-                            {
-                                if (brand.ToUpperInvariant().Contains("MOTORRAD"))
-                                {
-                                    prodArt = "M";
-                                }
-                            }
-
+                            string prodType = "P";
                             // add missing model series
                             foreach (string series in seriesHash)
                             {
-                                if (seriesDict.TryGetValue(series.ToUpperInvariant(), out string modelSeries))
+                                if (seriesDict.TryGetValue(series.ToUpperInvariant(), out Tuple<string, string, string> seriesTuple))
                                 {
-                                    modelSeriesHash.Add(modelSeries);
+                                    modelSeriesHash.Add(seriesTuple.Item1);
+                                    prodType = seriesTuple.Item2;
                                 }
                             }
 
                             HashSet<BNType> bnTypes = new HashSet<BNType>();
+                            HashSet<string> sgbdAddHash = new HashSet<string>();
                             Vehicle vehicleSeries = new Vehicle(clientContext);
-                            vehicleSeries.Prodart = prodArt;
+                            vehicleSeries.Prodart = prodType;
                             foreach (string series in seriesHash)
                             {
                                 vehicleSeries.Ereihe = series;
@@ -3956,6 +4011,23 @@ namespace PsdzClient
                                 }
                             }
 
+                            foreach (string series in seriesHash)
+                            {
+                                if (seriesDict.TryGetValue(series.ToUpperInvariant(), out Tuple<string, string, string> seriesTuple))
+                                {
+                                    vehicleSeries.Ereihe = series;
+                                    vehicleSeries.Produktlinie = seriesTuple.Item3;
+                                    if (!string.IsNullOrEmpty(vehicleSeries.Produktlinie))
+                                    {
+                                        string sgbdAdditional = DiagnosticsBusinessData.Instance.GetMainSeriesSgbdAdditional(vehicleSeries);
+                                        if (!string.IsNullOrEmpty(sgbdAdditional))
+                                        {
+                                            sgbdAddHash.Add(sgbdAdditional);
+                                        }
+                                    }
+                                }
+                            }
+
                             BNType? bnTypeSeries = null;
                             switch (bnTypes.Count)
                             {
@@ -3972,9 +4044,9 @@ namespace PsdzClient
                                     break;
                             }
 
-                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Sgbd: {0}, Brand: {1}, Series: {2}, BnType: {3}, Date: {4} {5}",
-                                baseEcuCharacteristics.brSgbd, brandHash.ToStringItems(), seriesHash.ToStringItems(), bnTypeSeries, dateCompare ?? string.Empty, date ?? string.Empty);
-                            vehicleSeriesList.Add(new EcuCharacteristicsInfo(baseEcuCharacteristics, seriesHash.ToList(), bnTypeSeries, brandHash.ToList(), date, dateCompare));
+                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Sgbd: {0}, Brand: {1}, Series: {2}, BnType: {3}, SgdbAdd: {4}, Date: {5} {6}",
+                                baseEcuCharacteristics.brSgbd, brandHash.ToStringItems(), seriesHash.ToStringItems(), bnTypeSeries, sgbdAddHash.ToStringItems(), dateCompare ?? string.Empty, date ?? string.Empty);
+                            vehicleSeriesList.Add(new EcuCharacteristicsInfo(baseEcuCharacteristics, seriesHash.ToList(), bnTypeSeries, brandHash.ToList(), sgbdAddHash.ToList(), date, dateCompare));
                         }
                     }
                 }
@@ -3986,28 +4058,26 @@ namespace PsdzClient
                     string brSgbd = ecuCharacteristics.brSgbd.Trim().ToUpperInvariant();
                     BNType? bnType = ecuCharacteristicsInfo.BnType;
 
+
                     string bnTypeName = null;
-                    List<VehicleStructsBmw.VehicleEcuInfo> ecuList = null;
                     if (bnType.HasValue)
                     {
                         bnTypeName = bnType.Value.ToString();
-                        if (bnType.Value == BNType.IBUS)
-                        {
-                            ecuList = new List<VehicleStructsBmw.VehicleEcuInfo>();
-                            foreach (IEcuLogisticsEntry ecuLogisticsEntry in ecuCharacteristics.ecuTable)
-                            {
-                                ecuList.Add(new VehicleStructsBmw.VehicleEcuInfo(ecuLogisticsEntry.DiagAddress, ecuLogisticsEntry.Name, ecuLogisticsEntry.GroupSgbd));
-                            }
-                        }
+                    }
+
+                    List<VehicleStructsBmw.VehicleEcuInfo> ecuList = new List<VehicleStructsBmw.VehicleEcuInfo>();
+                    foreach (IEcuLogisticsEntry ecuLogisticsEntry in ecuCharacteristics.ecuTable)
+                    {
+                        ecuList.Add(new VehicleStructsBmw.VehicleEcuInfo(ecuLogisticsEntry.DiagAddress, ecuLogisticsEntry.Name, ecuLogisticsEntry.GroupSgbd));
                     }
 
                     List<KeyValuePair<string, string>> seriesPair = new List<KeyValuePair<string, string>>();
                     foreach (string series in ecuCharacteristicsInfo.SeriesList)
                     {
                         string modelSeries = null;
-                        if (seriesDict.TryGetValue(series.ToUpperInvariant(), out string value))
+                        if (seriesDict.TryGetValue(series.ToUpperInvariant(), out Tuple<string, string, string> seriesTuple))
                         {
-                            modelSeries = value;
+                            modelSeries = seriesTuple.Item1;
                         }
 
                         seriesPair.AddIfNotContains(new KeyValuePair<string, string>(series, modelSeries));
@@ -4019,7 +4089,21 @@ namespace PsdzClient
                         string modelSeries = keyValuePair.Value;
                         string key = series;
 
-                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoAdd = new VehicleStructsBmw.VehicleSeriesInfo(key, modelSeries, brSgbd, bnTypeName, ecuCharacteristicsInfo.BrandList, ecuList, ecuCharacteristicsInfo.Date, ecuCharacteristicsInfo.DateCompare);
+                        List<string> sgdbAdd = new List<string>();
+                        foreach (string sgdb in ecuCharacteristicsInfo.SgdbAddList)
+                        {
+                            if (string.Compare(brSgbd, sgdb, StringComparison.OrdinalIgnoreCase) != 0)
+                            {
+                                sgdbAdd.Add(sgdb);
+                            }
+                        }
+
+                        if (sgdbAdd.Count == 0)
+                        {
+                            sgdbAdd = null;
+                        }
+
+                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoAdd = new VehicleStructsBmw.VehicleSeriesInfo(key, modelSeries, brSgbd, sgdbAdd, bnTypeName, ecuCharacteristicsInfo.BrandList, ecuList, ecuCharacteristicsInfo.Date, ecuCharacteristicsInfo.DateCompare);
 
                         if (sgbdDict.TryGetValue(key, out List<VehicleStructsBmw.VehicleSeriesInfo> vehicleSeriesInfoList))
                         {

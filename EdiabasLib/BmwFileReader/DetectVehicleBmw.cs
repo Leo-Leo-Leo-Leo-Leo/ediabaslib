@@ -16,7 +16,7 @@ namespace BmwFileReader
         [XmlType("VehicleDataBmw")]
         public class VehicleDataBmw
         {
-            public const string DataVersion = "5";
+            public const string DataVersion = "6";
 
             public string GetVersionString(DetectVehicleBmw detectVehicleBmw)
             {
@@ -54,8 +54,10 @@ namespace BmwFileReader
                 Vin = detectVehicleBmw.Vin;
                 TypeKey = detectVehicleBmw.TypeKey;
                 GroupSgdb = detectVehicleBmw.GroupSgdb;
+                SgdbAddList = detectVehicleBmw.SgdbAddList;
                 ModelSeries = detectVehicleBmw.ModelSeries;
                 Series = detectVehicleBmw.Series;
+                ProductType = detectVehicleBmw.ProductType;
                 BnType = detectVehicleBmw.BnType;
                 BrandList = detectVehicleBmw.BrandList;
                 Ds2GroupFiles = detectVehicleBmw.Ds2GroupFiles;
@@ -85,8 +87,10 @@ namespace BmwFileReader
                 detectVehicleBmw.Vin = Vin;
                 detectVehicleBmw.TypeKey = TypeKey;
                 detectVehicleBmw.GroupSgdb = GroupSgdb;
+                detectVehicleBmw.SgdbAddList = SgdbAddList;
                 detectVehicleBmw.ModelSeries = ModelSeries;
                 detectVehicleBmw.Series = Series;
+                detectVehicleBmw.ProductType = ProductType;
                 detectVehicleBmw.BnType = BnType;
                 detectVehicleBmw.BrandList = BrandList;
                 detectVehicleBmw.Ds2GroupFiles = Ds2GroupFiles;
@@ -111,8 +115,10 @@ namespace BmwFileReader
             [XmlElement("Vin"), DefaultValue(null)] public string Vin { get; set; }
             [XmlElement("TypeKey"), DefaultValue(null)] public string TypeKey { get; set; }
             [XmlElement("GroupSgdb"), DefaultValue(null)] public string GroupSgdb { get; set; }
+            [XmlElement("SgdbAddList"), DefaultValue(null)] public List<string> SgdbAddList { get; set; }
             [XmlElement("ModelSeries"), DefaultValue(null)] public string ModelSeries { get; set; }
             [XmlElement("Series"), DefaultValue(null)] public string Series { get; set; }
+            [XmlElement("ProductType"), DefaultValue(null)] public string ProductType { get; set; }
             [XmlElement("BnType")] public string BnType { get; private set; }
             [XmlElement("BrandList"), DefaultValue(null)] public List<string> BrandList { get; set; }
             [XmlElement("Ds2GroupFiles"), DefaultValue(null)] public string Ds2GroupFiles { get; set; }
@@ -158,10 +164,13 @@ namespace BmwFileReader
         public bool Ds2Vehicle { get; private set; }
         public string Vin { get; private set; }
         public string TypeKey { get; private set; }
-        public Dictionary<string, string> TypeKeyProperties;
+        public Dictionary<string, string> TypeKeyProperties { get; private set; }
+        public VehicleStructsBmw.VehicleSeriesInfo VehicleSeriesInfo { get; private set; }
         public string GroupSgdb { get; private set; }
+        public List<string> SgdbAddList { get; private set; }
         public string ModelSeries { get; private set; }
         public string Series { get; private set; }
+        public string ProductType { get; private set; }
         public string BnType { get; private set; }
         public List<string> BrandList { get; private set; }
         public string Ds2GroupFiles { get; private set; }
@@ -277,6 +286,7 @@ namespace BmwFileReader
 
                 string detectedVin = null;
                 int jobCount = readVinJobsBmwFast.Count + readIdentJobsBmwFast.Count + readILevelJobsBmwFast.Count;
+                int indexOffset = 0;
                 int index = 0;
                 foreach (JobInfo jobInfo in readVinJobsBmwFast)
                 {
@@ -333,6 +343,8 @@ namespace BmwFileReader
                     index++;
                 }
 
+                indexOffset += readVinJobsBmwFast.Count;
+                index = indexOffset;
                 if (string.IsNullOrEmpty(detectedVin))
                 {
                     return false;
@@ -537,15 +549,24 @@ namespace BmwFileReader
                     index++;
                 }
 
-                ProgressFunc?.Invoke(100);
-
+                indexOffset += readIdentJobsBmwFast.Count;
+                index = indexOffset;
                 if (TypeKeyProperties != null)
                 {
-                    if (TypeKeyProperties.TryGetValue(VehicleInfoBmw.VehicleTypeName, out string vehicleSeriesProp))
+                    if (TypeKeyProperties.TryGetValue(VehicleInfoBmw.VehicleSeriesName, out string vehicleSeriesProp))
                     {
                         if (!string.IsNullOrEmpty(vehicleSeriesProp))
                         {
                             Series = vehicleSeriesProp;
+                        }
+                    }
+
+                    if (TypeKeyProperties.TryGetValue(VehicleInfoBmw.ProductTypeName, out string productTypeProp))
+                    {
+                        if (!string.IsNullOrEmpty(productTypeProp))
+                        {
+                            ProductType = productTypeProp;
+                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Product type: {0}", ProductType);
                         }
                     }
 
@@ -571,7 +592,9 @@ namespace BmwFileReader
                     return false;
                 }
 
+                VehicleSeriesInfo = vehicleSeriesInfo;
                 GroupSgdb = vehicleSeriesInfo.BrSgbd;
+                SgdbAddList = vehicleSeriesInfo.SgdbAdd;
                 BnType = vehicleSeriesInfo.BnType;
                 if (BrandList == null || BrandList.Count == 0)
                 {
@@ -666,6 +689,10 @@ namespace BmwFileReader
 
                     index++;
                 }
+
+                indexOffset += readILevelJobsBmwFast.Count;
+                index = indexOffset;
+                ProgressFunc?.Invoke(100 * index / jobCount);
 
                 if (string.IsNullOrEmpty(iLevelShip))
                 {
@@ -936,11 +963,20 @@ namespace BmwFileReader
 
                 if (TypeKeyProperties != null)
                 {
-                    if (TypeKeyProperties.TryGetValue(VehicleInfoBmw.VehicleTypeName, out string vehicleSeriesProp))
+                    if (TypeKeyProperties.TryGetValue(VehicleInfoBmw.VehicleSeriesName, out string vehicleSeriesProp))
                     {
                         if (!string.IsNullOrEmpty(vehicleSeriesProp))
                         {
                             Series = vehicleSeriesProp;
+                        }
+                    }
+
+                    if (TypeKeyProperties.TryGetValue(VehicleInfoBmw.ProductTypeName, out string productTypeProp))
+                    {
+                        if (!string.IsNullOrEmpty(productTypeProp))
+                        {
+                            ProductType = productTypeProp;
+                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Product type: {0}", ProductType);
                         }
                     }
 
@@ -957,6 +993,8 @@ namespace BmwFileReader
                 VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo = VehicleInfoBmw.GetVehicleSeriesInfo(Series, ConstructYear, ConstructMonth, _ediabas);
                 if (vehicleSeriesInfo != null)
                 {
+                    VehicleSeriesInfo = vehicleSeriesInfo;
+                    SgdbAddList = vehicleSeriesInfo.SgdbAdd;
                     BnType = vehicleSeriesInfo.BnType;
                     if (BrandList == null || BrandList.Count == 0)
                     {
@@ -1097,9 +1135,12 @@ namespace BmwFileReader
             Vin = null;
             TypeKey = null;
             TypeKeyProperties = null;
+            VehicleSeriesInfo = null;
             GroupSgdb = null;
+            SgdbAddList = null;
             ModelSeries = null;
             Series = null;
+            ProductType = null;
             BnType = null;
             BrandList = null;
             Ds2GroupFiles = null;

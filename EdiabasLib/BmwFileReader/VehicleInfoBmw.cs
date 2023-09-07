@@ -194,7 +194,8 @@ namespace BmwFileReader
 #endif
 
         public const string ResultUnknown = "UNBEK";
-        public const string VehicleTypeName = "E-Bezeichnung";
+        public const string VehicleSeriesName = "E-Bezeichnung";
+        public const string ProductTypeName = "Produktart";
         public const string BrandName = "Marke";
 
         private static VehicleStructsBmw.VehicleSeriesInfoData _vehicleSeriesInfoData;
@@ -948,7 +949,7 @@ namespace BmwFileReader
                 case 'J':
                 case 'U':
                     ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Using fallback from first letter");
-                    return new VehicleStructsBmw.VehicleSeriesInfo(series, null, "F01", "BN2020");
+                    return new VehicleStructsBmw.VehicleSeriesInfo(series, null, "F01", null, "BN2020");
             }
 
             ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "No vehicle series info found");
