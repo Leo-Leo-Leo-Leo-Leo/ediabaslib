@@ -9,11 +9,12 @@ body {
 /* Wrapping element */
 /* Set some basic padding to keep content from hitting the edges */
 .body-content {
-    padding-left: 15px;
-    padding-right: 15px;
+    padding-left: 1rem;
+    padding-right: 1rem;
 }
 
 /* Set widths on the form inputs since otherwise they're 100% wide */
+/*
 input,
 select,
 textarea {
@@ -23,12 +24,29 @@ textarea {
 button {
     padding: 10px
 }
+*/
+html {
+    font-size: 75%;
+    scroll-behavior: auto !important;
+}
 
+.jumbotron {
+    padding: 2rem 2rem;
+    margin-bottom: 1rem;
+    background-color: var(--bs-gray-200);
+    border-radius: .3rem;
+}
 
 /* Responsive: Portrait tablets and up */
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 768px) and (min-height: 500px) {
+    html {
+        font-size: 100%
+    }
+
     .jumbotron {
-        margin-top: 20px;
+        padding-top: 4rem;
+        padding-bottom: 4rem;
+        margin-top: 1rem;
     }
 
     .body-content {

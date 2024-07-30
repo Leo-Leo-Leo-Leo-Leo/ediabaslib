@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
 using BMW.Rheingold.Programming.API;
 using BMW.Rheingold.Programming.Common;
@@ -17,7 +18,9 @@ using BMW.Rheingold.Psdz.Model.Tal;
 using BMW.Rheingold.Psdz.Model.Tal.TalFilter;
 using BmwFileReader;
 using PsdzClient.Core;
+using PsdzClient.Core.Container;
 using PsdzClient.Utility;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Programming
 {
@@ -194,6 +197,10 @@ namespace PsdzClient.Programming
         public DetectVehicle DetectVehicle { get; set; }
 
         public Vehicle VecInfo { get; set; }
+
+        public ISvt SvtTarget { get; private set; }
+
+        public ISvt SvtCurrent { get; private set; }
 
         public IEnumerable<IPsdzEcuIdentifier> EcuListActual { get; set; }
 
@@ -485,7 +492,7 @@ namespace PsdzClient.Programming
 			this.FaActual = fa;
             if (VecInfo != null)
             {
-                VecInfo.FA = ProgrammingUtils.BuildVehicleFa(fa, DetectVehicle.ModelSeries);
+                VecInfo.FA = ProgrammingUtils.BuildVehicleFa(fa, DetectVehicle.BrName);
             }
 		}
 
@@ -494,7 +501,7 @@ namespace PsdzClient.Programming
 			this.FaTarget = fa;
             if (VecInfo != null)
             {
-                VecInfo.TargetFA = ProgrammingUtils.BuildVehicleFa(fa, DetectVehicle.ModelSeries);
+                VecInfo.TargetFA = ProgrammingUtils.BuildVehicleFa(fa, DetectVehicle.BrName);
             }
 		}
 
@@ -556,6 +563,7 @@ namespace PsdzClient.Programming
                 return false;
             }
 
+            IDiagnosticsBusinessData service = ServiceLocator.Current.GetService<IDiagnosticsBusinessData>();
             VecInfo.VehicleIdentLevel = IdentificationLevel.VINVehicleReadout;
             VecInfo.ILevelWerk = !string.IsNullOrEmpty(IstufeShipment) ? IstufeShipment : DetectVehicle.ILevelShip;
             VecInfo.ILevel = !string.IsNullOrEmpty(IstufeCurrent) ? IstufeCurrent: DetectVehicle.ILevelCurrent;
@@ -587,7 +595,7 @@ namespace PsdzClient.Programming
                 }
             }
 
-            PsdzDatabase.VinRanges vinRangesByVin = programmingService.PsdzDatabase.GetVinRangesByVin17(VecInfo.VINType, VecInfo.VIN7, VecInfo.IsVehicleWithOnlyVin7());
+            PsdzDatabase.VinRanges vinRangesByVin = programmingService.PsdzDatabase.GetVinRangesByVin17(VecInfo.VINType, VecInfo.VIN7, false, false);
             if (vinRangesByVin != null)
             {
                 VecInfo.VINRangeType = vinRangesByVin.TypeKey;
@@ -633,7 +641,7 @@ namespace PsdzClient.Programming
             for (int i = 0; i < 2; i++)
             {
                 ObservableCollection<ECU> EcuList = new ObservableCollection<ECU>();
-                foreach (PsdzDatabase.EcuInfo ecuInfo in DetectVehicle.EcuList)
+                foreach (PsdzDatabase.EcuInfo ecuInfo in DetectVehicle.EcuListPsdz)
                 {
                     IEcuObj ecuObj = programmingObjectBuilder.Build(ecuInfo.PsdzEcu);
                     ECU ecu = programmingObjectBuilder.Build(ecuObj);
@@ -665,20 +673,14 @@ namespace PsdzClient.Programming
             {
                 return false;
             }
-            VehicleCharacteristicIdent vehicleCharacteristicIdent = new VehicleCharacteristicIdent();
 
-            foreach (PsdzDatabase.Characteristics characteristics in characteristicsList)
+            if (!UpdateAllVehicleCharacteristics(characteristicsList, programmingService.PsdzDatabase, VecInfo))
             {
-                if (!vehicleCharacteristicIdent.AssignVehicleCharacteristic(characteristics.RootNodeClass, VecInfo, characteristics))
-                {
-                    return false;
-                }
+                return false;
             }
 
             UpdateSALocalizedItems(programmingService, clientContext);
 
-            IDiagnosticsBusinessData service = DiagnosticsBusinessData.Instance;
-            VecInfo.BNType = DiagnosticsBusinessData.Instance.GetBNType(VecInfo);
             VecInfo.FA.AlreadyDone = true;
             if (VecInfo.ECU != null && VecInfo.ECU.Count > 1)
             {
@@ -689,13 +691,258 @@ namespace PsdzClient.Programming
                 CalculateECUConfiguration();
             }
 
-            VecInfo.BNMixed = VehicleLogistics.getBNMixed(VecInfo.Ereihe, VecInfo.FA);
             VecInfo.BatteryType = PsdzDatabase.ResolveBatteryType(VecInfo);
             VecInfo.WithLfpBattery = VecInfo.BatteryType == PsdzDatabase.BatteryEnum.LFP;
-            VecInfo.MainSeriesSgbd = VehicleLogistics.getBrSgbd(VecInfo);
+            VecInfo.MainSeriesSgbd = DetectVehicle.GroupSgbd;
+
+            // DetectVehicle.SgbdAdd ist calculated by GetMainSeriesSgbdAdditional anyway
             VecInfo.MainSeriesSgbdAdditional = service.GetMainSeriesSgbdAdditional(VecInfo);
+
+            PerformVecInfoAssignments();
+            DetectVehicle.SetVehicleLifeStartDate(VecInfo);
+
             EcuCharacteristics = VehicleLogistics.GetCharacteristics(VecInfo);
             return true;
+        }
+
+        // From ProgrammingSession
+        public void SetSollverbauung(ProgrammingService programmingService, IPsdzSollverbauung sollverbauung, IDictionary<string, string> orderNumbers = null)
+        {
+            EcuProgrammingInfos ecuProgrammingInfos = programmingService?.ProgrammingInfos;
+            ProgrammingObjectBuilder programmingObjectBuilder = ecuProgrammingInfos?.ProgrammingObjectBuilder;
+
+            IDictionary<string, string> useOrderNumbers = orderNumbers;
+            if (useOrderNumbers == null)
+            {
+                useOrderNumbers = new Dictionary<string, string>();
+                programmingObjectBuilder?.FillOrderNumbers(sollverbauung, useOrderNumbers);
+            }
+
+            SvtTarget = sollverbauung != null ? programmingObjectBuilder?.Build(sollverbauung, useOrderNumbers) : null;
+            ecuProgrammingInfos?.SetSvkTargetForEachEcu(SvtTarget);
+            SetSollverbauung(sollverbauung);
+        }
+
+        // From ProgrammingSession
+        public void SetSvtCurrent(ProgrammingService programmingService, IPsdzStandardSvt standardSvt)
+        {
+            SetSvtCurrent(programmingService, standardSvt, VecInfo.VIN17);
+        }
+
+        // From ProgrammingSession
+        public void SetSvtCurrent(ProgrammingService programmingService, IPsdzStandardSvt standardSvt, string vin17)
+        {
+            EcuProgrammingInfos ecuProgrammingInfos = programmingService?.ProgrammingInfos;
+            ProgrammingObjectBuilder programmingObjectBuilder = ecuProgrammingInfos?.ProgrammingObjectBuilder;
+            SvtCurrent = programmingObjectBuilder?.Build(standardSvt);
+            ecuProgrammingInfos?.SetSvkCurrentForEachEcu(SvtCurrent);
+            IPsdzSvt psdzSvt = programmingService?.Psdz?.ObjectBuilder?.BuildSvt(standardSvt, vin17);
+            SetSvtActual(psdzSvt);
+        }
+
+        public static bool AssignVehicleCharacteristics(List<PsdzDatabase.Characteristics> characteristics, Vehicle vehicle)
+        {
+            if (vehicle == null)
+            {
+                return false; 
+            }
+
+            VehicleCharacteristicIdent vehicleCharacteristicIdent = new VehicleCharacteristicIdent();
+            foreach (PsdzDatabase.Characteristics characteristic in characteristics)
+            {
+                if (string.IsNullOrEmpty(vehicle.VerkaufsBezeichnung) || !(characteristic.RootNodeClass == "40143490"))
+                {
+                    if (!vehicleCharacteristicIdent.AssignVehicleCharacteristic(characteristic.RootNodeClass, vehicle, characteristic))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        public static bool UpdateAlpinaCharacteristics(PsdzDatabase database, Vehicle vehicle)
+        {
+            List<PsdzDatabase.Characteristics> list = new List<PsdzDatabase.Characteristics>();
+            database.GetAlpinaCharacteristics(vehicle, list);
+            if (list.Any())
+            {
+                return AssignVehicleCharacteristics(list, vehicle);
+            }
+
+            return true;
+        }
+
+        public static bool UpdateAllVehicleCharacteristics(List<PsdzDatabase.Characteristics> characteristics, PsdzDatabase database, Vehicle vehicle)
+        {
+            if (database == null || vehicle == null)
+            {
+                return false;
+            }
+
+            if (!AssignVehicleCharacteristics(characteristics, vehicle))
+            {
+                return false;
+            }
+
+            IDiagnosticsBusinessData service = ServiceLocator.Current.GetService<IDiagnosticsBusinessData>();
+            string typsnr = !string.IsNullOrEmpty(vehicle.Typ) ? vehicle.Typ : vehicle.VINType;
+            service.SpecialTreatmentBasedOnEreihe(typsnr, vehicle);
+
+            if (!UpdateAlpinaCharacteristics(database, vehicle))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        // ToDo: Check on update
+        private void PerformVecInfoAssignments()
+        {
+            try
+            {
+                if (VecInfo == null)
+                {
+                    return;
+                }
+                if (VecInfo.ECU != null && VecInfo.ECU.Count > 0)
+                {   // [UH] ECU check added
+                    GearboxUtility.PerformGearboxAssignments(VecInfo);
+                }
+                if (VecInfo.BNType == BNType.UNKNOWN && !string.IsNullOrEmpty(VecInfo.Ereihe))
+                {
+                    IDiagnosticsBusinessData service = ServiceLocator.Current.GetService<IDiagnosticsBusinessData>();
+                    VecInfo.BNType = service.GetBNType(VecInfo);
+                }
+                if (VecInfo.BNMixed == BNMixed.UNKNOWN)
+                {
+                    VecInfo.BNMixed = VehicleLogistics.getBNMixed(VecInfo.Ereihe, VecInfo.FA);
+                }
+                if (string.IsNullOrEmpty(VecInfo.Prodart))
+                {
+                    if (!VecInfo.IsMotorcycle())
+                    {
+                        VecInfo.Prodart = "P";
+                    }
+                    else
+                    {
+                        VecInfo.Prodart = "M";
+                    }
+                }
+                if ((string.IsNullOrEmpty(VecInfo.Lenkung) || VecInfo.Lenkung == "UNBEK" || VecInfo.Lenkung.Trim() == string.Empty) && (!string.IsNullOrEmpty(VecInfo.VINType) & (VecInfo.VINType.Length == 4)))
+                {
+                    switch (VecInfo.VINType[3])
+                    {
+                        default:
+                            VecInfo.Lenkung = "LL";
+                            break;
+                        case '1':
+                        case '3':
+                        case '5':
+                        case 'C':
+                            VecInfo.Lenkung = "LL";
+                            break;
+                        case '2':
+                        case '6':
+                            VecInfo.Lenkung = "RL";
+                            break;
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(VecInfo.BaseVersion) && (!string.IsNullOrEmpty(VecInfo.VINType) & (VecInfo.VINType.Length == 4)))
+                {
+                    switch (VecInfo.VINType[3])
+                    {
+                        case '3':
+                        case 'C':
+                            VecInfo.BaseVersion = "US";
+                            break;
+                        case '1':
+                        case '5':
+                            VecInfo.BaseVersion = "ECE";
+                            break;
+                    }
+                }
+                if (string.IsNullOrEmpty(VecInfo.Land) || VecInfo.Land == "UNBEK")
+                {
+                    if (!string.IsNullOrEmpty(VecInfo.VINType) & (VecInfo.VINType.Length == 4))
+                    {
+                        switch (VecInfo.VINType[3])
+                        {
+                            default:
+                                VecInfo.Land = "EUR";
+                                break;
+                            case '1':
+                            case '2':
+                                VecInfo.Land = "EUR";
+                                break;
+                            case '3':
+                            case '4':
+                            case 'C':
+                                VecInfo.Land = "USA";
+                                break;
+                        }
+                    }
+                    if (VecInfo.hasSA("807") && VecInfo.Prodart == "P")
+                    {
+                        VecInfo.Land = "JP";
+                    }
+                    if (VecInfo.hasSA("8AA") && VecInfo.Prodart == "P")
+                    {
+                        VecInfo.Land = "CHN";
+                    }
+                }
+                if (string.IsNullOrEmpty(VecInfo.Modelljahr) && !string.IsNullOrEmpty(VecInfo.ILevelWerk))
+                {
+                    try
+                    {
+                        if (Regex.IsMatch(VecInfo.ILevelWerk, "^\\w{4}[_\\-]\\d{2}[_\\-]\\d{2}[_\\-]\\d{3}$"))
+                        {
+                            VecInfo.BaustandsJahr = VecInfo.ILevelWerk.Substring(5, 2);
+                            VecInfo.BaustandsMonat = VecInfo.ILevelWerk.Substring(8, 2);
+                            int num2 = Convert.ToInt32(VecInfo.ILevelWerk.Substring(5, 2), CultureInfo.InvariantCulture);
+                            VecInfo.Modelljahr = ((num2 <= 50) ? (num2 + 2000) : (num2 + 1900)).ToString(CultureInfo.InvariantCulture);
+                            VecInfo.Modellmonat = VecInfo.ILevelWerk.Substring(8, 2);
+                            VecInfo.Modelltag = "01";
+                            Log.Info("Missing construction date (year: {0}, month: {1}) retrieved from iLevel plant ('{2}')", VecInfo.Modelljahr, VecInfo.Modellmonat, VecInfo.ILevelWerk);
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        Log.WarningException("VehicleIdent.finalizeFASTAHeader()", exception);
+                    }
+                }
+                if (string.IsNullOrEmpty(VecInfo.MainSeriesSgbd))
+                {   // [UH] simplified
+                    VecInfo.MainSeriesSgbd = VehicleLogistics.getBrSgbd(VecInfo);
+                }
+                if (string.IsNullOrEmpty(VecInfo.Abgas))
+                {
+                    VecInfo.Abgas = "KAT";
+                }
+                if (!string.IsNullOrEmpty(VecInfo.Motor) && !(VecInfo.Motor == "UNBEK"))
+                {
+                    return;
+                }
+                ECU eCUbyECU_GRUPPE = VecInfo.getECUbyECU_GRUPPE("D_MOTOR");
+                if (eCUbyECU_GRUPPE == null)
+                {
+                    eCUbyECU_GRUPPE = VecInfo.getECUbyECU_GRUPPE("G_MOTOR");
+                }
+                if (eCUbyECU_GRUPPE != null && !string.IsNullOrEmpty(eCUbyECU_GRUPPE.VARIANTE))
+                {
+                    Match match = Regex.Match(eCUbyECU_GRUPPE.VARIANTE, "[SNM]\\d\\d");
+                    if (match.Success)
+                    {
+                        VecInfo.Motor = match.Value;
+                    }
+                }
+            }
+            catch (Exception exception2)
+            {
+                Log.WarningException("VehicleIdent.finalizeFASTAHeader()", exception2);
+            }
         }
 
         private void CalculateECUConfiguration()
@@ -725,7 +972,7 @@ namespace PsdzClient.Programming
             List<PsdzDatabase.EcuInfo> ecuList = new List<PsdzDatabase.EcuInfo>();
             try
             {
-                foreach (PsdzDatabase.EcuInfo ecuInfo in DetectVehicle.EcuList)
+                foreach (PsdzDatabase.EcuInfo ecuInfo in DetectVehicle.EcuListPsdz)
                 {
                     if (individualOnly)
                     {
@@ -935,18 +1182,17 @@ namespace PsdzClient.Programming
             // Check to see if Dispose has already been called.
             if (!_disposed)
             {
-                if (DetectVehicle != null)
-                {
-                    DetectVehicle.Dispose();
-                    DetectVehicle = null;
-                }
-
-                VecInfo = null;
-
 				// If disposing equals true, dispose all managed
 				// and unmanaged resources.
 				if (disposing)
                 {
+                    if (DetectVehicle != null)
+                    {
+                        DetectVehicle.Dispose();
+                        DetectVehicle = null;
+                    }
+
+                    VecInfo = null;
                 }
 
                 // Note disposing has been done.

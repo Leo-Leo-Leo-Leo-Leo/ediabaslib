@@ -1,6 +1,8 @@
 ﻿using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
 using System.Collections.Generic;
 using System;
+using PsdzClient.Core.Container;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Core
 {
@@ -26,7 +28,7 @@ namespace PsdzClient.Core
 
         string GetMainSeriesSgbd(IVehicle vecInfo);
 
-        //void UpdateCharacteristics(IVehicle vecInfo, string typsnr, IEcuKom ecuKom, bool isVorSerie, IProgressMonitor monitor, int retryCount, Func<BNType, int, IProgressMonitor, IEcuJob> doECUReadFA);
+        void UpdateCharacteristics(IVehicle vecInfo, string typsnr, IEcuKom ecuKom, bool isVorSerie, IProgressMonitor monitor, int retryCount, Func<BNType, int, IProgressMonitor, IEcuJob> doECUReadFA);
 
         string GetMainSeriesSgbdAdditional(IVehicle vecInfo);
 
@@ -37,15 +39,15 @@ namespace PsdzClient.Core
         BNType GetBNType(IVehicle vehicle);
 
         bool IsEPMEnabled(IVehicle vehicle);
-#if false
+
         IEcuJob ExecuteFSLesenExpert(IEcuKom ecuKom, string variant, int retries);
 
         void BN2000HandleKMMFixes(IVehicle vecInfo, IEcuKom ecuKom, bool resetMOSTDone, IProgressMonitor monitor, int retryCount, DoECUIdentDelegate doECUIdentDelegate);
 
         void HandleECUGroups(IVehicle vecInfo, IEcuKom ecuKom, List<IEcu> ecusToRemoveKMM);
-#endif
+
         void AddServiceCode(string methodName, int identifier);
-#if false
+
         void SetVehicleLifeStartDate(IVehicle vehicle, IEcuKom ecuKom);
 
         void MaskResultsFromFSLesenExpertForFSLesenDetail(IEcuJob ecuJob);
@@ -59,6 +61,13 @@ namespace PsdzClient.Core
         bool IsSp2021Gateway(IVehicle vecInfo, IEcuKom ecuKom, int retryCount);
 
         IEcuJob ClampShutdownManagement(IVehicle vecInfo, IEcuKom ecuKom, int retryCount = 2, int i_geschw_schwelle = 30);
-#endif
+
+        string ReadVinForGroupCars(BNType bNType, IEcuKom ecuKom);
+
+        string ReadVinForMotorcycles(BNType bNType, IEcuKom ecuKom);
+
+        string GetFourCharEreihe(string ereihe);
+
+        void ShowAdapterHintMotorCycle(IProgressMonitor monitor, IOperationServices services, string eReihe, string basicType);
     }
 }

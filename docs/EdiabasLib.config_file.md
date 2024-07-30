@@ -1,5 +1,6 @@
 # Properties of the EdiabasLib.config file
-The `EdiabasLib.config` file is a replacement for the standard `EDIABAS.INI` file. It must be located in the same directory as the `EdiabasLib.dll` or `Api32.dll` file.
+Current EDIABAS emulation version is 7.6.0.  
+The `EdiabasLib.config` file is a replacement for the standard `EDIABAS.INI` file. It must be located in the same directory as the `EdiabasLib.dll`, `Api32.dll` or `Api64.dll` file.  
 The following properties could be specified in this file:
 
 ## Standard properties
@@ -10,14 +11,18 @@ The following properties could be specified in this file:
 * `EcuPath`: Path to the ecu files
 * `RetryComm`: 1=Retry communication
 * `EnetRemoteHost`: Remote host for ENET protocol. Possible values are:
-	* `ip address`: No broadcast, directly connect to specified host.
-	* `auto`: Broadcast to 169.254.255.255, Identical to EDIABAS `RemoteHost = Autodetect`.
+	* `ip address:<protocol>:<diag port>:<control port>`: No broadcast, directly connect to specified host. Optionally the protcol (`HSFZ` or `DoIP`) and the communication ports could be specified.
+	* `auto`: Broadcast to subnet `HostIdentService`, Identical to EDIABAS `RemoteHost = Autodetect`. When multiple network adapters are present, this may work unreliable. Use `auto:all` instead.
 	* `auto:all`: Broadcast to all network interfaces.
 	* `auto:<interface name>`: Broadcast to all interfaces that start with `<interface name>` (case ignored).
-* `EnetTesterAddress`: Tester address for ENET protocol, standard is 0xF4
-* `EnetControlPort`, `ControlPort`: Control port for ENET protocol, standard is 6811
-* `EnetDiagnosticPort`, `DiagnosticPort`: Diagnostic port for ENET protocol, standard is 6801
-* `EnetTimeoutConnect`, `TimeoutConnect`: Connect timeout for ENET protocol, default is 5000
+* `EnetVehicleProtocol`, `VehicleProtocol`: Order of vehicle protocols used, separated by comma. Possible vales are `HSFZ` and `DoIP`.
+* `EnetHostIdentService`, `HostIdentService`: IPv4 netmask for vehicle searching. Default is `255.255.255.255`. This has changed with Ediabas 7.6.0.
+* `EnetTesterAddress`: Tester address for HSFZ protocol, standard is the hex value `0xF4`.
+* `EnetDoIPTesterAddress`: Tester address for DoIP protocol, standard is the hex value `0x0EF3`.
+* `EnetControlPort`, `ControlPort`: Control port for HSFZ protocol, standard port is `6811`.
+* `EnetDiagnosticPort`, `DiagnosticPort`: Diagnostic port for HSFZ protocol, standard port is `6801`.
+* `EnetDoIPPort`, `DoIPPort`: Port for DoIP protocol, standard port is `13400`
+* `EnetTimeoutConnect`, `TimeoutConnect`: Connect timeout for ENET protocol, default is `5000`
 
 When using BMW ICOM, change the values of `EnetControlPort` and `EnetDiagnosticPort` to the output from the BMW ICOM web interface line:  
 Example: `Diag Addr: 0x10 Diagnostic Port: 50160 Control Port: 50161`  
@@ -29,11 +34,12 @@ The standard ICOM configuration page could be found at: `http://XXXX:58000` (no 
 
 ## Non standard properties
 * `ObdComPort`: COM port name for OBD interface.
-* `AdsComPort`: COM port name for ADS interface (if not specifed ObdComPort will be used).
+* `AdsComPort`: COM port name for ADS interface (if not specified ObdComPort will be used).
 * `AppendTrace`: 0=Override old log file, 1=Always append the logfiles.
 * `LockTrace`: 0=Allow changing `IfhTrace` level from the application, 1=Prevent changing the `IfhTrace` level from the application.
+* `CompatMode`: EDIABAS 7.6.0 has incomplatible changes in mathematical function. This prevents using old ECU files. Setting this value to 1 (what is the default), keeps the behaviour of EDIABAS 7.3.0.
 * `EnetAddRecTimeout`: Additional ENET standard additional receive timeout, default is 1000
-* `EnetAddRecTimeout`: Additional ENET ICOM additional receive timeout, default is 2000
+* `EnetAddRecTimeoutIcom`: Additional ENET ICOM additional receive timeout, default is 2000
 * `EnetIcomAllocate`: 1=Allocate ICOM before connecting, default is 0. This parameter is only used, if the diagnostic port has been set.
 
 ## FTDI D2XX driver properties

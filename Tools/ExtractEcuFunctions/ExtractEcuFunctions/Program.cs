@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -11,14 +10,13 @@ using System.Xml.Serialization;
 using BmwFileReader;
 using ICSharpCode.SharpZipLib.Core;
 using ICSharpCode.SharpZipLib.Zip;
+using Microsoft.Data.Sqlite;
 using PsdzClient.Core;
 
 namespace ExtractEcuFunctions
 {
     static class Program
     {
-        const string DbPassword = "6505EFBDC3E5F324";
-
         public class DbInfo
         {
             public DbInfo(string version, DateTime dateTime)
@@ -135,7 +133,14 @@ namespace ExtractEcuFunctions
                     // ignored
                 }
 
-                string connection = "Data Source=\"" + args[0] + "\";";
+                SqliteConnectionStringBuilder connectionBuilder = new SqliteConnectionStringBuilder
+                {
+                    DataSource = "file:" + args[0] + "?cipher=rc4",
+                    Mode = SqliteOpenMode.ReadOnly,
+                    Password = DatabaseFunctions.DatabasePassword,
+                };
+
+                string connection = connectionBuilder.ConnectionString;
                 if (!InitGlobalData(connection))
                 {
                     outTextWriter?.WriteLine("Init failed");
@@ -229,10 +234,24 @@ namespace ExtractEcuFunctions
                     processThread.Join();
                 }
 
+                outTextWriter?.WriteLine("Creating ZIP file");
                 if (!CreateZipFile(outDirSub, zipFile))
                 {
                     outTextWriter?.WriteLine("Create ZIP failed");
                     return 1;
+                }
+
+                outTextWriter?.WriteLine("Deleting output directory");
+                try
+                {
+                    if (Directory.Exists(outDirSub))
+                    {
+                        Directory.Delete(outDirSub, true);
+                    }
+                }
+                catch (Exception)
+                {
+                    // ignored
                 }
             }
             catch (Exception e)
@@ -248,9 +267,8 @@ namespace ExtractEcuFunctions
         {
             try
             {
-                using (SQLiteConnection mDbConnection = new SQLiteConnection(connection))
+                using (SqliteConnection mDbConnection = new SqliteConnection(connection))
                 {
-                    mDbConnection.SetPassword(DbPassword);
                     mDbConnection.Open();
 
                     outTextWriter?.WriteLine("*** Fault data {0} ***", language);
@@ -276,8 +294,6 @@ namespace ExtractEcuFunctions
                     {
                         serializer.Serialize(writer, ecuFaultData);
                     }
-
-                    mDbConnection.Close();
                 }
 
                 return true;
@@ -294,9 +310,8 @@ namespace ExtractEcuFunctions
         {
             try
             {
-                using (SQLiteConnection mDbConnection = new SQLiteConnection(connection))
+                using (SqliteConnection mDbConnection = new SqliteConnection(connection))
                 {
-                    mDbConnection.SetPassword(DbPassword);
                     mDbConnection.Open();
 
                     outTextWriter?.WriteLine("*** ECU: {0} ***", ecuName);
@@ -318,8 +333,6 @@ namespace ExtractEcuFunctions
                             serializer.Serialize(writer, ecuVariant);
                         }
                     }
-
-                    mDbConnection.Close();
                 }
 
                 return true;
@@ -335,9 +348,8 @@ namespace ExtractEcuFunctions
         {
             try
             {
-                using (SQLiteConnection mDbConnection = new SQLiteConnection(connection))
+                using (SqliteConnection mDbConnection = new SqliteConnection(connection))
                 {
-                    mDbConnection.SetPassword(DbPassword);
                     mDbConnection.Open();
 
                     long[] rootClassValues = (long[])Enum.GetValues(typeof(VehicleCharacteristicAbstract.VehicleCharacteristic));
@@ -356,8 +368,6 @@ namespace ExtractEcuFunctions
 
                     TypeKeyClassId = DatabaseFunctions.GetNodeClassId(mDbConnection, @"Typschluessel");
                     EnvDiscreteNodeClassId = DatabaseFunctions.GetNodeClassId(mDbConnection, "EnvironmentalConditionTextDiscrete");
-
-                    mDbConnection.Close();
 
                     if (string.IsNullOrEmpty(TypeKeyClassId))
                     {
@@ -383,14 +393,11 @@ namespace ExtractEcuFunctions
             try
             {
                 List<string> ecuNameList;
-                using (SQLiteConnection mDbConnection = new SQLiteConnection(connection))
+                using (SqliteConnection mDbConnection = new SqliteConnection(connection))
                 {
-                    mDbConnection.SetPassword(DbPassword);
                     mDbConnection.Open();
 
                     ecuNameList = GetEcuNameList(mDbConnection);
-
-                    mDbConnection.Close();
                 }
 
                 return ecuNameList;
@@ -401,17 +408,18 @@ namespace ExtractEcuFunctions
             }
         }
 
-        private static List<string> GetEcuNameList(SQLiteConnection mDbConnection)
+        private static List<string> GetEcuNameList(SqliteConnection mDbConnection)
         {
             List<string> ecuNameList = new List<string>();
             string sql = @"SELECT NAME FROM XEP_ECUVARIANTS";
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuNameList.Add(reader["NAME"].ToString().Trim());
+                        ecuNameList.Add(reader["NAME"].ToString()?.Trim());
                     }
                 }
             }
@@ -419,7 +427,7 @@ namespace ExtractEcuFunctions
             return ecuNameList;
         }
 
-        private static EcuFunctionStructs.EcuTranslation GetTranslation(SQLiteDataReader reader, string prefix = "TITLE", string language = null)
+        private static EcuFunctionStructs.EcuTranslation GetTranslation(SqliteDataReader reader, string prefix = "TITLE", string language = null)
         {
             return new EcuFunctionStructs.EcuTranslation(
                 language == null || language.ToLowerInvariant() == "de" ? reader[prefix + "_DEDE"].ToString() : string.Empty,
@@ -448,18 +456,18 @@ namespace ExtractEcuFunctions
         {
             try
             {
-                using (SQLiteConnection mDbConnection = new SQLiteConnection(connection))
+                using (SqliteConnection mDbConnection = new SqliteConnection(connection))
                 {
-                    mDbConnection.SetPassword(DbPassword);
                     mDbConnection.Open();
 
                     outTextWriter?.WriteLine("*** Extract TypeKeyInfo start ClassId={0} ***", rootClassId);
                     string sql = $"SELECT t.NAME AS TYPEKEY, c.NAME AS VALUE FROM XEP_CHARACTERISTICS t INNER JOIN XEP_VEHICLES v ON (v.TYPEKEYID = t.ID)" +
                                  $" INNER JOIN XEP_CHARACTERISTICS c ON (v.CHARACTERISTICID = c.ID) INNER JOIN XEP_CHARACTERISTICROOTS r ON" +
                                  $" (r.ID = c.PARENTID AND r.NODECLASS = {rootClassId}) WHERE t.NODECLASS = {TypeKeyClassId} ORDER BY TYPEKEY";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+                    using (SqliteCommand command = mDbConnection.CreateCommand())
                     {
-                        using (SQLiteDataReader reader = command.ExecuteReader())
+                        command.CommandText = sql;
+                        using (SqliteDataReader reader = command.ExecuteReader())
                         {
                             while (reader.Read())
                             {
@@ -486,8 +494,6 @@ namespace ExtractEcuFunctions
                             }
                         }
                     }
-
-                    mDbConnection.Close();
                 }
 
                 outTextWriter?.WriteLine("*** Write TypeKeyInfo done ***");
@@ -501,17 +507,18 @@ namespace ExtractEcuFunctions
             }
         }
 
-        private static string GetCharacteristicRootName(SQLiteConnection mDbConnection, long rootClassId)
+        private static string GetCharacteristicRootName(SqliteConnection mDbConnection, long rootClassId)
         {
             string rootName = null;
             string sql = $"SELECT TITLE_DEDE FROM XEP_CHARACTERISTICROOTS WHERE (NODECLASS = {rootClassId})";
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        rootName = reader["TITLE_DEDE"].ToString().Trim();
+                        rootName = reader["TITLE_DEDE"].ToString()?.Trim();
                         break;
                     }
                 }
@@ -539,7 +546,7 @@ namespace ExtractEcuFunctions
                 outTextWriter?.WriteLine("*** Write TypeKeyInfo start ***");
                 string typeKeysFile = Path.Combine(outDirSub, "typekeyinfo.txt");
                 int itemCount = 0;
-                using (StreamWriter swTypeKeys = new StreamWriter(typeKeysFile))
+                using (StreamWriter swTypeKeys = new StreamWriter(typeKeysFile, false, new UTF8Encoding(true), 0x1000))
                 {
                     StringBuilder sbHeader = new StringBuilder();
                     foreach (KeyValuePair<long, string> rootClassPair in RootClassDict)
@@ -593,31 +600,85 @@ namespace ExtractEcuFunctions
         {
             try
             {
-                using (SQLiteConnection mDbConnection = new SQLiteConnection(connection))
+                using (SqliteConnection mDbConnection = new SqliteConnection(connection))
                 {
-                    mDbConnection.SetPassword(DbPassword);
                     mDbConnection.Open();
 
                     outTextWriter?.WriteLine("*** Write VinRanges start ***");
-                    string vinRangeFile = Path.Combine(outDirSub, "vinranges.txt");
-                    using (StreamWriter swVinranges = new StreamWriter(vinRangeFile))
+                    string vinRangeSpecFile = null;
+                    StreamWriter swVinrangesSpec = null;
+
+                    try
                     {
-                        string sql = @"SELECT v.VINBANDFROM AS VINBANDFROM, v.VINBANDTO AS VINBANDTO, v.TYPSCHLUESSEL AS TYPEKEY" +
-                                     @", v.PRODUCTIONDATEYEAR AS PRODYEAR, v.PRODUCTIONDATEMONTH AS PRODMONTH, v.RELEASESTATE AS RELEASESTATE, v.GEARBOX_TYPE AS GEARBOX FROM VINRANGES v";
-                        using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+                        string vinRangeFile = Path.Combine(outDirSub, "vinranges.txt");
+                        using (StreamWriter swVinranges = new StreamWriter(vinRangeFile, false, new UTF8Encoding(true), 0x1000))
                         {
-                            using (SQLiteDataReader reader = command.ExecuteReader())
+                            string sql = @"SELECT v.VINBANDFROM AS VINBANDFROM, v.VINBANDTO AS VINBANDTO, v.VIN17_4_7 AS VIN17_4_7, v.TYPSCHLUESSEL AS TYPEKEY" +
+                                         @", v.PRODUCTIONDATEYEAR AS PRODYEAR, v.PRODUCTIONDATEMONTH AS PRODMONTH, v.RELEASESTATE AS RELEASESTATE, v.GEARBOX_TYPE AS GEARBOX_TYPE FROM VINRANGES v";
+                            using (SqliteCommand command = mDbConnection.CreateCommand())
                             {
-                                while (reader.Read())
+                                command.CommandText = sql;
+                                using (SqliteDataReader reader = command.ExecuteReader())
                                 {
-                                    swVinranges.WriteLine(reader["VINBANDFROM"] + "," + reader["VINBANDTO"] + "," + reader["TYPEKEY"] + "," + reader["PRODYEAR"] + "," + reader["PRODMONTH"] +
-                                                          "," + reader["RELEASESTATE"] + "," + reader["GEARBOX"]);
+                                    while (reader.Read())
+                                    {
+                                        string vinbandFrom = reader["VINBANDFROM"].ToString();
+                                        string vinbandTo = reader["VINBANDTO"].ToString();
+                                        string line = vinbandFrom + "," + vinbandTo + "," + reader["VIN17_4_7"] + "," + reader["TYPEKEY"] + "," + reader["PRODYEAR"] + "," + reader["PRODMONTH"] +
+                                                      "," + reader["RELEASESTATE"] + "," + reader["GEARBOX_TYPE"];
+
+                                        if (!string.IsNullOrEmpty(vinbandFrom) && !string.IsNullOrEmpty(vinbandTo))
+                                        {
+                                            swVinranges.WriteLine(line);
+
+                                            char bandStart = vinbandFrom.ToLowerInvariant()[0];
+                                            char bandEnd = vinbandFrom.ToLowerInvariant()[0];
+                                            if (bandStart != bandEnd)
+                                            {
+                                                outTextWriter?.WriteLine("*** Band range detected: {0}-{1}", vinbandFrom, vinbandTo);
+                                            }
+
+                                            for (char band = bandStart; band <= bandEnd; band++)
+                                            {
+                                                string vinRangeSpecFileNew = Path.Combine(outDirSub, $"vinranges_{band}.txt");
+
+                                                if (string.IsNullOrEmpty(vinRangeSpecFile) || string.Compare(vinRangeSpecFile, vinRangeSpecFileNew, StringComparison.OrdinalIgnoreCase) != 0)
+                                                {
+                                                    if (swVinrangesSpec != null)
+                                                    {
+                                                        swVinrangesSpec.Dispose();
+                                                        swVinrangesSpec = null;
+                                                    }
+                                                }
+
+                                                if (swVinrangesSpec == null)
+                                                {
+                                                    if (File.Exists(vinRangeSpecFileNew))
+                                                    {
+                                                        swVinrangesSpec = new StreamWriter(vinRangeSpecFileNew, true, new UTF8Encoding(false), 0x1000);
+                                                    }
+                                                    else
+                                                    {
+                                                        swVinrangesSpec = new StreamWriter(vinRangeSpecFileNew, false, new UTF8Encoding(true), 0x1000);
+                                                    }
+                                                    vinRangeSpecFile = vinRangeSpecFileNew;
+                                                }
+
+                                                swVinrangesSpec.WriteLine(line);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-
-                    mDbConnection.Close();
+                    finally
+                    {
+                        if (swVinrangesSpec != null)
+                        {
+                            swVinrangesSpec.Dispose();
+                        }
+                    }
                 }
 
                 outTextWriter?.WriteLine("*** Write VinRanges done ***");
@@ -631,17 +692,18 @@ namespace ExtractEcuFunctions
             }
         }
 
-        private static DbInfo GetDbInfo(SQLiteConnection mDbConnection)
+        private static DbInfo GetDbInfo(SqliteConnection mDbConnection)
         {
             DbInfo dbInfo = null;
             string sql = @"SELECT VERSION, CREATIONDATE FROM RG_VERSION";
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        string version = reader["VERSION"].ToString().Trim();
+                        string version = reader["VERSION"].ToString()?.Trim();
                         DateTime dateTime = reader.GetDateTime(1);
                         dbInfo = new DbInfo(version, dateTime);
                         break;
@@ -652,7 +714,7 @@ namespace ExtractEcuFunctions
             return dbInfo;
         }
 
-        private static EcuFunctionStructs.EcuVariant GetEcuVariant(SQLiteConnection mDbConnection, string ecuName)
+        private static EcuFunctionStructs.EcuVariant GetEcuVariant(SqliteConnection mDbConnection, string ecuName)
         {
             EcuFunctionStructs.EcuVariant ecuVariant = null;
             string name = ecuName.ToLowerInvariant();
@@ -662,14 +724,15 @@ namespace ExtractEcuFunctions
             }
 
             string sql = string.Format(@"SELECT ID, " + DatabaseFunctions.SqlTitleItems + ", ECUGROUPID FROM XEP_ECUVARIANTS WHERE (lower(NAME) = '{0}')", name);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        string groupId = reader["ECUGROUPID"].ToString().Trim();
-                        ecuVariant = new EcuFunctionStructs.EcuVariant(reader["ID"].ToString().Trim(),
+                        string groupId = reader["ECUGROUPID"].ToString()?.Trim();
+                        ecuVariant = new EcuFunctionStructs.EcuVariant(reader["ID"].ToString()?.Trim(),
                             groupId,
                             GetEcuGroupName(mDbConnection, groupId),
                             GetTranslation(reader),
@@ -689,19 +752,20 @@ namespace ExtractEcuFunctions
             return ecuVariant;
         }
 
-        private static List<EcuFunctionStructs.EcuFaultCode> GetFaultCodes(SQLiteConnection mDbConnection, string variantId)
+        private static List<EcuFunctionStructs.EcuFaultCode> GetFaultCodes(SqliteConnection mDbConnection, string variantId)
         {
             List<EcuFunctionStructs.EcuFaultCode> ecuFaultCodeList = new List<EcuFunctionStructs.EcuFaultCode>();
             // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetXepFaultCodeByEcuVariantId
             string sql = string.Format(@"SELECT ID, CODE, DATATYPE, RELEVANCE FROM XEP_FAULTCODES WHERE ECUVARIANTID = {0}", variantId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
                         EcuFunctionStructs.EcuFaultCode ecuFaultCode = new EcuFunctionStructs.EcuFaultCode(
-                            reader["ID"].ToString().Trim(),
+                            reader["ID"].ToString()?.Trim(),
                             reader["CODE"].ToString(),
                             reader["DATATYPE"].ToString(),
                             reader["RELEVANCE"].ToString());
@@ -760,18 +824,19 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetFaultLabelXepFaultLabel
-        private static List<EcuFunctionStructs.EcuFaultCodeLabel> GetFaultCodeLabels(SQLiteConnection mDbConnection, string language)
+        private static List<EcuFunctionStructs.EcuFaultCodeLabel> GetFaultCodeLabels(SqliteConnection mDbConnection, string language)
         {
             List<EcuFunctionStructs.EcuFaultCodeLabel> ecuFaultCodeLabelList = new List<EcuFunctionStructs.EcuFaultCodeLabel>();
             string sql = @"SELECT ID LABELID, CODE, SAECODE, " + DatabaseFunctions.SqlTitleItems + ", RELEVANCE, DATATYPE " +
                          @"FROM XEP_FAULTLABELS";
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        string labelId = reader["LABELID"].ToString().Trim();
+                        string labelId = reader["LABELID"].ToString()?.Trim();
                         bool addItem;
                         lock (FaultCodeLabelIdHashSet)
                         {
@@ -795,19 +860,20 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetFaultLabelXepFaultLabel
-        private static EcuFunctionStructs.EcuFaultCodeLabel GetFaultCodeLabel(SQLiteConnection mDbConnection, EcuFunctionStructs.EcuFaultCode ecuFaultCode)
+        private static EcuFunctionStructs.EcuFaultCodeLabel GetFaultCodeLabel(SqliteConnection mDbConnection, EcuFunctionStructs.EcuFaultCode ecuFaultCode)
         {
             EcuFunctionStructs.EcuFaultCodeLabel ecuFaultCodeLabel = null;
             string sql = string.Format(@"SELECT LABELS.ID LABELID, CODE, SAECODE, " + DatabaseFunctions.SqlTitleItems + ", RELEVANCE, DATATYPE " +
                                        @"FROM XEP_FAULTLABELS LABELS, XEP_REFFAULTLABELS REFLABELS" +
                                        @" WHERE CODE = {0} AND LABELS.ID = REFLABELS.LABELID AND REFLABELS.ID = {1}", ecuFaultCode.Code, ecuFaultCode.Id);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuFaultCodeLabel = new EcuFunctionStructs.EcuFaultCodeLabel(reader["LABELID"].ToString().Trim(),
+                        ecuFaultCodeLabel = new EcuFunctionStructs.EcuFaultCodeLabel(reader["LABELID"].ToString()?.Trim(),
                             reader["CODE"].ToString(),
                             reader["SAECODE"].ToString(),
                             GetTranslation(reader),
@@ -822,18 +888,19 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetFaultModeLabelById
-        private static List<EcuFunctionStructs.EcuFaultModeLabel> GetFaultModeLabels(SQLiteConnection mDbConnection, string language)
+        private static List<EcuFunctionStructs.EcuFaultModeLabel> GetFaultModeLabels(SqliteConnection mDbConnection, string language)
         {
             List<EcuFunctionStructs.EcuFaultModeLabel> ecuFaultModeLabelList = new List<EcuFunctionStructs.EcuFaultModeLabel>();
             string sql = @"SELECT ID LABELID, CODE, " + DatabaseFunctions.SqlTitleItems + ", RELEVANCE, ERWEITERT " +
                          @"FROM XEP_FAULTMODELABELS ORDER BY LABELID";
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        string labelId = reader["LABELID"].ToString().Trim();
+                        string labelId = reader["LABELID"].ToString()?.Trim();
                         bool addItem;
                         lock (FaultModeLabelIdHashSet)
                         {
@@ -856,19 +923,20 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetFaultModeLabelById
-        private static List<EcuFunctionStructs.EcuFaultModeLabel> GetFaultModeLabelList(SQLiteConnection mDbConnection, EcuFunctionStructs.EcuFaultCode ecuFaultCode)
+        private static List<EcuFunctionStructs.EcuFaultModeLabel> GetFaultModeLabelList(SqliteConnection mDbConnection, EcuFunctionStructs.EcuFaultCode ecuFaultCode)
         {
             List<EcuFunctionStructs.EcuFaultModeLabel> ecuFaultModeLabelList = new List<EcuFunctionStructs.EcuFaultModeLabel>();
             string sql = string.Format(@"SELECT LABELS.ID LABELID, CODE, " + DatabaseFunctions.SqlTitleItems + ", RELEVANCE, ERWEITERT " +
                                        @"FROM XEP_FAULTMODELABELS LABELS, XEP_REFFAULTLABELS REFLABELS" +
                                        @" WHERE LABELS.ID = REFLABELS.LABELID AND REFLABELS.ID = {0} ORDER BY LABELID", ecuFaultCode.Id);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuFaultModeLabelList.Add(new EcuFunctionStructs.EcuFaultModeLabel(reader["LABELID"].ToString().Trim(),
+                        ecuFaultModeLabelList.Add(new EcuFunctionStructs.EcuFaultModeLabel(reader["LABELID"].ToString()?.Trim(),
                             reader["CODE"].ToString(),
                             GetTranslation(reader),
                             reader["RELEVANCE"].ToString(),
@@ -881,18 +949,19 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEnvCondLabels
-        private static List<EcuFunctionStructs.EcuEnvCondLabel> GetEnvCondLabels(SQLiteConnection mDbConnection, string language)
+        private static List<EcuFunctionStructs.EcuEnvCondLabel> GetEnvCondLabels(SqliteConnection mDbConnection, string language)
         {
             List<EcuFunctionStructs.EcuEnvCondLabel> ecuEnvCondLabelList = new List<EcuFunctionStructs.EcuEnvCondLabel>();
             string sql = @"SELECT ID, NODECLASS, " + DatabaseFunctions.SqlTitleItems + ", RELEVANCE, BLOCKANZAHL, UWIDENTTYP, UWIDENT, UNIT " +
                          @"FROM XEP_ENVCONDSLABELS ORDER BY ID";
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        string labelId = reader["ID"].ToString().Trim();
+                        string labelId = reader["ID"].ToString()?.Trim();
                         bool addItem;
                         lock (EnvCondLabelIdHashSet)
                         {
@@ -926,7 +995,7 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEnvCondLabels
-        private static List<EcuFunctionStructs.EcuEnvCondLabel> GetEnvCondLabelList(SQLiteConnection mDbConnection,
+        private static List<EcuFunctionStructs.EcuEnvCondLabel> GetEnvCondLabelList(SqliteConnection mDbConnection,
             EcuFunctionStructs.EcuFaultCode ecuFaultCode, string variantId)
         {
             List<EcuFunctionStructs.EcuEnvCondLabel> ecuEnvCondLabelList = new List<EcuFunctionStructs.EcuEnvCondLabel>();
@@ -934,13 +1003,14 @@ namespace ExtractEcuFunctions
                        @"FROM XEP_ENVCONDSLABELS" +
                        @" WHERE ID IN (SELECT LABELID FROM XEP_REFFAULTLABELS, XEP_FAULTCODES WHERE CODE = {0} AND ECUVARIANTID = {1} AND XEP_REFFAULTLABELS.ID = XEP_FAULTCODES.ID) ORDER BY ID",
                         ecuFaultCode.Code, variantId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuEnvCondLabelList.Add(new EcuFunctionStructs.EcuEnvCondLabel(reader["ID"].ToString().Trim(),
+                        ecuEnvCondLabelList.Add(new EcuFunctionStructs.EcuEnvCondLabel(reader["ID"].ToString()?.Trim(),
                             reader["NODECLASS"].ToString(),
                             GetTranslation(reader),
                             reader["RELEVANCE"].ToString(),
@@ -963,7 +1033,7 @@ namespace ExtractEcuFunctions
             return ecuEnvCondLabelList;
         }
 
-        private static EcuFunctionStructs.EcuClique FindEcuClique(SQLiteConnection mDbConnection, EcuFunctionStructs.EcuVariant ecuVariant)
+        private static EcuFunctionStructs.EcuClique FindEcuClique(SqliteConnection mDbConnection, EcuFunctionStructs.EcuVariant ecuVariant)
         {
             if (ecuVariant == null)
             {
@@ -979,7 +1049,7 @@ namespace ExtractEcuFunctions
             return GetEcuCliqueById(mDbConnection, cliqueId);
         }
 
-        private static EcuFunctionStructs.EcuClique GetEcuCliqueById(SQLiteConnection mDbConnection, string ecuCliqueId)
+        private static EcuFunctionStructs.EcuClique GetEcuCliqueById(SqliteConnection mDbConnection, string ecuCliqueId)
         {
             if (string.IsNullOrEmpty(ecuCliqueId))
             {
@@ -988,15 +1058,16 @@ namespace ExtractEcuFunctions
 
             EcuFunctionStructs.EcuClique ecuClique = null;
             string sql = string.Format(@"SELECT ID, CLIQUENKURZBEZEICHNUNG, ECUREPID FROM XEP_ECUCLIQUES WHERE (ID = {0})", ecuCliqueId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuClique = new EcuFunctionStructs.EcuClique(reader["ID"].ToString().Trim(),
-                            reader["CLIQUENKURZBEZEICHNUNG"].ToString().Trim(),
-                            reader["ECUREPID"].ToString().Trim());
+                        ecuClique = new EcuFunctionStructs.EcuClique(reader["ID"].ToString()?.Trim(),
+                            reader["CLIQUENKURZBEZEICHNUNG"].ToString()?.Trim(),
+                            reader["ECUREPID"].ToString()?.Trim());
                     }
                 }
             }
@@ -1013,7 +1084,7 @@ namespace ExtractEcuFunctions
             return ecuClique;
         }
 
-        private static string GetRefEcuCliqueId(SQLiteConnection mDbConnection, string ecuRefId)
+        private static string GetRefEcuCliqueId(SqliteConnection mDbConnection, string ecuRefId)
         {
             if (string.IsNullOrEmpty(ecuRefId))
             {
@@ -1022,13 +1093,14 @@ namespace ExtractEcuFunctions
 
             string cliqueId = null;
             string sql = string.Format(@"SELECT ECUCLIQUEID FROM XEP_REFECUCLIQUES WHERE (ID = {0})", ecuRefId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        cliqueId = reader["ECUCLIQUEID"].ToString().Trim();
+                        cliqueId = reader["ECUCLIQUEID"].ToString()?.Trim();
                     }
                 }
             }
@@ -1036,7 +1108,7 @@ namespace ExtractEcuFunctions
             return cliqueId;
         }
 
-        public static string GetEcuRepsNameById(SQLiteConnection mDbConnection, string ecuId)
+        public static string GetEcuRepsNameById(SqliteConnection mDbConnection, string ecuId)
         {
             if (string.IsNullOrEmpty(ecuId))
             {
@@ -1045,13 +1117,14 @@ namespace ExtractEcuFunctions
 
             string ecuRepsName = null;
             string sql = string.Format(@"SELECT STEUERGERAETEKUERZEL FROM XEP_ECUREPS WHERE (ID = {0})", ecuId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuRepsName = reader["STEUERGERAETEKUERZEL"].ToString().Trim();
+                        ecuRepsName = reader["STEUERGERAETEKUERZEL"].ToString()?.Trim();
                     }
                 }
             }
@@ -1061,17 +1134,18 @@ namespace ExtractEcuFunctions
 
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEcuGroupFunctionsByEcuGroupId
-        private static List<string> GetEcuGroupFunctionIds(SQLiteConnection mDbConnection, string groupId)
+        private static List<string> GetEcuGroupFunctionIds(SqliteConnection mDbConnection, string groupId)
         {
             List<string> ecuGroupFunctionIds = new List<string>();
             string sql = string.Format(@"SELECT ID FROM XEP_ECUGROUPFUNCTIONS WHERE ECUGROUPID = {0}", groupId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuGroupFunctionIds.Add(reader["ID"].ToString().Trim());
+                        ecuGroupFunctionIds.Add(reader["ID"].ToString()?.Trim());
                     }
                 }
             }
@@ -1079,17 +1153,18 @@ namespace ExtractEcuFunctions
             return ecuGroupFunctionIds;
         }
 
-        private static string GetEcuGroupName(SQLiteConnection mDbConnection, string groupId)
+        private static string GetEcuGroupName(SqliteConnection mDbConnection, string groupId)
         {
             string ecuGroupName = null;
             string sql = string.Format(@"SELECT NAME FROM XEP_ECUGROUPS WHERE ID = {0}", groupId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuGroupName = reader["NAME"].ToString().Trim();
+                        ecuGroupName = reader["NAME"].ToString()?.Trim();
                     }
                 }
             }
@@ -1098,17 +1173,18 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetXepNodeClassNameById
-        private static string GetNodeClassName(SQLiteConnection mDbConnection, string nodeClass)
+        private static string GetNodeClassName(SqliteConnection mDbConnection, string nodeClass)
         {
             string result = string.Empty;
             string sql = string.Format(@"SELECT NAME FROM XEP_NODECLASSES WHERE ID = {0}", nodeClass);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        result = reader["NAME"].ToString().Trim();
+                        result = reader["NAME"].ToString()?.Trim();
                     }
                 }
             }
@@ -1116,21 +1192,22 @@ namespace ExtractEcuFunctions
             return result;
         }
 
-        private static List<EcuFunctionStructs.EcuJob> GetFixedFuncStructJobsList(SQLiteConnection mDbConnection, EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct)
+        private static List<EcuFunctionStructs.EcuJob> GetFixedFuncStructJobsList(SqliteConnection mDbConnection, EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct)
         {
             List<EcuFunctionStructs.EcuJob> ecuJobList = new List<EcuFunctionStructs.EcuJob>();
             // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEcuJobsWithParameters
             string sql = string.Format(@"SELECT JOBS.ID JOBID, FUNCTIONNAMEJOB, NAME, PHASE, RANK " +
                                        "FROM XEP_ECUJOBS JOBS, XEP_REFECUJOBS REFJOBS WHERE JOBS.ID = REFJOBS.ECUJOBID AND REFJOBS.ID = {0}", ecuFixedFuncStruct.Id);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuJobList.Add(new EcuFunctionStructs.EcuJob(reader["JOBID"].ToString().Trim(),
-                            reader["FUNCTIONNAMEJOB"].ToString().Trim(),
-                            reader["NAME"].ToString().Trim(),
+                        ecuJobList.Add(new EcuFunctionStructs.EcuJob(reader["JOBID"].ToString()?.Trim(),
+                            reader["FUNCTIONNAMEJOB"].ToString()?.Trim(),
+                            reader["NAME"].ToString()?.Trim(),
                             reader["PHASE"].ToString(),
                             reader["RANK"].ToString()));
                     }
@@ -1145,16 +1222,17 @@ namespace ExtractEcuFunctions
                     @"SELECT PARAM.ID PARAMID, PARAMVALUE, FUNCTIONNAMEPARAMETER, ADAPTERPATH, NAME, ECUJOBID " +
                     "FROM XEP_ECUPARAMETERS PARAM, XEP_REFECUPARAMETERS REFPARAM WHERE " +
                     "PARAM.ID = REFPARAM.ECUPARAMETERID AND REFPARAM.ID = {0} AND PARAM.ECUJOBID = {1}", ecuFixedFuncStruct.Id, ecuJob.Id);
-                using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+                using (SqliteCommand command = mDbConnection.CreateCommand())
                 {
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (SqliteDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
-                            ecuJobParList.Add(new EcuFunctionStructs.EcuJobParameter(reader["PARAMID"].ToString().Trim(),
-                                reader["PARAMVALUE"].ToString().Trim(),
+                            ecuJobParList.Add(new EcuFunctionStructs.EcuJobParameter(reader["PARAMID"].ToString()?.Trim(),
+                                reader["PARAMVALUE"].ToString()?.Trim(),
                                 reader["ADAPTERPATH"].ToString(),
-                                reader["NAME"].ToString().Trim()));
+                                reader["NAME"].ToString()?.Trim()));
                         }
                     }
                 }
@@ -1167,18 +1245,19 @@ namespace ExtractEcuFunctions
                     @"SELECT RESULTS.ID RESULTID, " + DatabaseFunctions.SqlTitleItems + ", FUNCTIONNAMERESULT, ADAPTERPATH, NAME, STEUERGERAETEFUNKTIONENRELEVAN, LOCATION, UNIT, UNITFIXED, FORMAT, MULTIPLIKATOR, OFFSET, RUNDEN, ZAHLENFORMAT, ECUJOBID " +
                     "FROM XEP_ECURESULTS RESULTS, XEP_REFECURESULTS REFRESULTS WHERE " +
                     "ECURESULTID = RESULTS.ID AND REFRESULTS.ID = {0} AND RESULTS.ECUJOBID = {1}", ecuFixedFuncStruct.Id, ecuJob.Id);
-                using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+                using (SqliteCommand command = mDbConnection.CreateCommand())
                 {
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (SqliteDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
                             EcuFunctionStructs.EcuJobResult ecuJobResult = new EcuFunctionStructs.EcuJobResult(
-                                reader["RESULTID"].ToString().Trim(),
+                                reader["RESULTID"].ToString()?.Trim(),
                                 GetTranslation(reader),
-                                reader["FUNCTIONNAMERESULT"].ToString().Trim(),
+                                reader["FUNCTIONNAMERESULT"].ToString()?.Trim(),
                                 reader["ADAPTERPATH"].ToString(),
-                                reader["NAME"].ToString().Trim(),
+                                reader["NAME"].ToString()?.Trim(),
                                 reader["STEUERGERAETEFUNKTIONENRELEVAN"].ToString(),
                                 reader["LOCATION"].ToString(),
                                 reader["UNIT"].ToString(),
@@ -1209,23 +1288,24 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEcuResultStateValues
-        private static List<EcuFunctionStructs.EcuResultStateValue> GetResultStateValueList(SQLiteConnection mDbConnection, string id, string language = null)
+        private static List<EcuFunctionStructs.EcuResultStateValue> GetResultStateValueList(SqliteConnection mDbConnection, string id, string language = null)
         {
             List<EcuFunctionStructs.EcuResultStateValue> ecuResultStateValueList = new List<EcuFunctionStructs.EcuResultStateValue>();
             string sql = string.Format(@"SELECT ID, " + DatabaseFunctions.SqlTitleItems + ", STATEVALUE, VALIDFROM, VALIDTO, PARENTID " +
                                        "FROM XEP_STATEVALUES WHERE (PARENTID IN (SELECT STATELISTID FROM XEP_REFSTATELISTS WHERE (ID = {0})))", id);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        ecuResultStateValueList.Add(new EcuFunctionStructs.EcuResultStateValue(reader["ID"].ToString().Trim(),
+                        ecuResultStateValueList.Add(new EcuFunctionStructs.EcuResultStateValue(reader["ID"].ToString()?.Trim(),
                             GetTranslation(reader, "TITLE", language),
                             reader["STATEVALUE"].ToString(),
                             reader["VALIDFROM"].ToString(),
                             reader["VALIDTO"].ToString(),
-                            reader["PARENTID"].ToString().Trim()));
+                            reader["PARENTID"].ToString()?.Trim()));
                     }
                 }
             }
@@ -1234,21 +1314,22 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEcuFixedFunctionsByParentId
-        private static List<EcuFunctionStructs.EcuFixedFuncStruct> GetEcuFixedFuncStructList(SQLiteConnection mDbConnection, string parentId)
+        private static List<EcuFunctionStructs.EcuFixedFuncStruct> GetEcuFixedFuncStructList(SqliteConnection mDbConnection, string parentId)
         {
             List<EcuFunctionStructs.EcuFixedFuncStruct> ecuFixedFuncStructList = new List<EcuFunctionStructs.EcuFixedFuncStruct>();
             string sql = string.Format(@"SELECT ID, NODECLASS, " + DatabaseFunctions.SqlTitleItems + ", " +
                                        SqlPreOpItems + ", " + SqlProcItems + ", " + SqlPostOpItems + ", " +
                                        "SORT_ORDER, ACTIVATION, ACTIVATION_DURATION_MS " +
                                        "FROM XEP_ECUFIXEDFUNCTIONS WHERE (PARENTID = {0})", parentId);
-            using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+            using (SqliteCommand command = mDbConnection.CreateCommand())
             {
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                command.CommandText = sql;
+                using (SqliteDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
                         string nodeClass = reader["NODECLASS"].ToString();
-                        EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct = new EcuFunctionStructs.EcuFixedFuncStruct(reader["ID"].ToString().Trim(),
+                        EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct = new EcuFunctionStructs.EcuFixedFuncStruct(reader["ID"]?.ToString()?.Trim(),
                             nodeClass,
                             GetNodeClassName(mDbConnection, nodeClass),
                             GetTranslation(reader),
@@ -1269,7 +1350,7 @@ namespace ExtractEcuFunctions
         }
 
         // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEcuFixedFunctionsForEcuVariant
-        private static EcuFunctionStructs.EcuVariant GetEcuVariantFunctions(TextWriter outTextWriter, TextWriter logTextWriter, SQLiteConnection mDbConnection, string ecuName)
+        private static EcuFunctionStructs.EcuVariant GetEcuVariantFunctions(TextWriter outTextWriter, TextWriter logTextWriter, SqliteConnection mDbConnection, string ecuName)
         {
             EcuFunctionStructs.EcuVariant ecuVariant = GetEcuVariant(mDbConnection, ecuName);
             if (ecuVariant == null)
@@ -1288,14 +1369,15 @@ namespace ExtractEcuFunctions
             List<EcuFunctionStructs.RefEcuVariant> refEcuVariantList = new List<EcuFunctionStructs.RefEcuVariant>();
             {
                 string sql = string.Format(@"SELECT ID, ECUVARIANTID FROM XEP_REFECUVARIANTS WHERE ECUVARIANTID = {0}", ecuVariant.Id);
-                using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+                using (SqliteCommand command = mDbConnection.CreateCommand())
                 {
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (SqliteDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
                             refEcuVariantList.Add(new EcuFunctionStructs.RefEcuVariant(reader["ID"].ToString(),
-                                reader["ECUVARIANTID"].ToString().Trim()));
+                                reader["ECUVARIANTID"].ToString()?.Trim()));
                         }
                     }
                 }
@@ -1316,13 +1398,14 @@ namespace ExtractEcuFunctions
             {
                 // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEcuVariantFunctionByNameAndEcuGroupFunctionId
                 string sql = string.Format(@"SELECT ID, VISIBLE, NAME, OBD_RELEVANZ FROM XEP_ECUVARFUNCTIONS WHERE (lower(NAME) = '{0}') AND (ECUGROUPFUNCTIONID = {1})", ecuName.ToLowerInvariant(), ecuGroupFunctionId);
-                using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+                using (SqliteCommand command = mDbConnection.CreateCommand())
                 {
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (SqliteDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
-                            ecuVarFunctionsList.Add(new EcuFunctionStructs.EcuVarFunc(reader["ID"].ToString().Trim(), ecuGroupFunctionId));
+                            ecuVarFunctionsList.Add(new EcuFunctionStructs.EcuVarFunc(reader["ID"].ToString()?.Trim(), ecuGroupFunctionId));
                         }
                     }
                 }
@@ -1339,14 +1422,15 @@ namespace ExtractEcuFunctions
                 // from: DatabaseProvider.SQLiteConnector.dll BMW.Rheingold.DatabaseProvider.SQLiteConnector.DatabaseProviderSQLite.GetEcuFunctionStructureById
                 string sql = string.Format(@"SELECT REFFUNCS.ECUFUNCSTRUCTID FUNCSTRUCTID, NODECLASS, " + DatabaseFunctions.SqlTitleItems + ", MULTISELECTION, PARENTID, SORT_ORDER " +
                         "FROM XEP_ECUFUNCSTRUCTURES FUNCS, XEP_REFECUFUNCSTRUCTS REFFUNCS WHERE FUNCS.ID = REFFUNCS.ECUFUNCSTRUCTID AND REFFUNCS.ID = {0}", ecuVarFunc.Id);
-                using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+                using (SqliteCommand command = mDbConnection.CreateCommand())
                 {
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (SqliteDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
                             string nodeClass = reader["NODECLASS"].ToString();
-                            ecuFuncStructList.Add(new EcuFunctionStructs.EcuFuncStruct(reader["FUNCSTRUCTID"].ToString().Trim(),
+                            ecuFuncStructList.Add(new EcuFunctionStructs.EcuFuncStruct(reader["FUNCSTRUCTID"].ToString()?.Trim(),
                                 nodeClass,
                                 GetNodeClassName(mDbConnection, nodeClass),
                                 GetTranslation(reader),
@@ -1391,24 +1475,23 @@ namespace ExtractEcuFunctions
         {
             try
             {
-                AesCryptoServiceProvider crypto = null;
+                Aes crypto = null;
                 FileStream fsOut = null;
                 ZipOutputStream zipStream = null;
                 try
                 {
                     if (!string.IsNullOrEmpty(key))
                     {
-                        crypto = new AesCryptoServiceProvider
-                        {
-                            Mode = CipherMode.CBC,
-                            Padding = PaddingMode.PKCS7,
-                            KeySize = 256
-                        };
-                        using (SHA256Managed sha256 = new SHA256Managed())
+                        crypto = Aes.Create();
+                        crypto.Mode = CipherMode.CBC;
+                        crypto.Padding = PaddingMode.PKCS7;
+                        crypto.KeySize = 256;
+
+                        using (SHA256 sha256 = SHA256.Create())
                         {
                             crypto.Key = sha256.ComputeHash(Encoding.ASCII.GetBytes(key));
                         }
-                        using (var md5 = MD5.Create())
+                        using (MD5 md5 = MD5.Create())
                         {
                             crypto.IV = md5.ComputeHash(Encoding.ASCII.GetBytes(key));
                         }
@@ -1418,8 +1501,7 @@ namespace ExtractEcuFunctions
                     // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
                     if (crypto != null)
                     {
-                        CryptoStream crStream = new CryptoStream(fsOut,
-                            crypto.CreateEncryptor(), CryptoStreamMode.Write);
+                        CryptoStream crStream = new CryptoStream(fsOut, crypto.CreateEncryptor(), CryptoStreamMode.Write);
                         zipStream = new ZipOutputStream(crStream);
                     }
                     else

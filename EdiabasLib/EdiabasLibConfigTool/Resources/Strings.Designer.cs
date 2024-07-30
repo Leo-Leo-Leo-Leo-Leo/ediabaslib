@@ -331,6 +331,15 @@ namespace EdiabasLibConfigTool.Resources {
         }
         
         /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die Warning: Unknown API version. ähnelt.
+        /// </summary>
+        internal static string PatchApiVersionUnknown {
+            get {
+                return ResourceManager.GetString("PatchApiVersionUnknown", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Sucht eine lokalisierte Zeichenfolge, die Backup file {0} is already existing. ähnelt.
         /// </summary>
         internal static string PatchBackupFileExisting {
@@ -436,6 +445,15 @@ namespace EdiabasLibConfigTool.Resources {
         internal static string PatchNoValidBackupFile {
             get {
                 return ResourceManager.GetString("PatchNoValidBackupFile", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die Ediabas {0} file is missing. ähnelt.
+        /// </summary>
+        internal static string PatchOriginalApiDllMissing {
+            get {
+                return ResourceManager.GetString("PatchOriginalApiDllMissing", resourceCulture);
             }
         }
         

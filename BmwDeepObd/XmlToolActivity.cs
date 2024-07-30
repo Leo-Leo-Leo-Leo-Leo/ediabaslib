@@ -1,5 +1,7 @@
+#define USE_DRAG_LIST
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -10,6 +12,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Android.Content;
 using Android.Content.PM;
+using Android.Content.Res;
 using Android.Hardware.Usb;
 using Android.OS;
 using Android.Text.Method;
@@ -20,7 +23,13 @@ using Android.Widget;
 using BmwDeepObd.FilePicker;
 using EdiabasLib;
 using AndroidX.AppCompat.App;
+using AndroidX.Core.View;
+using AndroidX.RecyclerView.Widget;
+using BmwDeepObd.Dialogs;
 using BmwFileReader;
+using Com.Woxthebox.Draglistview;
+using Skydoves.BalloonLib;
+using System.Runtime.InteropServices;
 
 // ReSharper disable IdentifierTypo
 // ReSharper disable StringLiteralTypo
@@ -108,6 +117,7 @@ namespace BmwDeepObd
                 Description = description;
                 DescriptionTrans = null;
                 DescriptionTransRequired = true;
+                DetectFailure = false;
                 Sgbd = sgbd;
                 Grp = grp;
                 Selected = false;
@@ -132,6 +142,7 @@ namespace BmwDeepObd
                 ReadCommand = null;
                 UseCompatIds = false;
                 EcuJobNames = null;
+                ItemId = null;
             }
 
             public void InitReadValues()
@@ -230,6 +241,8 @@ namespace BmwDeepObd
 
             public bool DescriptionTransRequired { get; set; }
 
+            public bool DetectFailure { get; set; }
+
             public string Sgbd { get; set; }
 
             public string Grp { get; set; }
@@ -307,6 +320,8 @@ namespace BmwDeepObd
             public bool UseCompatIds { get; set; }
 
             public List<string> EcuJobNames { get; set; }
+
+            public long? ItemId { get; set; }
         }
 
         public class EcuInfoSubSys
@@ -364,9 +379,11 @@ namespace BmwDeepObd
                 BnType = string.Empty;
                 BrandName = string.Empty;
                 DetectMotorbikes = false;
+                DetectVehicleBmwFile = null;
                 CommErrorsOccurred = false;
-                ShownServiceMenuHint = false;
+                ServiceMenuHintShown = false;
                 ServiceFunctionWarningShown = false;
+                ListMoveHintShown = false;
             }
 
             public bool ForceAppend { get; set; }
@@ -389,9 +406,11 @@ namespace BmwDeepObd
             public string BnType { get; set; }
             public string BrandName { get; set; }
             public bool DetectMotorbikes { get; set; }
+            public string DetectVehicleBmwFile { get; set; }
             public bool CommErrorsOccurred { get; set; }
-            public bool ShownServiceMenuHint { get; set; }
+            public bool ServiceMenuHintShown { get; set; }
             public bool ServiceFunctionWarningShown { get; set; }
+            public bool ListMoveHintShown { get; set; }
         }
 
 #if DEBUG
@@ -406,6 +425,7 @@ namespace BmwDeepObd
             </{0}>";
         private const string XsdFileName = "BmwDeepObd.xsd";
         private const string TranslationFileName = "Translation.xml";
+        private const string DetectVehicleBmwFileName = "XmlToolDetectVehicleBmw.xml";
         private const int MotorAddrVag = 1;
 
         private const string PageExtension = ".ccpage";
@@ -417,13 +437,6 @@ namespace BmwDeepObd
         private const string DisplayNameEcuPrefix = "!ECU#";
         private const string ManualConfigName = "Manual";
         private const string UnknownVinConfigName = "Unknown";
-
-        private static readonly Tuple<string, string>[] ReadVinJobs =
-        {
-            new Tuple<string, string>("C_FG_LESEN_FUNKTIONAL", ""),
-            new Tuple<string, string>("PROG_FG_NR_LESEN_FUNKTIONAL", "18"),
-            new Tuple<string, string>("AIF_LESEN_FUNKTIONAL", ""),
-        };
 
         private static readonly Tuple<VagUdsS22DataType, int>[] VagUdsS22Data =
         {
@@ -597,7 +610,7 @@ namespace BmwDeepObd
         public const string ExtraDeepObdWifiIp = "deepobdwifi_ip";
         public const string ExtraFileName = "file_name";
         public const string ExtraMotorbikes = "motorbikes";
-        public static readonly CultureInfo Culture = CultureInfo.CreateSpecificCulture("en");
+        public static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
 
         public delegate void MwTabFileSelected(string fileName);
         public delegate void UpdateEcuDelegate(bool error);
@@ -611,8 +624,13 @@ namespace BmwDeepObd
         private View _barView;
         private Button _buttonRead;
         private Button _buttonSafe;
+#if USE_DRAG_LIST
+        private DragListView _listViewEcu;
+        private DragEcuListAdapter _ecuListAdapter;
+#else
         private ListView _listViewEcu;
         private EcuListAdapter _ecuListAdapter;
+#endif
         private TextView _textViewCarInfo;
         private string _ecuDir;
         private string _vagDir;
@@ -633,27 +651,82 @@ namespace BmwDeepObd
         private SgFunctions _sgFunctions;
         private Thread _jobThread;
         private static List<EcuInfo> _ecuList = new List<EcuInfo>();
+        private static readonly object _ecuListLock = new object();
         private EcuInfo _ecuInfoMot;
         private EcuInfo _ecuInfoDid;
         private EcuInfo _ecuInfoBmwServiceMenu;
+        private DetectVehicleBmw _detectVehicleBmw;
         private bool _translateEnabled = true;
         private bool _translateActive;
         private bool _ecuListTranslated;
+
+        private static int EcuListCount
+        {
+            get
+            {
+                int ecuListCount = 0;
+                lock (_ecuListLock)
+                {
+                    if (_ecuList != null)
+                    {
+                        ecuListCount = _ecuList.Count;
+                    }
+                }
+
+                return ecuListCount;
+            }
+        }
+
+        private static EcuInfo GetEcuInfo(int index)
+        {
+            EcuInfo ecuInfo;
+            lock (_ecuListLock)
+            {
+                if (_ecuList != null && index >= 0 && index < _ecuList.Count)
+                {
+                    ecuInfo = _ecuList[index];
+                }
+                else
+                {
+                    ecuInfo = null;
+                }
+            }
+
+            return ecuInfo;
+        }
+
+        private static List<EcuInfo> GetClonedEcuList()
+        {
+            lock (_ecuListLock)
+            {
+                if (_ecuList == null)
+                {
+                    return new List<EcuInfo>();
+                }
+
+                return new List<EcuInfo>(_ecuList);
+            }
+        }
+
+        private static void ClearStaticEcuList()
+        {
+            lock (_ecuListLock)
+            {
+                _ecuList?.Clear();
+            }
+        }
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
             SetTheme(ActivityCommon.SelectedThemeId);
             base.OnCreate(savedInstanceState);
 
-            if (_ecuList == null)
+            lock (_ecuListLock)
             {
-                _ecuList = new List<EcuInfo>();
+                _ecuList ??= new List<EcuInfo>();
             }
 
-            if (_ruleEvalBmw == null)
-            {
-                _ruleEvalBmw = new RuleEvalBmw();
-            }
+            _ruleEvalBmw ??= new RuleEvalBmw();
 
             if (savedInstanceState != null)
             {
@@ -662,7 +735,7 @@ namespace BmwDeepObd
             }
             else
             {
-                _ecuList.Clear();
+                ClearStaticEcuList();
                 _ruleEvalBmw?.ClearEvalProperties();
             }
 
@@ -687,7 +760,11 @@ namespace BmwDeepObd
                 SupportActionBar.SetDisplayHomeAsUpEnabled(true);
                 SupportActionBar.SetDisplayShowCustomEnabled(true);
             }
+#if USE_DRAG_LIST
+            SetContentView(Resource.Layout.xml_tool_swipe);
+#else
             SetContentView(Resource.Layout.xml_tool);
+#endif
 
             _menuUpdateHandler = new Handler(Looper.MainLooper);
             _showServiceMenuRunnable = new Java.Lang.Runnable(() =>
@@ -737,12 +814,22 @@ namespace BmwDeepObd
             };
 
             _textViewCarInfo = FindViewById<TextView>(Resource.Id.textViewCarInfo);
+#if USE_DRAG_LIST
+            _listViewEcu = FindViewById<DragListView>(Resource.Id.listEcu);
+            _ecuListAdapter = new DragEcuListAdapter(this, Resource.Layout.ecu_select_list_swipe, Resource.Id.item_layout, true);
+#else
             _listViewEcu = FindViewById<ListView>(Resource.Id.listEcu);
             _ecuListAdapter = new EcuListAdapter(this);
+#endif
             _ecuListAdapter.CheckChanged += EcuCheckChanged;
             _ecuListAdapter.MenuOptionsSelected += (ecuInfo, view) =>
             {
-                int itemIndex = _ecuListAdapter.Items.IndexOf(ecuInfo);
+                if (_activityCommon == null)
+                {
+                    return;
+                }
+
+                int itemIndex = _ecuListAdapter.GetItemIndex(ecuInfo);
                 if (itemIndex < 0)
                 {
                     return;
@@ -750,23 +837,48 @@ namespace BmwDeepObd
 
                 ShowContextMenu(view, itemIndex);
             };
+#if USE_DRAG_LIST
+            _listViewEcu.SetLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.Vertical, false));
+            _listViewEcu.SetAdapter(_ecuListAdapter, false);
+            _listViewEcu.SetCanDragHorizontally(false);
+            _listViewEcu.SetCanDragVertically(true);
+            _listViewEcu.SetCustomDragItem(new CustomDragItem(this, Resource.Layout.ecu_select_list_swipe));
+            _listViewEcu.SetDragListListener(new CustomDragListener(this));
+            _listViewEcu.SetDragListCallback(new CustomDragListCallback(this));
+            _listViewEcu.DragEnabled = true;
 
+            _ecuListAdapter.ItemClicked += (ecuInfo, view) =>
+            {
+                if (_activityCommon == null)
+                {
+                    return;
+                }
+
+                if (ecuInfo != null)
+                {
+                    PerformJobsRead(ecuInfo);
+                }
+            };
+#else
             _listViewEcu.Adapter = _ecuListAdapter;
             _listViewEcu.ItemClick += (sender, args) =>
             {
-                int pos = args.Position;
-                if (pos >= 0)
+                if (_activityCommon == null)
                 {
-                    PerformJobsRead(_ecuList[pos]);
+                    return;
                 }
-            };
 
+                int pos = args.Position;
+                PerformJobsRead(GetEcuInfo(pos));
+            };
+#endif
             _activityCommon = new ActivityCommon(this, () =>
             {
                 if (_activityCommon == null)
                 {
                     return;
                 }
+
                 if (_activityActive)
                 {
                     UpdateOptionsMenu();
@@ -824,6 +936,18 @@ namespace BmwDeepObd
             EdiabasClose(_instanceData.ForceAppend);
             ReadTranslation();
 
+            if (!string.IsNullOrEmpty(_instanceData.DetectVehicleBmwFile) && !string.IsNullOrEmpty(_bmwDir))
+            {
+                DetectVehicleBmw detectVehicleBmw = new DetectVehicleBmw(_ediabas, _bmwDir);
+                lock (detectVehicleBmw.GlobalLockObject)
+                {
+                    if (detectVehicleBmw.LoadDataFromFile(_instanceData.DetectVehicleBmwFile))
+                    {
+                        _detectVehicleBmw = detectVehicleBmw;
+                    }
+                }
+            }
+
             if (!_activityRecreated)
             {
                 if (_instanceData.ManualConfigIdx > 0 || IsPageSelectionActive())
@@ -865,7 +989,7 @@ namespace BmwDeepObd
                         {
                             if (bmwServiceCall)
                             {
-                                _instanceData.ShownServiceMenuHint = true;
+                                _instanceData.ServiceMenuHintShown = true;
                             }
 
                             ExecuteAnalyzeJob();
@@ -880,6 +1004,7 @@ namespace BmwDeepObd
         protected override void OnSaveInstanceState(Bundle outState)
         {
             StoreTranslation();
+            StoreDetectVehicleInfo();
             StoreInstanceState(outState, _instanceData);
             base.OnSaveInstanceState(outState);
         }
@@ -956,7 +1081,6 @@ namespace BmwDeepObd
                 try
                 {
                     _menuUpdateHandler.RemoveCallbacksAndMessages(null);
-                    _menuUpdateHandler.Dispose();
                 }
                 catch (Exception)
                 {
@@ -970,7 +1094,7 @@ namespace BmwDeepObd
         {
             base.Finish();
             StoreTranslation();
-            _ecuList.Clear();
+            ClearStaticEcuList();
             _ruleEvalBmw.ClearEvalProperties();
         }
 
@@ -987,9 +1111,12 @@ namespace BmwDeepObd
             }
 
             int resourceId = Resource.String.xml_tool_msg_save_config_select;
-            if (!_ecuList.Any(x => x.Selected))
+            lock (_ecuListLock)
             {
-                resourceId = Resource.String.xml_tool_msg_save_config_empty;
+                if (!_ecuList.Any(x => x.Selected))
+                {
+                    resourceId = Resource.String.xml_tool_msg_save_config_empty;
+                }
             }
             new AlertDialog.Builder(this)
                 .SetPositiveButton(Resource.String.button_yes, (sender, args) =>
@@ -1046,16 +1173,23 @@ namespace BmwDeepObd
                         {
                             break;
                         }
-                        if (_ecuList.Any(ecuInfo => string.Compare(ecuInfo.Sgbd, ecuName, StringComparison.OrdinalIgnoreCase) == 0))
+
+                        lock (_ecuListLock)
                         {
-                            break;
+                            if (_ecuList.Any(ecuInfo => string.Compare(ecuInfo.Sgbd, ecuName, StringComparison.OrdinalIgnoreCase) == 0))
+                            {
+                                break;
+                            }
+
+                            EcuInfo ecuInfoNew = new EcuInfo(ecuName, -1, string.Empty, ecuName, string.Empty)
+                            {
+                                PageName = string.Empty,
+                                EcuName = string.Empty
+                            };
+
+                            _ecuList.Add(ecuInfoNew);
                         }
-                        EcuInfo ecuInfoNew = new EcuInfo(ecuName, -1, string.Empty, ecuName, string.Empty)
-                        {
-                            PageName = string.Empty,
-                            EcuName = string.Empty
-                        };
-                        _ecuList.Add(ecuInfoNew);
+
                         ExecuteUpdateEcuInfo();
                         UpdateOptionsMenu();
                         UpdateDisplay();
@@ -1206,7 +1340,7 @@ namespace BmwDeepObd
             }
 
             bool commActive = IsJobRunning();
-            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable();
+            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable(true);
 
             IMenuItem selInterfaceMenu = menu.FindItem(Resource.Id.menu_tool_sel_interface);
             if (selInterfaceMenu != null)
@@ -1243,7 +1377,7 @@ namespace BmwDeepObd
             IMenuItem addErrorsMenu = menu.FindItem(Resource.Id.menu_xml_tool_add_errors_page);
             if (addErrorsMenu != null)
             {
-                addErrorsMenu.SetEnabled(!commActive && _ecuList.Count > 0 && !_instanceData.NoErrorsPageUpdate);
+                addErrorsMenu.SetEnabled(!commActive && EcuListCount > 0 && !_instanceData.NoErrorsPageUpdate);
                 addErrorsMenu.SetChecked(_instanceData.AddErrorsPage);
             }
 
@@ -1282,14 +1416,14 @@ namespace BmwDeepObd
             if (translationSubmenu != null)
             {
                 translationSubmenu.SetEnabled(true);
-                translationSubmenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationSubmenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
 
             IMenuItem translationEnableMenu = menu.FindItem(Resource.Id.menu_translation_enable);
             if (translationEnableMenu != null)
             {
                 translationEnableMenu.SetEnabled(!commActive || ActivityCommon.IsTranslationAvailable());
-                translationEnableMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationEnableMenu.SetVisible(_activityCommon.IsTranslationRequired());
                 translationEnableMenu.SetChecked(ActivityCommon.EnableTranslation);
             }
 
@@ -1297,14 +1431,14 @@ namespace BmwDeepObd
             if (translationYandexKeyMenu != null)
             {
                 translationYandexKeyMenu.SetEnabled(!commActive);
-                translationYandexKeyMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationYandexKeyMenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
 
             IMenuItem translationClearCacheMenu = menu.FindItem(Resource.Id.menu_translation_clear_cache);
             if (translationClearCacheMenu != null)
             {
                 translationClearCacheMenu.SetEnabled(!_activityCommon.IsTranslationCacheEmpty());
-                translationClearCacheMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationClearCacheMenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
         }
 
@@ -1321,10 +1455,14 @@ namespace BmwDeepObd
                     if (_buttonSafe.Enabled)
                     {
                         int resourceId = Resource.String.xml_tool_msg_save_config_select;
-                        if (!_ecuList.Any(x => x.Selected))
+                        lock (_ecuListLock)
                         {
-                            resourceId = Resource.String.xml_tool_msg_save_config_empty;
+                            if (!_ecuList.Any(x => x.Selected))
+                            {
+                                resourceId = Resource.String.xml_tool_msg_save_config_empty;
+                            }
                         }
+
                         new AlertDialog.Builder(this)
                             .SetPositiveButton(Resource.String.button_yes, (sender, args) =>
                             {
@@ -1462,22 +1600,79 @@ namespace BmwDeepObd
                             return;
                         }
 
-                        try
-                        {
-                            StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md")));
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
+                        _activityCommon.OpenWebUrl("https://github.com/uholeschak/ediabaslib/blob/master/docs/Configuration_Generator.md");
                     });
                     return true;
             }
             return base.OnOptionsItemSelected(item);
         }
 
+        public override bool OnFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY)
+        {
+            if (_activityCommon == null)
+            {
+                return false;
+            }
+
+#if USE_DRAG_LIST
+            if (EcuListCount > 1)
+            {
+                if (!_instanceData.ListMoveHintShown)
+                {
+                    int itemsCount = _ecuListAdapter.ItemsCount;
+                    if (itemsCount > 0)
+                    {
+                        View itemViewBalloon = null;
+                        for (int item = 0; item < itemsCount; item++)
+                        {
+                            DragEcuListAdapter.CustomViewHolder viewHolder = _ecuListAdapter.GetItemViewHolder(item);
+                            View itemView = viewHolder?.ItemView;
+                            if (itemView != null && itemView.IsShown)
+                            {
+                                itemViewBalloon = itemView;
+                                break;
+                            }
+                        }
+
+                        if (itemViewBalloon != null)
+                        {
+                            Balloon.Builder balloonBuilder = ActivityCommon.GetBalloonBuilder(this);
+                            balloonBuilder.Text = GetString(Resource.String.xml_tool_drag_list_hint);
+                            Balloon balloon = balloonBuilder.Build();
+                            balloon.Show(itemViewBalloon);
+
+                            _instanceData.ListMoveHintShown = true;
+                        }
+                    }
+                }
+            }
+#endif
+            return base.OnFling(e1, e2, velocityX, velocityY);
+        }
+
         private void FinishContinue()
         {
+            if (_activityCommon == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(_instanceData.DetectVehicleBmwFile))
+            {
+                try
+                {
+                    if (File.Exists(_instanceData.DetectVehicleBmwFile))
+                    {
+                        File.Delete(_instanceData.DetectVehicleBmwFile);
+                    }
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+                _instanceData.DetectVehicleBmwFile = null;
+            }
+
             if (!SendTraceFile((sender, args) =>
             {
                 if (_activityCommon == null)
@@ -1526,6 +1721,14 @@ namespace BmwDeepObd
 
             _ediabas.EdInterfaceClass.EnableTransmitCache = false;
             _activityCommon.SetEdiabasInterface(_ediabas, _instanceData.DeviceAddress);
+
+            if (_detectVehicleBmw != null)
+            {
+                lock (_detectVehicleBmw.GlobalLockObject)
+                {
+                    _detectVehicleBmw.Ediabas = _ediabas;
+                }
+            }
         }
 
         // ReSharper disable once UnusedMethodReturnValue.Local
@@ -1534,6 +1737,14 @@ namespace BmwDeepObd
             if (IsJobRunning())
             {
                 return false;
+            }
+
+            if (_detectVehicleBmw != null)
+            {
+                lock (_detectVehicleBmw.GlobalLockObject)
+                {
+                    _detectVehicleBmw.Ediabas = null;
+                }
             }
 
             if (_sgFunctions != null)
@@ -1547,7 +1758,9 @@ namespace BmwDeepObd
                 _ediabas.Dispose();
                 _ediabas = null;
             }
+
             _instanceData.ForceAppend = forceAppend;
+            UpdateLogInfo();
             UpdateDisplay();
             UpdateOptionsMenu();
             return true;
@@ -1566,9 +1779,10 @@ namespace BmwDeepObd
         private void ClearEcuList()
         {
             ClearVehicleInfo();
-            _ecuList.Clear();
+            ClearStaticEcuList();
             _ecuInfoMot = null;
             _ecuInfoDid = null;
+            _detectVehicleBmw = null;
             _ecuListTranslated = false;
             _instanceData.EcuSearchAbortIndex = -1;
         }
@@ -1663,14 +1877,15 @@ namespace BmwDeepObd
                 return;
             }
 
-            if (ActivityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation && !ActivityCommon.IsTranslationAvailable())
+            if (_activityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation && !ActivityCommon.IsTranslationAvailable())
             {
                 EditYandexKey();
                 return;
             }
 
-            _ecuListAdapter.Items.Clear();
-            if (_ecuList.Count == 0)
+            _ecuListAdapter.ClearItems();
+
+            if (EcuListCount == 0)
             {
                 ClearEcuList();
             }
@@ -1687,9 +1902,13 @@ namespace BmwDeepObd
                 {
                     return;
                 }
-                foreach (EcuInfo ecu in _ecuList)
+
+                lock (_ecuListLock)
                 {
-                    _ecuListAdapter.Items.Add(ecu);
+                    foreach (EcuInfo ecu in _ecuList)
+                    {
+                        _ecuListAdapter.AppendItem(ecu);
+                    }
                 }
             }
             if (!ActivityCommon.EnableTranslation)
@@ -1700,12 +1919,16 @@ namespace BmwDeepObd
             _buttonRead.Text = GetString((_instanceData.ManualConfigIdx > 0) ?
                 Resource.String.button_xml_tool_edit : Resource.String.button_xml_tool_read);
             _buttonRead.Enabled = _activityCommon.IsInterfaceAvailable();
-            int selectedCount = _ecuList.Count(ecuInfo => ecuInfo.Selected);
-            _buttonSafe.Enabled = (_ecuList.Count > 0) && (_instanceData.AddErrorsPage || (selectedCount > 0));
+            int selectedCount;
+            lock (_ecuListLock)
+            {
+                selectedCount = _ecuList.Count(ecuInfo => ecuInfo.Selected);
+            }
+            _buttonSafe.Enabled = (EcuListCount > 0) && (_instanceData.AddErrorsPage || (selectedCount > 0));
             _ecuListAdapter.NotifyDataSetChanged();
 
             string statusText = string.Empty;
-            if (_ecuList.Count > 0)
+            if (EcuListCount > 0)
             {
                 StringBuilder sb = new StringBuilder();
                 sb.Append(GetString(Resource.String.xml_tool_ecu_list));
@@ -1734,13 +1957,14 @@ namespace BmwDeepObd
 
         private bool TranslateEcuText(EventHandler<EventArgs> handler = null)
         {
-            if (_translateEnabled && !_translateActive && ActivityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation)
+            if (_translateEnabled && !_translateActive && _activityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation)
             {
                 if (!_ecuListTranslated)
                 {
                     _ecuListTranslated = true;
                     List<string> stringList = new List<string>();
-                    foreach (EcuInfo ecu in _ecuList)
+
+                    foreach (EcuInfo ecu in GetClonedEcuList())
                     {
                         if (!string.IsNullOrEmpty(ecu.Description) && ecu.DescriptionTransRequired && ecu.DescriptionTrans == null)
                         {
@@ -1782,6 +2006,7 @@ namespace BmwDeepObd
                             // ReSharper restore LoopCanBeConvertedToQuery
                         }
                     }
+
                     if (stringList.Count == 0)
                     {
                         return false;
@@ -1801,7 +2026,7 @@ namespace BmwDeepObd
                                 if (transList != null && transList.Count == stringList.Count)
                                 {
                                     int transIndex = 0;
-                                    foreach (EcuInfo ecu in _ecuList)
+                                    foreach (EcuInfo ecu in GetClonedEcuList())
                                     {
                                         if (!string.IsNullOrEmpty(ecu.Description) && ecu.DescriptionTransRequired && ecu.DescriptionTrans == null)
                                         {
@@ -1876,7 +2101,7 @@ namespace BmwDeepObd
 
         private void ResetTranslations()
         {
-            foreach (EcuInfo ecu in _ecuList)
+            foreach (EcuInfo ecu in GetClonedEcuList())
             {
                 ecu.DescriptionTrans = null;
                 if (ecu.JobList != null)
@@ -1898,11 +2123,6 @@ namespace BmwDeepObd
 
         private void UpdateLogInfo()
         {
-            if (_ediabas == null)
-            {
-                return;
-            }
-
             string logDir = string.Empty;
             try
             {
@@ -1923,16 +2143,9 @@ namespace BmwDeepObd
                 _instanceData.TraceDir = logDir;
             }
 
-            if (!string.IsNullOrEmpty(_instanceData.TraceDir))
+            if (_ediabas != null)
             {
-                _ediabas.SetConfigProperty("TracePath", _instanceData.TraceDir);
-                _ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
-                _ediabas.SetConfigProperty("AppendTrace", _instanceData.TraceAppend || _instanceData.ForceAppend ? "1" : "0");
-                _ediabas.SetConfigProperty("CompressTrace", "1");
-            }
-            else
-            {
-                _ediabas.SetConfigProperty("IfhTrace", "0");
+                ActivityCommon.SetEdiabasConfigProperties(_ediabas, _instanceData.TraceDir, _instanceData.TraceAppend || _instanceData.ForceAppend);
             }
         }
 
@@ -1957,11 +2170,6 @@ namespace BmwDeepObd
                     return;
                 }
 
-                if (!EdiabasClose(true))
-                {
-                    return;
-                }
-
                 bool bmwServiceFunctions = false;
                 if (ActivityCommon.SelectedManufacturer == ActivityCommon.ManufacturerType.Bmw)
                 {
@@ -1972,6 +2180,12 @@ namespace BmwDeepObd
                         EcuFunctionStructs.EcuVariant ecuVariant = ActivityCommon.EcuFunctionReader.GetEcuVariantCached(ecuSgbdName);
                         _ruleEvalBmw?.UpdateEvalEcuProperties(ecuVariant);
                     }
+                }
+
+                // Close after ShowBwmServiceMenu
+                if (!EdiabasClose(true))
+                {
+                    return;
                 }
 
                 XmlToolEcuActivity.IntentEcuInfo = ecuInfo;
@@ -2178,7 +2392,13 @@ namespace BmwDeepObd
                 {
                     return;
                 }
+
                 SparseBooleanArray sparseArray = listView.CheckedItemPositions;
+                if (sparseArray == null)
+                {
+                    return;
+                }
+
                 for (int i = 0; i < sparseArray.Size(); i++)
                 {
                     bool value = sparseArray.ValueAt(i);
@@ -2323,7 +2543,7 @@ namespace BmwDeepObd
                 switch (args.Item.ItemId)
                 {
                     case Resource.Id.menu_xml_tool_edit_detect:
-                        if (_ecuList.Count > 0)
+                        if (EcuListCount > 0)
                         {
                             if (_instanceData.EcuSearchAbortIndex >= 0)
                             {
@@ -2355,15 +2575,26 @@ namespace BmwDeepObd
 
                     case Resource.Id.menu_xml_tool_edit_del:
                     {
-                        for (int i = 0; i < _ecuList.Count; i++)
+                        lock (_ecuListLock)
                         {
-                            EcuInfo ecuInfo = _ecuList[i];
-                            if (!ecuInfo.Selected)
+                            for (int i = 0; i < _ecuList.Count; i++)
                             {
-                                _ecuList.Remove(ecuInfo);
-                                i = 0;
+                                if (i < 0)
+                                {
+                                    continue;
+                                }
+
+                                EcuInfo ecuInfo = _ecuList[i];
+                                if (!ecuInfo.Selected)
+                                {
+                                    if (_ecuList.Remove(ecuInfo))
+                                    {
+                                        i--;
+                                    }
+                                }
                             }
                         }
+
                         UpdateDisplay();
                         break;
                     }
@@ -2392,7 +2623,8 @@ namespace BmwDeepObd
             AndroidX.AppCompat.Widget.PopupMenu popupContext = new AndroidX.AppCompat.Widget.PopupMenu(this, anchor);
             popupContext.Inflate(Resource.Menu.xml_tool_context);
 
-            bool enableMenuAction = itemPos >= 0 && itemPos < _ecuListAdapter.Items.Count && !IsJobRunning();
+            bool itemInEcuList = itemPos >= 0 && itemPos < EcuListCount;
+            bool enableMenuAction = itemPos >= 0 && itemPos < _ecuListAdapter.ItemsCount && !IsJobRunning();
             bool bmwVisible = ActivityCommon.SelectedManufacturer == ActivityCommon.ManufacturerType.Bmw;
             bool vagVisible = ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw;
             bool bmwDatabaseActive = ActivityCommon.EcuFunctionsActive && ActivityCommon.EcuFunctionReader != null;
@@ -2401,16 +2633,16 @@ namespace BmwDeepObd
             configEcuMenu.SetEnabled(enableMenuAction);
 
             IMenuItem moveTopMenu = popupContext.Menu.FindItem(Resource.Id.menu_xml_tool_move_top);
-            moveTopMenu?.SetEnabled(itemPos > 0);
+            moveTopMenu?.SetEnabled(enableMenuAction && itemPos > 0);
 
             IMenuItem moveUpMenu = popupContext.Menu.FindItem(Resource.Id.menu_xml_tool_move_up);
-            moveUpMenu?.SetEnabled(itemPos > 0);
+            moveUpMenu?.SetEnabled(enableMenuAction && itemPos > 0);
 
             IMenuItem moveDownMenu = popupContext.Menu.FindItem(Resource.Id.menu_xml_tool_move_down);
-            moveDownMenu?.SetEnabled((itemPos + 1) < _ecuListAdapter.Items.Count);
+            moveDownMenu?.SetEnabled(enableMenuAction && (itemPos + 1) < _ecuListAdapter.ItemsCount);
 
             IMenuItem moveBottomMenu = popupContext.Menu.FindItem(Resource.Id.menu_xml_tool_move_bottom);
-            moveBottomMenu?.SetEnabled((itemPos + 1) < _ecuListAdapter.Items.Count);
+            moveBottomMenu?.SetEnabled(enableMenuAction && (itemPos + 1) < _ecuListAdapter.ItemsCount);
 
             IMenuItem ediabasToolMenu = popupContext.Menu.FindItem(Resource.Id.menu_xml_tool_ediabas_tool);
             ediabasToolMenu?.SetEnabled(enableMenuAction);
@@ -2418,7 +2650,7 @@ namespace BmwDeepObd
             IMenuItem bmwActuatorMenu = popupContext.Menu.FindItem(Resource.Id.menu_xml_tool_bmw_actuator);
             if (bmwActuatorMenu != null)
             {
-                bool enableBmwActuator = enableMenuAction && XmlToolEcuActivity.ControlActuatorCount(_ecuList[itemPos]) > 0;
+                bool enableBmwActuator = enableMenuAction && itemInEcuList && XmlToolEcuActivity.ControlActuatorCount(GetEcuInfo(itemPos)) > 0;
                 bmwActuatorMenu.SetEnabled(enableBmwActuator);
                 bmwActuatorMenu.SetVisible(bmwVisible && bmwDatabaseActive);
             }
@@ -2426,7 +2658,7 @@ namespace BmwDeepObd
             IMenuItem bmwServiceMenu = popupContext.Menu.FindItem(Resource.Id.menu_xml_tool_bmw_service);
             if (bmwServiceMenu != null)
             {
-                bool enableBmwService = enableMenuAction && ShowBwmServiceMenu(_ecuList[itemPos]) > 0;
+                bool enableBmwService = enableMenuAction && itemInEcuList && ShowBwmServiceMenu(GetEcuInfo(itemPos)) > 0;
                 bmwServiceMenu.SetEnabled(enableBmwService);
                 bmwServiceMenu.SetVisible(bmwVisible && bmwDatabaseActive);
             }
@@ -2478,70 +2710,99 @@ namespace BmwDeepObd
                     return;
                 }
 
+                if (itemPos < 0 || itemPos >= EcuListCount)
+                {
+                    return;
+                }
+
                 switch (args.Item.ItemId)
                 {
                     case Resource.Id.menu_xml_tool_config_ecu:
-                        PerformJobsRead(_ecuList[itemPos]);
+                        PerformJobsRead(GetEcuInfo(itemPos));
                         break;
 
                     case Resource.Id.menu_xml_tool_move_top:
                     {
-                        EcuInfo oldItem = _ecuList[itemPos];
-                        _ecuList.RemoveAt(itemPos);
-                        _ecuList.Insert(0, oldItem);
+                        lock (_ecuListLock)
+                        {
+                            EcuInfo oldItem = _ecuList[itemPos];
+                            _ecuList.RemoveAt(itemPos);
+                            _ecuList.Insert(0, oldItem);
+                        }
+
                         UpdateDisplay();
                         break;
                     }
 
                     case Resource.Id.menu_xml_tool_move_up:
-                        (_ecuList[itemPos], _ecuList[itemPos - 1]) = (_ecuList[itemPos - 1], _ecuList[itemPos]);
+                        if (itemPos <= 0)
+                        {
+                            break;
+                        }
+
+                        lock (_ecuListLock)
+                        {
+                            (_ecuList[itemPos], _ecuList[itemPos - 1]) = (_ecuList[itemPos - 1], _ecuList[itemPos]);
+                        }
                         UpdateDisplay();
                         break;
 
                     case Resource.Id.menu_xml_tool_move_down:
-                        (_ecuList[itemPos], _ecuList[itemPos + 1]) = (_ecuList[itemPos + 1], _ecuList[itemPos]);
+                        if (itemPos + 1 >= EcuListCount)
+                        {
+                            break;
+                        }
+
+                        lock (_ecuListLock)
+                        {
+                            (_ecuList[itemPos], _ecuList[itemPos + 1]) = (_ecuList[itemPos + 1], _ecuList[itemPos]);
+                        }
                         UpdateDisplay();
                         break;
 
                     case Resource.Id.menu_xml_tool_move_bottom:
                     {
-                        EcuInfo oldItem = _ecuList[itemPos];
-                        _ecuList.RemoveAt(itemPos);
-                        _ecuList.Add(oldItem);
+                        lock (_ecuListLock)
+                        {
+                            EcuInfo oldItem = _ecuList[itemPos];
+                            _ecuList.RemoveAt(itemPos);
+                            _ecuList.Add(oldItem);
+                        }
+
                         UpdateDisplay();
                         break;
                     }
 
                     case Resource.Id.menu_xml_tool_ediabas_tool:
-                        StartEdiabasTool(_ecuList[itemPos]);
+                        StartEdiabasTool(GetEcuInfo(itemPos));
                         break;
 
                     case Resource.Id.menu_xml_tool_bmw_actuator:
-                        CallEcuFunction(_ecuList[itemPos], EcuFunctionCallType.BmwActuator);
+                        CallEcuFunction(GetEcuInfo(itemPos), EcuFunctionCallType.BmwActuator);
                         break;
 
                     case Resource.Id.menu_xml_tool_bmw_service:
-                        ShowBwmServiceMenu(_ecuList[itemPos], anchor);
+                        ShowBwmServiceMenu(GetEcuInfo(itemPos), anchor);
                         break;
 
                     case Resource.Id.menu_xml_tool_vag_coding:
-                        CallEcuFunction(_ecuList[itemPos], EcuFunctionCallType.VagCoding);
+                        CallEcuFunction(GetEcuInfo(itemPos), EcuFunctionCallType.VagCoding);
                         break;
 
                     case Resource.Id.menu_xml_tool_vag_coding2:
-                        CallEcuFunction(_ecuList[itemPos], EcuFunctionCallType.VagCoding2);
+                        CallEcuFunction(GetEcuInfo(itemPos), EcuFunctionCallType.VagCoding2);
                         break;
 
                     case Resource.Id.menu_xml_tool_vag_adaption:
-                        CallEcuFunction(_ecuList[itemPos], EcuFunctionCallType.VagAdaption);
+                        CallEcuFunction(GetEcuInfo(itemPos), EcuFunctionCallType.VagAdaption);
                         break;
 
                     case Resource.Id.menu_xml_tool_vag_login:
-                        CallEcuFunction(_ecuList[itemPos], EcuFunctionCallType.VagLogin);
+                        CallEcuFunction(GetEcuInfo(itemPos), EcuFunctionCallType.VagLogin);
                         break;
 
                     case Resource.Id.menu_xml_tool_vag_sec_access:
-                        CallEcuFunction(_ecuList[itemPos], EcuFunctionCallType.VagSecAccess);
+                        CallEcuFunction(GetEcuInfo(itemPos), EcuFunctionCallType.VagSecAccess);
                         break;
                 }
             };
@@ -2578,7 +2839,7 @@ namespace BmwDeepObd
 
                 if (!IsPageSelectionActive())
                 {
-                    int itemIndex = _ecuListAdapter.Items.IndexOf(ecuInfo);
+                    int itemIndex = _ecuListAdapter.GetItemIndex(ecuInfo);
                     if (itemIndex < 0)
                     {
                         return false;
@@ -2607,6 +2868,11 @@ namespace BmwDeepObd
         {
             try
             {
+                if (ecuInfo == null)
+                {
+                    return -1;
+                }
+
                 if (ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw)
                 {
                     return -1;
@@ -2636,18 +2902,29 @@ namespace BmwDeepObd
                     _ruleEvalBmw?.UpdateEvalEcuProperties(ecuVariant);
                     bmwServiceDataItems = VehicleInfoBmw.GetServiceDataItems(_bmwDir, _ruleEvalBmw);
 
-                    VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo = VehicleInfoBmw.GetVehicleSeriesInfo(_instanceData.VehicleSeries, null, null, _ediabas);
-                    if (vehicleSeriesInfo != null)
+                    DetectVehicleBmw detectVehicleBmw = _detectVehicleBmw;
+                    if (detectVehicleBmw != null)
                     {
-                        VehicleStructsBmw.VehicleEcuInfo vehicleEcuInfo = VehicleInfoBmw.GetEcuInfoByGroupName(vehicleSeriesInfo, ecuInfo.Grp);
-                        if (vehicleEcuInfo != null)
+                        lock (detectVehicleBmw.GlobalLockObject)
                         {
-                            if (!string.IsNullOrWhiteSpace(vehicleEcuInfo.GroupSgbd))
+                            detectVehicleBmw.Ediabas = _ediabas;
+                            if (detectVehicleBmw.Valid)
                             {
-                                string[] groupNames = vehicleEcuInfo.GroupSgbd.Split('|');
-                                foreach (string groupName in groupNames)
+                                VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo = VehicleInfoBmw.GetVehicleSeriesInfo(detectVehicleBmw);
+                                if (vehicleSeriesInfo != null)
                                 {
-                                    validSgbdDict.TryAdd(groupName.ToUpperInvariant(), true);
+                                    VehicleStructsBmw.VehicleEcuInfo vehicleEcuInfo = VehicleInfoBmw.GetEcuInfoByGroupName(vehicleSeriesInfo, ecuInfo.Grp);
+                                    if (vehicleEcuInfo != null)
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(vehicleEcuInfo.GroupSgbd))
+                                        {
+                                            string[] groupNames = vehicleEcuInfo.GroupSgbd.Split('|');
+                                            foreach (string groupName in groupNames)
+                                            {
+                                                validSgbdDict.TryAdd(groupName.ToUpperInvariant(), true);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2704,7 +2981,7 @@ namespace BmwDeepObd
                 }
 
                 AndroidX.AppCompat.Widget.PopupMenu popupMenu = new AndroidX.AppCompat.Widget.PopupMenu(this, anchor, (int) GravityFlags.Right);
-                string language = ActivityCommon.GetCurrentLanguage();
+                string language = _activityCommon.GetCurrentLanguage();
                 int menuId = 1;
                 bool result = AddBwmServiceMenuChilds(popupMenu.Menu, null, serviceTreeItem, ecuInfo, validSgbdDict, language, 0, ref menuId);
                 if (!result || menuId == 1 || !popupMenu.Menu.HasVisibleItems)
@@ -3081,7 +3358,7 @@ namespace BmwDeepObd
             return null;
         }
 
-        private void UpdateBmwEcuInfo(DetectVehicleBmw detectVehicleBmw)
+        private void UpdateBmwEcuInfo()
         {
             if (ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw)
             {
@@ -3090,9 +3367,17 @@ namespace BmwDeepObd
 
             if (ActivityCommon.EcuFunctionsActive && ActivityCommon.EcuFunctionReader != null)
             {
-                _ruleEvalBmw?.SetEvalProperties(detectVehicleBmw, null);
+                DetectVehicleBmw detectVehicleBmw = _detectVehicleBmw;
+                if (detectVehicleBmw != null)
+                {
+                    lock (detectVehicleBmw.GlobalLockObject)
+                    {
+                        detectVehicleBmw.Ediabas = _ediabas;
+                        _ruleEvalBmw?.SetEvalProperties(detectVehicleBmw, null);
+                    }
+                }
 
-                foreach (EcuInfo ecuInfo in _ecuList)
+                foreach (EcuInfo ecuInfo in GetClonedEcuList())
                 {
                     if (ecuInfo.JobList == null)
                     {
@@ -3110,7 +3395,7 @@ namespace BmwDeepObd
                     {
                         if (sbFuncNames.Length > 0)
                         {
-                            sbFuncNames.Append(", ");
+                            sbFuncNames.Append("\r\n");
                         }
 
                         sbFuncNames.Append(string.Format("{0}: {1}", GetString(Resource.String.menu_xml_tool_bmw_service), serviceCount));
@@ -3121,7 +3406,7 @@ namespace BmwDeepObd
                     {
                         if (sbFuncNames.Length > 0)
                         {
-                            sbFuncNames.Append(", ");
+                            sbFuncNames.Append("\r\n");
                         }
 
                         sbFuncNames.Append(string.Format("{0}: {1}", GetString(Resource.String.menu_xml_tool_bmw_actuator), actuatorCount));
@@ -3375,7 +3660,6 @@ namespace BmwDeepObd
                 int ecuInvalidCount = 0;
                 List<EcuInfo> ecuListUse = null;
                 string ecuFileNameUse = null;
-                bool unstableIdent = false;
                 List<string> ecuFileNameList = new List<string>();
 
                 DetectVehicleBmw detectVehicleBmw = new DetectVehicleBmw(_ediabas, _bmwDir);
@@ -3396,32 +3680,37 @@ namespace BmwDeepObd
                 };
 
                 string detectedVin = null;
-                if (detectVehicleBmw.DetectVehicleBmwFast(_instanceData.DetectMotorbikes))
+                lock (detectVehicleBmw.GlobalLockObject)
                 {
-                    if (detectVehicleBmw.SgdbAddList != null && detectVehicleBmw.SgdbAddList.Count > 0)
+                    if (detectVehicleBmw.DetectVehicleBmwFast(_instanceData.DetectMotorbikes))
                     {
-                        ecuFileNameList.AddRange(detectVehicleBmw.SgdbAddList);
-                    }
+                        if (!string.IsNullOrEmpty(detectVehicleBmw.SgbdAdd))
+                        {
+                            ecuFileNameList.Add(detectVehicleBmw.SgbdAdd);
+                        }
 
-                    if (!string.IsNullOrEmpty(detectVehicleBmw.GroupSgdb))
-                    {
-                        ecuFileNameList.Add(detectVehicleBmw.GroupSgdb);
-                    }
+                        if (!string.IsNullOrEmpty(detectVehicleBmw.GroupSgbd))
+                        {
+                            ecuFileNameList.Add(detectVehicleBmw.GroupSgbd);
+                        }
 
-                    detectedVin = detectVehicleBmw.Vin;
-                    _instanceData.VehicleSeries = detectVehicleBmw.Series;
-                    _instanceData.CDate = string.Empty;
-                    if (detectVehicleBmw.ConstructYear != null && detectVehicleBmw.ConstructMonth != null)
-                    {
-                        _instanceData.CDate = detectVehicleBmw.ConstructYear + "-" + detectVehicleBmw.ConstructMonth;
-                    }
+                        detectedVin = detectVehicleBmw.Vin;
+                        _instanceData.VehicleSeries = detectVehicleBmw.Series;
+                        _instanceData.CDate = string.Empty;
+                        if (detectVehicleBmw.ConstructYear != null && detectVehicleBmw.ConstructMonth != null)
+                        {
+                            _instanceData.CDate = detectVehicleBmw.ConstructYear + "-" + detectVehicleBmw.ConstructMonth;
+                        }
 
-                    _instanceData.BnType = detectVehicleBmw.BnType;
-                    _instanceData.BrandName = string.Empty;
-                    if (detectVehicleBmw.BrandList != null && detectVehicleBmw.BrandList.Count > 0)
-                    {
-                        _instanceData.BrandName = detectVehicleBmw.BrandList[0];
+                        _instanceData.BnType = detectVehicleBmw.BnType;
+                        _instanceData.BrandName = detectVehicleBmw.Brand;
                     }
+                }
+
+                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ecu file list count: {0}", ecuFileNameList.Count);
+                foreach (string fileName in ecuFileNameList)
+                {
+                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ecu file name: {0}", fileName);
                 }
 
                 if (ecuFileNameList.Count > 0 && detectedVin != null && !_ediabasJobAbort)
@@ -3432,41 +3721,193 @@ namespace BmwDeepObd
                     int currentStep = 0;
                     foreach (string fileName in ecuFileNameList)
                     {
+                        bool singleEcu = false;
+                        bool detetedEcus = false;
+
+                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Using ecu file name for ident: {0}", fileName);
+
                         try
                         {
                             if (_ediabasJobAbort)
                             {
+                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ecu detection aborted at: {0}", fileName);
                                 ecuListUse = null;
                                 break;
                             }
 
                             ActivityCommon.ResolveSgbdFile(_ediabas, fileName);
+                            ForceLoadSgbd();
 
-                            for (int identRetry = 0; identRetry < 10; identRetry++)
+                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ecu file resolved: {0}", _ediabas.SgbdFileName);
+                            if (_ediabas.IsJobExisting("IDENT_FUNKTIONAL"))
                             {
-                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ecu ident retry: {0}", identRetry + 1);
+                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Has IDENT_FUNKTIONAL job: {0}", fileName);
 
-                                int localMaxSteps = maxSteps;
-                                int localStep = currentStep;
-                                RunOnUiThread(() =>
+                                for (int identRetry = 0; identRetry < 10; identRetry++)
                                 {
-                                    if (_activityCommon == null)
+                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ecu ident retry: {0}", identRetry + 1);
+
+                                    int localMaxSteps = maxSteps;
+                                    int localStep = currentStep;
+                                    RunOnUiThread(() =>
                                     {
-                                        return;
+                                        if (_activityCommon == null)
+                                        {
+                                            return;
+                                        }
+
+                                        if (progress != null)
+                                        {
+                                            progress.Progress = 100 * localStep / localMaxSteps;
+                                        }
+                                    });
+
+                                    int lastEcuListSize = ecuList.Count;
+
+                                    _ediabas.ArgString = string.Empty;
+                                    _ediabas.ArgBinaryStd = null;
+                                    _ediabas.ResultsRequests = string.Empty;
+                                    _ediabas.ExecuteJob("IDENT_FUNKTIONAL");
+                                    singleEcu = false;
+
+                                    List<Dictionary<string, EdiabasNet.ResultData>> resultSets = _ediabas.ResultSets;
+                                    if (resultSets != null && resultSets.Count >= 2)
+                                    {
+                                        int dictIndex = 0;
+                                        foreach (Dictionary<string, EdiabasNet.ResultData> resultDict in resultSets)
+                                        {
+                                            if (dictIndex == 0)
+                                            {
+                                                dictIndex++;
+                                                continue;
+                                            }
+
+                                            bool ecuDataPresent = false;
+                                            string ecuName = string.Empty;
+                                            Int64 ecuAdr = -1;
+                                            string ecuDesc = string.Empty;
+                                            string ecuSgbd = string.Empty;
+                                            string ecuGroup = string.Empty;
+                                            Int64 dateYear = 0;
+                                            // ReSharper disable once InlineOutVariableDeclaration
+                                            EdiabasNet.ResultData resultData;
+                                            if (resultDict.TryGetValue("ECU_GROBNAME", out resultData))
+                                            {
+                                                if (resultData.OpData is string)
+                                                {
+                                                    ecuName = (string)resultData.OpData;
+                                                }
+                                            }
+                                            if (resultDict.TryGetValue("ID_SG_ADR", out resultData))
+                                            {
+                                                if (resultData.OpData is Int64)
+                                                {
+                                                    ecuAdr = (Int64)resultData.OpData;
+                                                }
+                                            }
+                                            if (resultDict.TryGetValue("ECU_NAME", out resultData))
+                                            {
+                                                if (resultData.OpData is string)
+                                                {
+                                                    ecuDesc = (string)resultData.OpData;
+                                                }
+                                            }
+                                            if (resultDict.TryGetValue("ECU_SGBD", out resultData))
+                                            {
+                                                ecuDataPresent = true;
+                                                if (resultData.OpData is string)
+                                                {
+                                                    ecuSgbd = (string)resultData.OpData;
+                                                }
+                                            }
+                                            if (resultDict.TryGetValue("ECU_GRUPPE", out resultData))
+                                            {
+                                                ecuDataPresent = true;
+                                                if (resultData.OpData is string)
+                                                {
+                                                    ecuGroup = (string)resultData.OpData;
+                                                }
+                                            }
+                                            if (resultDict.TryGetValue("ID_DATUM_JAHR", out resultData))
+                                            {
+                                                if (resultData.OpData is Int64)
+                                                {
+                                                    dateYear = (Int64)resultData.OpData;
+                                                }
+                                            }
+
+                                            if (!string.IsNullOrEmpty(ecuName) && ecuAdr >= 0 && ecuAdr <= VehicleStructsBmw.MaxEcuAddr && !string.IsNullOrEmpty(ecuSgbd))
+                                            {
+                                                detetedEcus = true;
+                                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT_FUNKTIONAL ECU found: Name={0}, Addr={1}, Desc={2}, Sgdb={3}, Group={4}, Date={5}",
+                                                    ecuName, ecuAdr, ecuDesc, ecuSgbd, ecuGroup, dateYear);
+                                                if (!EcuListContainsAddr(ecuList, ecuAdr))
+                                                {
+                                                    // address not existing
+                                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT_FUNKTIONAL Addr missing: {0}", ecuAdr);
+                                                    EcuInfo ecuInfo = new EcuInfo(ecuName, ecuAdr, ecuDesc, ecuSgbd, ecuGroup);
+                                                    if (ActivityCommon.EcuFunctionsActive && ActivityCommon.EcuFunctionReader != null)
+                                                    {
+                                                        string ecuSgbdName = ecuInfo.Sgbd ?? string.Empty;
+                                                        EcuFunctionStructs.EcuVariant ecuVariant = ActivityCommon.EcuFunctionReader.GetEcuVariantCached(ecuSgbdName);
+                                                        if (ecuVariant == null)
+                                                        {
+                                                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT_FUNKTIONAL No ECU variant found for: Sgbd={0}, Addr={1}, Group={2}",
+                                                                ecuSgbdName, ecuInfo.Address, ecuInfo.Grp);
+                                                        }
+                                                        else
+                                                        {
+                                                            string title = ecuVariant.Title?.GetTitle(_activityCommon.GetCurrentLanguage());
+                                                            if (!string.IsNullOrEmpty(title))
+                                                            {
+                                                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT_FUNKTIONAL ECU variant found for: Sgbd={0}, Title={1}", ecuSgbdName, title);
+                                                                ecuInfo.PageName = title;
+                                                                ecuInfo.Description = title;
+                                                                ecuInfo.DescriptionTransRequired = false;
+                                                            }
+                                                        }
+                                                    }
+
+                                                    ecuList.Add(ecuInfo);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                if (ecuDataPresent)
+                                                {
+                                                    if (DetectVehicleBmwBase.IsValidEcuName(ecuName) && (dateYear != 0))
+                                                    {
+                                                        if (!invalidAddrList.Contains(ecuAdr))
+                                                        {
+                                                            invalidAddrList.Add(ecuAdr);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            dictIndex++;
+                                        }
                                     }
 
-                                    if (progress != null)
+                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Detect EcuListSize={0}, EcuListSizeOld={1}", ecuList.Count, lastEcuListSize);
+                                    if (ecuList.Count == lastEcuListSize)
                                     {
-                                        progress.Progress = 100 * localStep / localMaxSteps;
+                                        break;
                                     }
-                                });
 
-                                int lastEcuListSize = ecuList.Count;
+                                    maxSteps++;
+                                    currentStep++;
+                                }
+                            }
+                            else if(_ediabas.IsJobExisting("IDENT"))
+                            {
+                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Has IDENT job: {0}", fileName);
 
                                 _ediabas.ArgString = string.Empty;
                                 _ediabas.ArgBinaryStd = null;
                                 _ediabas.ResultsRequests = string.Empty;
-                                _ediabas.ExecuteJob("IDENT_FUNKTIONAL");
+                                _ediabas.ExecuteJob("IDENT");
+                                singleEcu = true;
 
                                 List<Dictionary<string, EdiabasNet.ResultData>> resultSets = _ediabas.ResultSets;
                                 if (resultSets != null && resultSets.Count >= 2)
@@ -3479,13 +3920,211 @@ namespace BmwDeepObd
                                             dictIndex++;
                                             continue;
                                         }
-                                        bool ecuDataPresent = false;
+
+                                        bool jobOk = false;
+                                        Int64 ecuAdr = -1;
+                                        if (EdiabasThread.IsJobStatusOk(resultDict))
+                                        {
+                                            jobOk = true;
+                                        }
+
+                                        EdiabasNet.ResultData resultData;
+                                        if (resultDict.TryGetValue("ID_SG_ADR", out resultData))
+                                        {
+                                            if (resultData.OpData is Int64)
+                                            {
+                                                ecuAdr = (Int64)resultData.OpData;
+                                            }
+                                        }
+
+                                        if (jobOk && ecuAdr >= 0 && ecuAdr <= VehicleStructsBmw.MaxEcuAddr)
+                                        {
+                                            detetedEcus = true;
+                                            string ecuSgbdName = Path.GetFileNameWithoutExtension(_ediabas.SgbdFileName);
+                                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Single ECU detected: {0}", ecuSgbdName);
+                                            if (!EcuListContainsAddr(ecuList, ecuAdr))
+                                            {
+                                                EcuInfo ecuInfo = new EcuInfo(ecuSgbdName.ToUpperInvariant(), ecuAdr, string.Empty, ecuSgbdName, fileName.ToUpperInvariant());
+                                                if (ActivityCommon.EcuFunctionsActive && ActivityCommon.EcuFunctionReader != null)
+                                                {
+                                                    EcuFunctionStructs.EcuVariant ecuVariant = ActivityCommon.EcuFunctionReader.GetEcuVariantCached(ecuSgbdName);
+                                                    if (ecuVariant == null)
+                                                    {
+                                                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT No ECU variant found for: Sgbd={0}", ecuSgbdName);
+                                                    }
+                                                    else
+                                                    {
+                                                        string ecuName = ecuVariant.EcuName ?? string.Empty;
+                                                        string groupName = ecuVariant.GroupName ?? string.Empty;
+                                                        ecuInfo.Name = ecuName.ToUpperInvariant();
+                                                        ecuInfo.EcuName = ecuName.ToUpperInvariant();
+                                                        ecuInfo.Grp = groupName.ToUpperInvariant();
+
+                                                        string title = ecuVariant.Title?.GetTitle(_activityCommon.GetCurrentLanguage());
+                                                        if (!string.IsNullOrEmpty(title))
+                                                        {
+                                                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT ECU variant found for: Sgbd={0}, Name={1}, Group={2}, Title={3}",
+                                                                ecuSgbdName, ecuName, groupName, title);
+                                                            ecuInfo.PageName = title;
+                                                            ecuInfo.Description = title;
+                                                            ecuInfo.DescriptionTransRequired = false;
+                                                        }
+                                                    }
+                                                }
+
+                                                ecuList.Add(ecuInfo);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            string ecuSgbdName = Path.GetFileNameWithoutExtension(_ediabas.SgbdFileName);
+                                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Single ECU not detected: {0}", ecuSgbdName);
+                                        }
+
+                                        dictIndex++;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Has no ident function: {0}", fileName);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ident exception: {0}", EdiabasNet.GetExceptionText(ex));
+                        }
+
+                        if (detetedEcus)
+                        {
+                            if (!singleEcu && string.IsNullOrEmpty(ecuFileNameUse))
+                            {
+                                ecuFileNameUse = fileName;
+                            }
+                        }
+                    }
+
+                    if (ecuList.Count > 0)
+                    {
+                        ecuInvalidCount = 0;
+                        // ReSharper disable once LoopCanBeConvertedToQuery
+                        foreach (long addr in invalidAddrList)
+                        {
+                            if (!EcuListContainsAddr(ecuList, addr))
+                            {
+                                ecuInvalidCount++;
+                            }
+                        }
+
+                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Detect result: count={0}, invalid={1}", ecuList.Count, ecuInvalidCount);
+                        ecuListUse = ecuList;
+                    }
+                }
+
+                if (ecuListUse == null)
+                {
+                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "No ecus detected");
+                }
+                else
+                {
+                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Deteted ecu count: {0}", ecuListUse.Count);
+                    lock (_ecuListLock)
+                    {
+                        _ecuList.AddRange(ecuListUse.OrderBy(x => x.Name));
+                    }
+
+                    if (!string.IsNullOrEmpty(ecuFileNameUse))
+                    {
+                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Selected functional ecu file: {0}", ecuFileNameUse);
+                        _instanceData.SgbdFunctional = ecuFileNameUse;
+                    }
+                    else
+                    {
+                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "No functional ecu file");
+                        _instanceData.SgbdFunctional = string.Empty;
+                    }
+
+                    try
+                    {
+                        List<EcuInfo> ecuInfoAddList = new List<EcuInfo>();
+                        List<EcuInfo> tempEcuList = GetClonedEcuList();
+                        lock (detectVehicleBmw.GlobalLockObject)
+                        {
+                            foreach (DetectVehicleBmwBase.EcuInfo ecuInfoAdd in detectVehicleBmw.EcuList)
+                            {
+                                if (!EcuListContainsAddr(tempEcuList, ecuInfoAdd.Address))
+                                {
+                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Additional ecu added: {0}", ecuInfoAdd.Name);
+                                    ecuInfoAddList.Add(new EcuInfo(ecuInfoAdd.Name, ecuInfoAdd.Address, string.Empty, string.Empty, ecuInfoAdd.Grp));
+                                }
+                                else
+                                {
+                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Additional ecu already present: {0}", ecuInfoAdd.Name);
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(ecuFileNameUse))
+                        {
+                            ActivityCommon.ResolveSgbdFile(_ediabas, ecuFileNameUse);
+                            ForceLoadSgbd();
+
+                            DetectVehicleBmwBase.JobInfo vinJobUsed = null;
+                            foreach (DetectVehicleBmwBase.JobInfo vinJob in DetectVehicleBmwBase.ReadVinJobs)
+                            {
+                                try
+                                {
+                                    if (_ediabasJobAbort)
+                                    {
+                                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vin job aborted at: {0}", vinJob.JobName);
+                                        break;
+                                    }
+
+                                    if (!_ediabas.IsJobExisting(vinJob.JobName))
+                                    {
+                                        continue;
+                                    }
+
+                                    _ediabas.ArgString = string.Empty;
+                                    if (!string.IsNullOrEmpty(vinJob.JobArgs))
+                                    {
+                                        _ediabas.ArgString = vinJob.JobArgs;
+                                    }
+
+                                    _ediabas.ArgBinaryStd = null;
+                                    _ediabas.ResultsRequests = string.Empty;
+                                    _ediabas.ExecuteJob(vinJob.JobName);
+
+                                    vinJobUsed = vinJob;
+                                    break;
+                                }
+                                catch (Exception)
+                                {
+                                    // ignored
+                                }
+                            }
+
+                            if (vinJobUsed == null)
+                            {
+                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "No VIN job found");
+                            }
+                            else
+                            {
+                                List<Dictionary<string, EdiabasNet.ResultData>> resultSets = _ediabas.ResultSets;
+                                if (resultSets != null && resultSets.Count >= 2)
+                                {
+                                    int dictIndex = 0;
+                                    foreach (Dictionary<string, EdiabasNet.ResultData> resultDict in resultSets)
+                                    {
+                                        if (dictIndex == 0)
+                                        {
+                                            dictIndex++;
+                                            continue;
+                                        }
+
                                         string ecuName = string.Empty;
                                         Int64 ecuAdr = -1;
-                                        string ecuDesc = string.Empty;
-                                        string ecuSgbd = string.Empty;
-                                        string ecuGroup = string.Empty;
-                                        Int64 dateYear = 0;
+                                        string ecuVin = string.Empty;
                                         // ReSharper disable once InlineOutVariableDeclaration
                                         EdiabasNet.ResultData resultData;
                                         if (resultDict.TryGetValue("ECU_GROBNAME", out resultData))
@@ -3502,292 +4141,137 @@ namespace BmwDeepObd
                                                 ecuAdr = (Int64)resultData.OpData;
                                             }
                                         }
-                                        if (resultDict.TryGetValue("ECU_NAME", out resultData))
+                                        if (resultDict.TryGetValue("FG_NR", out resultData))
                                         {
                                             if (resultData.OpData is string)
                                             {
-                                                ecuDesc = (string)resultData.OpData;
+                                                ecuVin = (string)resultData.OpData;
                                             }
                                         }
-                                        if (resultDict.TryGetValue("ECU_SGBD", out resultData))
+                                        if (resultDict.TryGetValue("FG_NR_KURZ", out resultData))
                                         {
-                                            ecuDataPresent = true;
                                             if (resultData.OpData is string)
                                             {
-                                                ecuSgbd = (string)resultData.OpData;
+                                                ecuVin = (string)resultData.OpData;
                                             }
                                         }
-                                        if (resultDict.TryGetValue("ECU_GRUPPE", out resultData))
+                                        if (resultDict.TryGetValue("AIF_FG_NR", out resultData))
                                         {
-                                            ecuDataPresent = true;
                                             if (resultData.OpData is string)
                                             {
-                                                ecuGroup = (string)resultData.OpData;
-                                            }
-                                        }
-                                        if (resultDict.TryGetValue("ID_DATUM_JAHR", out resultData))
-                                        {
-                                            if (resultData.OpData is Int64)
-                                            {
-                                                dateYear = (Int64)resultData.OpData;
+                                                ecuVin = (string)resultData.OpData;
                                             }
                                         }
 
-                                        if (!string.IsNullOrEmpty(ecuName) && ecuAdr >= 0 && !string.IsNullOrEmpty(ecuSgbd))
+                                        EcuInfo ecuInfoMatch = null;
+                                        foreach (EcuInfo ecuInfo in GetClonedEcuList())
                                         {
-                                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT_FUNKTIONAL ECU found: Name={0}, Addr={1}, Desc={2}, Sgdb={3}, Group={4}, Date={5}",
-                                                ecuName, ecuAdr, ecuDesc, ecuSgbd, ecuGroup, dateYear);
-                                            if (ecuList.All(ecuInfo => ecuInfo.Address != ecuAdr))
+                                            if (ecuInfo.Address == ecuAdr)
                                             {
-                                                // address not existing
-                                                EcuInfo ecuInfo = new EcuInfo(ecuName, ecuAdr, ecuDesc, ecuSgbd, ecuGroup);
-                                                if (ActivityCommon.EcuFunctionsActive && ActivityCommon.EcuFunctionReader != null)
-                                                {
-                                                    string ecuSgbdName = ecuInfo.Sgbd ?? string.Empty;
-                                                    EcuFunctionStructs.EcuVariant ecuVariant = ActivityCommon.EcuFunctionReader.GetEcuVariantCached(ecuSgbdName);
-                                                    if (ecuVariant == null)
-                                                    {
-                                                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT_FUNKTIONAL No ECU variant found for: Sgbd={0}, Addr={1}, Group={2}", ecuSgbdName, ecuInfo.Address, ecuInfo.Grp);
-                                                    }
-                                                    else
-                                                    {
-                                                        string title = ecuVariant.Title?.GetTitle(ActivityCommon.GetCurrentLanguage());
-                                                        if (!string.IsNullOrEmpty(title))
-                                                        {
-                                                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "IDENT_FUNKTIONAL ECU variant found for: Sgbd={0}, Title={1}", ecuSgbdName, title);
-                                                            ecuInfo.PageName = title;
-                                                            ecuInfo.Description = title;
-                                                            ecuInfo.DescriptionTransRequired = false;
-                                                        }
-                                                    }
-                                                }
+                                                ecuInfoMatch = ecuInfo;
+                                                break;
+                                            }
+                                        }
 
-                                                ecuList.Add(ecuInfo);
+                                        if (ecuInfoMatch != null)
+                                        {
+                                            if (!string.IsNullOrEmpty(ecuVin) && DetectVehicleBmwBase.VinRegex.IsMatch(ecuVin))
+                                            {
+                                                ecuInfoMatch.Vin = ecuVin;
                                             }
                                         }
                                         else
                                         {
-                                            if (ecuDataPresent)
+                                            if (!string.IsNullOrEmpty(ecuName) && ecuAdr >= 0 && ecuAdr <= VehicleStructsBmw.MaxEcuAddr)
                                             {
-                                                if (!ecuName.StartsWith("VIRTSG", StringComparison.OrdinalIgnoreCase) && (dateYear != 0))
+                                                if (!EcuListContainsAddr(ecuInfoAddList, ecuAdr))
                                                 {
-                                                    if (!invalidAddrList.Contains(ecuAdr))
+                                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Job: {0} Extra ECU found: Name={1}, Addr={2}",
+                                                        vinJobUsed.JobName, ecuName, ecuAdr);
+                                                    string groupSgbd = null;
+                                                    lock (detectVehicleBmw.GlobalLockObject)
                                                     {
-                                                        invalidAddrList.Add(ecuAdr);
+                                                        if (detectVehicleBmw.VehicleSeriesInfo != null && detectVehicleBmw.VehicleSeriesInfo.EcuList != null)
+                                                        {
+                                                            foreach (VehicleStructsBmw.VehicleEcuInfo vehicleEcuInfo in detectVehicleBmw.VehicleSeriesInfo.EcuList)
+                                                            {
+                                                                if (vehicleEcuInfo.DiagAddr == ecuAdr)
+                                                                {
+                                                                    if (DetectVehicleBmwBase.IsValidEcuName(vehicleEcuInfo.Name))
+                                                                    {
+                                                                        groupSgbd = vehicleEcuInfo.GroupSgbd;
+                                                                        ecuName = vehicleEcuInfo.Name;
+                                                                        break;
+                                                                    }
+
+                                                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ignoring invalid ECU: Name={0}, Addr={1}", ecuName, ecuAdr);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if (!string.IsNullOrEmpty(groupSgbd))
+                                                    {
+                                                        ecuInfoAddList.Add(new EcuInfo(ecuName, ecuAdr, string.Empty, string.Empty, groupSgbd));
                                                     }
                                                 }
                                             }
                                         }
+
                                         dictIndex++;
                                     }
                                 }
+                            }
+                        }
 
-                                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Detect EcuListSize={0}, EcuListSizeOld={1}", ecuList.Count, lastEcuListSize);
-                                if (ecuList.Count == lastEcuListSize)
+                        if (ecuInfoAddList.Count > 0)
+                        {
+                            foreach (EcuInfo ecuInfoAdd in ecuInfoAddList)
+                            {
+                                if (string.IsNullOrEmpty(ecuInfoAdd.Grp))
                                 {
-                                    break;
+                                    continue;
                                 }
 
-                                unstableIdent = true;
-                                maxSteps++;
-                                currentStep++;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
-
-                        if (ecuList.Count > 0)
-                        {
-                            ecuInvalidCount = 0;
-                            // ReSharper disable once LoopCanBeConvertedToQuery
-                            foreach (long addr in invalidAddrList)
-                            {
-                                if (ecuList.All(ecuInfo => ecuInfo.Address != addr))
-                                {
-                                    ecuInvalidCount++;
-                                }
-                            }
-
-                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Detect result: count={0}, invalid={1}", ecuList.Count, ecuInvalidCount);
-                            ecuListUse = ecuList;
-                            if (string.IsNullOrEmpty(ecuFileNameUse))
-                            {
-                                ecuFileNameUse = fileName;
-                            }
-                        }
-                    }
-                }
-
-                if (ecuListUse != null && !string.IsNullOrEmpty(ecuFileNameUse))
-                {
-                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Selected Ecu file: {0}", ecuFileNameUse);
-                    _ecuList.AddRange(ecuListUse.OrderBy(x => x.Name));
-                    _instanceData.SgbdFunctional = ecuFileNameUse;
-
-                    if (!elmDevice || unstableIdent || string.IsNullOrEmpty(detectedVin))
-                    {
-                        try
-                        {
-                            ActivityCommon.ResolveSgbdFile(_ediabas, ecuFileNameUse);
-                            string vinJobUsed = null;
-                            foreach (Tuple<string, string> vinJob in ReadVinJobs)
-                            {
+                                string[] groups = ecuInfoAdd.Grp.Split('|');
                                 try
                                 {
-                                    if (_ediabasJobAbort)
+                                    string groupSgbd = null;
+                                    foreach (string group in groups)
                                     {
-                                        break;
-                                    }
-
-                                    string jobName = vinJob.Item1;
-                                    if (!_ediabas.IsJobExisting(jobName))
-                                    {
-                                        continue;
-                                    }
-
-                                    _ediabas.ArgString = vinJob.Item2;
-                                    _ediabas.ArgBinaryStd = null;
-                                    _ediabas.ResultsRequests = string.Empty;
-                                    _ediabas.ExecuteJob(jobName);
-
-                                    vinJobUsed = jobName;
-                                    break;
-                                }
-                                catch (Exception)
-                                {
-                                    // ignored
-                                }
-                            }
-
-                            if (string.IsNullOrEmpty(vinJobUsed))
-                            {
-                                throw new Exception("Read VIN failed");
-                            }
-
-                            List<EcuInfo> ecuInfoAdd = new List<EcuInfo>();
-                            List<Dictionary<string, EdiabasNet.ResultData>> resultSets = _ediabas.ResultSets;
-                            if (resultSets != null && resultSets.Count >= 2)
-                            {
-                                int dictIndex = 0;
-                                foreach (Dictionary<string, EdiabasNet.ResultData> resultDict in resultSets)
-                                {
-                                    if (dictIndex == 0)
-                                    {
-                                        dictIndex++;
-                                        continue;
-                                    }
-
-                                    string ecuName = string.Empty;
-                                    Int64 ecuAdr = -1;
-                                    string ecuVin = string.Empty;
-                                    // ReSharper disable once InlineOutVariableDeclaration
-                                    EdiabasNet.ResultData resultData;
-                                    if (resultDict.TryGetValue("ECU_GROBNAME", out resultData))
-                                    {
-                                        if (resultData.OpData is string)
+                                        try
                                         {
-                                            ecuName = (string)resultData.OpData;
-                                        }
-                                    }
-                                    if (resultDict.TryGetValue("ID_SG_ADR", out resultData))
-                                    {
-                                        if (resultData.OpData is Int64)
-                                        {
-                                            ecuAdr = (Int64)resultData.OpData;
-                                        }
-                                    }
-                                    if (resultDict.TryGetValue("FG_NR", out resultData))
-                                    {
-                                        if (resultData.OpData is string)
-                                        {
-                                            ecuVin = (string)resultData.OpData;
-                                        }
-                                    }
-                                    if (resultDict.TryGetValue("FG_NR_KURZ", out resultData))
-                                    {
-                                        if (resultData.OpData is string)
-                                        {
-                                            ecuVin = (string)resultData.OpData;
-                                        }
-                                    }
-                                    if (resultDict.TryGetValue("AIF_FG_NR", out resultData))
-                                    {
-                                        if (resultData.OpData is string)
-                                        {
-                                            ecuVin = (string)resultData.OpData;
-                                        }
-                                    }
-
-                                    EcuInfo ecuInfoMatch = null;
-                                    foreach (EcuInfo ecuInfo in _ecuList)
-                                    {
-                                        if (ecuInfo.Address == ecuAdr)
-                                        {
-                                            ecuInfoMatch = ecuInfo;
+                                            ActivityCommon.ResolveSgbdFile(_ediabas, group);
+                                            ForceLoadSgbd();
+                                            groupSgbd = group;
                                             break;
                                         }
-                                    }
-
-                                    if (ecuInfoMatch != null)
-                                    {
-                                        if (!string.IsNullOrEmpty(ecuVin) && DetectVehicleBmw.VinRegex.IsMatch(ecuVin))
+                                        catch (Exception)
                                         {
-                                            ecuInfoMatch.Vin = ecuVin;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        if (!string.IsNullOrEmpty(ecuName) && ecuAdr >= 0)
-                                        {
-                                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Job: {0} Extra ECU found: Name={1}, Addr={2}",
-                                                vinJobUsed, ecuName, ecuAdr);
-                                            string groupSgbd = null;
-                                            if (detectVehicleBmw.VehicleSeriesInfo?.EcuList != null)
-                                            {
-                                                foreach (VehicleStructsBmw.VehicleEcuInfo vehicleEcuInfo in detectVehicleBmw.VehicleSeriesInfo?.EcuList)
-                                                {
-                                                    if (vehicleEcuInfo.DiagAddr == ecuAdr)
-                                                    {
-                                                        groupSgbd = vehicleEcuInfo.GroupSgbd;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-
-                                            if (!string.IsNullOrEmpty(groupSgbd))
-                                            {
-                                                ecuInfoAdd.Add(new EcuInfo(ecuName, ecuAdr, string.Empty, string.Empty, groupSgbd));
-                                            }
+                                            // ignored
                                         }
                                     }
 
-                                    dictIndex++;
-                                }
-                            }
-
-                            foreach (EcuInfo ecuInfo in ecuInfoAdd)
-                            {
-                                string groupSgbd = ecuInfo.Grp;
-                                try
-                                {
-                                    ActivityCommon.ResolveSgbdFile(_ediabas, groupSgbd);
+                                    if (string.IsNullOrEmpty(groupSgbd))
+                                    {
+                                        continue;
+                                    }
 
                                     _ediabas.ArgString = string.Empty;
                                     _ediabas.ArgBinaryStd = null;
                                     _ediabas.ResultsRequests = string.Empty;
                                     _ediabas.ExecuteJob("_VERSIONINFO");
 
-                                    string ecuDesc = GetEcuName(_ediabas.ResultSets);
+                                    string ecuDesc = DetectVehicleBmwBase.GetEcuName(_ediabas.ResultSets);
                                     string ecuSgbd = Path.GetFileNameWithoutExtension(_ediabas.SgbdFileName);
                                     _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Resolved Group={0}, Sgbd={1}, Desc={2}", groupSgbd, ecuSgbd, ecuDesc);
-                                    ecuInfo.Sgbd = ecuSgbd;
-                                    ecuInfo.Description = ecuDesc;
+                                    ecuInfoAdd.Sgbd = ecuSgbd;
+                                    ecuInfoAdd.Description = ecuDesc;
+                                    ecuInfoAdd.DetectFailure = true;
 
                                     if (ActivityCommon.EcuFunctionsActive && ActivityCommon.EcuFunctionReader != null)
                                     {
-                                        string ecuSgbdName = ecuInfo.Sgbd ?? string.Empty;
+                                        string ecuSgbdName = ecuInfoAdd.Sgbd ?? string.Empty;
                                         EcuFunctionStructs.EcuVariant ecuVariant = ActivityCommon.EcuFunctionReader.GetEcuVariantCached(ecuSgbdName);
                                         if (ecuVariant == null)
                                         {
@@ -3795,29 +4279,37 @@ namespace BmwDeepObd
                                         }
                                         else
                                         {
-                                            string title = ecuVariant.Title?.GetTitle(ActivityCommon.GetCurrentLanguage());
+                                            string title = ecuVariant.Title?.GetTitle(_activityCommon.GetCurrentLanguage());
                                             if (!string.IsNullOrEmpty(title))
                                             {
                                                 _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "ECU variant found for: Sgbd={0}, Title={1}", ecuSgbdName, title);
-                                                ecuInfo.PageName = title;
-                                                ecuInfo.Description = title;
-                                                ecuInfo.DescriptionTransRequired = false;
+                                                ecuInfoAdd.PageName = title;
+                                                ecuInfoAdd.Description = title;
+                                                ecuInfoAdd.DescriptionTransRequired = false;
                                             }
                                         }
                                     }
 
-                                    _ecuList.Add(ecuInfo);
+                                    lock (_ecuListLock)
+                                    {
+                                        _ecuList.Add(ecuInfoAdd);
+                                    }
                                 }
                                 catch (Exception)
                                 {
-                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Failed to resolve Group {0}", groupSgbd);
+                                    _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Failed to resolve Groups: {0}", ecuInfoAdd.Grp);
                                 }
                             }
+
+                            lock (detectVehicleBmw.GlobalLockObject)
+                            {
+                                detectVehicleBmw.HandleSpecialEcus();
+                            }
                         }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
                     }
 
                     // get vin
@@ -3828,7 +4320,7 @@ namespace BmwDeepObd
                     }
                     else
                     {
-                        _instanceData.Vin = GetBestVin(_ecuList);
+                        _instanceData.Vin = GetBestVin(GetClonedEcuList());
                     }
 
                     RunOnUiThread(() =>
@@ -3841,7 +4333,8 @@ namespace BmwDeepObd
                         progress.Progress = 100;
                     });
 
-                    UpdateBmwEcuInfo(detectVehicleBmw);
+                    _detectVehicleBmw = detectVehicleBmw;
+                    UpdateBmwEcuInfo();
                     ReadAllXml();
                 }
 
@@ -3849,33 +4342,38 @@ namespace BmwDeepObd
                 if (!_ediabasJobAbort && ecuListUse == null && !elmDevice)
                 {
                     string detectedVinDs2 = null;
-                    if (detectVehicleBmw.DetectVehicleDs2())
+                    lock (detectVehicleBmw.GlobalLockObject)
                     {
-                        pin78ConnRequire = detectVehicleBmw.Pin78ConnectRequire;
-                        detectedVinDs2 = detectVehicleBmw.Vin;
-                        ecuListUse = DetectDs2Ecus(progress, detectedVinDs2, detectVehicleBmw.Series, detectVehicleBmw.Ds2GroupFiles);
-                    }
-                    else
-                    {
-                        ecuListUse = null;
+                        if (detectVehicleBmw.DetectVehicleDs2())
+                        {
+                            pin78ConnRequire = detectVehicleBmw.Pin78ConnectRequire;
+                            detectedVinDs2 = detectVehicleBmw.Vin;
+                            ecuListUse = DetectDs2Ecus(progress, detectedVinDs2, detectVehicleBmw);
+                        }
+                        else
+                        {
+                            ecuListUse = null;
+                        }
                     }
 
                     if (ecuListUse != null)
                     {
-                        _ecuList.AddRange(ecuListUse.OrderBy(x => x.Name));
-                        // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
-                        _instanceData.VehicleSeries = detectVehicleBmw.Series;
-                        _instanceData.CDate = string.Empty;
-                        if (detectVehicleBmw.ConstructYear != null)
+                        lock (_ecuListLock)
                         {
-                            _instanceData.CDate = detectVehicleBmw.ConstructYear;
+                            _ecuList.AddRange(ecuListUse.OrderBy(x => x.Name));
                         }
-
-                        _instanceData.BnType = detectVehicleBmw.BnType;
-                        _instanceData.BrandName = string.Empty;
-                        if (detectVehicleBmw.BrandList != null && detectVehicleBmw.BrandList.Count > 0)
+                        // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
+                        lock (detectVehicleBmw.GlobalLockObject)
                         {
-                            _instanceData.BrandName = detectVehicleBmw.BrandList[0];
+                            _instanceData.VehicleSeries = detectVehicleBmw.Series;
+                            _instanceData.CDate = string.Empty;
+                            if (detectVehicleBmw.ConstructYear != null)
+                            {
+                                _instanceData.CDate = detectVehicleBmw.ConstructYear;
+                            }
+
+                            _instanceData.BnType = detectVehicleBmw.BnType;
+                            _instanceData.BrandName = detectVehicleBmw.Brand;
                         }
 
                         if (!string.IsNullOrEmpty(detectedVinDs2))
@@ -3884,10 +4382,11 @@ namespace BmwDeepObd
                         }
                         else
                         {
-                            _instanceData.Vin = GetBestVin(_ecuList);
+                            _instanceData.Vin = GetBestVin(GetClonedEcuList());
                         }
 
-                        UpdateBmwEcuInfo(detectVehicleBmw);
+                        _detectVehicleBmw = detectVehicleBmw;
+                        UpdateBmwEcuInfo();
                         ReadAllXml();
                     }
                 }
@@ -3899,7 +4398,6 @@ namespace BmwDeepObd
                         return;
                     }
                     progress.Dismiss();
-                    progress.Dispose();
                     progress = null;
                     _activityCommon.SetLock(ActivityCommon.LockType.None);
 
@@ -3986,9 +4484,9 @@ namespace BmwDeepObd
                         }
                         else
                         {
-                            if (_instanceData.ShownServiceMenuHint)
+                            if (_instanceData.ServiceMenuHintShown)
                             {
-                                _instanceData.ShownServiceMenuHint = false;
+                                _instanceData.ServiceMenuHintShown = false;
                                 ShowAlert(Resource.String.alert_title_info, Resource.String.xml_tool_msg_service_menu);
                             }
                             else
@@ -4016,9 +4514,10 @@ namespace BmwDeepObd
             _jobThread.Start();
         }
 
-        private List<EcuInfo> DetectDs2Ecus(CustomProgressDialog progress, string vin, string vehicleType, string groupFiles)
+        private List<EcuInfo> DetectDs2Ecus(CustomProgressDialog progress, string vin, DetectVehicleBmw detectVehicleBmw)
         {
             _ediabas.LogString(EdiabasNet.EdLogLevel.Ifh, "Get DS2 ecu list");
+            string groupFiles = detectVehicleBmw.Ds2GroupFiles;
 
             try
             {
@@ -4030,9 +4529,9 @@ namespace BmwDeepObd
                     {
                         _instanceData.Vin = vin;
                         ReadAllXml(true);
-                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "ECUs found for VIN: {0}", _ecuList.Count);
+                        _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "ECUs found for VIN: {0}", EcuListCount);
                         bool readEcus = true;
-                        if (_ecuList.Count > 0)
+                        if (EcuListCount > 0)
                         {
                             readEcus = false;
                             Semaphore waitSem = new Semaphore(0, 1);
@@ -4068,10 +4567,11 @@ namespace BmwDeepObd
                             });
                             waitSem.WaitOne();
                         }
+
                         if (!readEcus)
                         {
                             _ediabas.LogString(EdiabasNet.EdLogLevel.Ifh, "Keep existing ECU list");
-                            ecuList = new List<EcuInfo>(_ecuList);
+                            ecuList = GetClonedEcuList();
                             ClearEcuList();
                             foreach (EcuInfo ecuInfo in ecuList)
                             {
@@ -4096,7 +4596,7 @@ namespace BmwDeepObd
                                         }
                                         else
                                         {
-                                            title = ecuVariant.Title?.GetTitle(ActivityCommon.GetCurrentLanguage());
+                                            title = ecuVariant.Title?.GetTitle(_activityCommon.GetCurrentLanguage());
                                             if (!string.IsNullOrWhiteSpace(ecuVariant.GroupName))
                                             {
                                                 ecuInfo.Grp = ecuVariant.GroupName.Trim();
@@ -4106,7 +4606,7 @@ namespace BmwDeepObd
 
                                     if (string.IsNullOrEmpty(title))
                                     {
-                                        ecuInfo.Description = GetEcuComment(_ediabas.ResultSets);
+                                        ecuInfo.Description = DetectVehicleBmwBase.GetEcuComment(_ediabas.ResultSets);
                                     }
                                     else
                                     {
@@ -4130,13 +4630,13 @@ namespace BmwDeepObd
                     if (ActivityCommon.ScanAllEcus)
                     {
                         _ediabas.LogString(EdiabasNet.EdLogLevel.Ifh, "Scan all ECUs requested, ignoring detected groups");
-                        groupFilesUse = DetectVehicleBmw.AllDs2GroupFiles;
+                        groupFilesUse = DetectVehicleBmwBase.AllDs2GroupFiles;
                     }
 
                     _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Group files: {0}", groupFilesUse);
                     string[] groupArray = groupFilesUse.Split(',');
                     List<string> groupList;
-                    VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo = VehicleInfoBmw.GetVehicleSeriesInfo(vehicleType, null, null, _ediabas);
+                    VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo = VehicleInfoBmw.GetVehicleSeriesInfo(detectVehicleBmw);
                     if (vehicleSeriesInfo != null)
                     {
                         groupList = new List<string>();
@@ -4164,6 +4664,7 @@ namespace BmwDeepObd
                         string ecuDesc = string.Empty;
                         if (_ediabasJobAbort)
                         {
+                            _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Group detect aborted at: {0}", ecuGroup);
                             break;
                         }
 
@@ -4190,7 +4691,7 @@ namespace BmwDeepObd
                             _ediabas.NoInitForVJobs = true;
                             _ediabas.ExecuteJob("_VERSIONINFO");
 
-                            ecuDesc = GetEcuComment(_ediabas.ResultSets);
+                            ecuDesc = DetectVehicleBmwBase.GetEcuComment(_ediabas.ResultSets);
 
                             _ediabas.ExecuteJob("IDENT");
 
@@ -4243,7 +4744,7 @@ namespace BmwDeepObd
                                                 _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "VIN found: {0}", ecuVin);
                                             }
                                         }
-                                        if (!string.IsNullOrEmpty(ecuVin) && DetectVehicleBmw.VinRegex.IsMatch(ecuVin))
+                                        if (!string.IsNullOrEmpty(ecuVin) && DetectVehicleBmwBase.VinRegex.IsMatch(ecuVin))
                                         {
                                             _ediabas.LogString(EdiabasNet.EdLogLevel.Ifh, "VIN valid");
                                             ecuInfo.Vin = ecuVin;
@@ -4271,6 +4772,11 @@ namespace BmwDeepObd
             {
                 return null;
             }
+        }
+
+        private bool EcuListContainsAddr(List<EcuInfo> ecuList, long ecuAdr)
+        {
+            return ecuList.Any(ecuInfo => ecuInfo != null && ecuInfo.Address == ecuAdr);
         }
 
         private bool IsMwTabEmpty(string mwTabFileName)
@@ -4302,11 +4808,7 @@ namespace BmwDeepObd
 
                 // for UDS read VIN from motor
                 ActivityCommon.ResolveSgbdFile(_ediabas, "mot_01");
-
-                _ediabas.ArgString = string.Empty;
-                _ediabas.ArgBinaryStd = null;
-                _ediabas.ResultsRequests = string.Empty;
-                _ediabas.ExecuteJob("_JOBS");    // force to load file
+                ForceLoadSgbd();
 
                 string ecuName = Path.GetFileNameWithoutExtension(_ediabas.SgbdFileName);
                 EcuInfo ecuInfoMot = new EcuInfo(ecuName.ToUpperInvariant(), 1, string.Empty, ecuName, string.Empty);
@@ -4340,11 +4842,7 @@ namespace BmwDeepObd
 
                 // for UDS read hw info from did
                 ActivityCommon.ResolveSgbdFile(_ediabas, "did_19");
-
-                _ediabas.ArgString = string.Empty;
-                _ediabas.ArgBinaryStd = null;
-                _ediabas.ResultsRequests = string.Empty;
-                _ediabas.ExecuteJob("_JOBS");    // force to load file
+                ForceLoadSgbd();
 
                 string ecuName = Path.GetFileNameWithoutExtension(_ediabas.SgbdFileName);
                 EcuInfo ecuInfoDid = new EcuInfo(ecuName.ToUpperInvariant(), 19, string.Empty, ecuName, string.Empty);
@@ -4488,7 +4986,7 @@ namespace BmwDeepObd
                 int detectCount = 0;
                 if (searchStartIndex >= 0)
                 {
-                    detectCount = _ecuList.Count;
+                    detectCount = EcuListCount;
                 }
                 foreach (ActivityCommon.VagEcuEntry ecuEntry in ecuVagList)
                 {
@@ -4536,11 +5034,7 @@ namespace BmwDeepObd
                         try
                         {
                             ActivityCommon.ResolveSgbdFile(_ediabas, ecuEntry.SysName);
-
-                            _ediabas.ArgString = string.Empty;
-                            _ediabas.ArgBinaryStd = null;
-                            _ediabas.ResultsRequests = string.Empty;
-                            _ediabas.ExecuteJob("_JOBS");    // force to load file
+                            ForceLoadSgbd();
 
                             string jobName = JobReadEcuVersion;
                             if (!_ediabas.IsJobExisting(jobName))
@@ -4558,11 +5052,7 @@ namespace BmwDeepObd
 
                             sgbdFileNameOverride = string.Format(CultureInfo.InvariantCulture, VagUdsCommonSgbd + "#0x{0:X02}", ecuEntry.Address);
                             ActivityCommon.ResolveSgbdFile(_ediabas, sgbdFileNameOverride);
-
-                            _ediabas.ArgString = string.Empty;
-                            _ediabas.ArgBinaryStd = null;
-                            _ediabas.ResultsRequests = string.Empty;
-                            _ediabas.ExecuteJob("_JOBS");    // force to load file
+                            ForceLoadSgbd();
 
                             string jobName = JobReadEcuVersion;
                             if (!_ediabas.IsJobExisting(jobName))
@@ -4587,23 +5077,27 @@ namespace BmwDeepObd
                                         {
                                             ecuName = Path.GetFileNameWithoutExtension(_ediabas.SgbdFileName) ?? string.Empty;
                                         }
-                                        thisEcuInfo = _ecuList.FirstOrDefault(ecuInfo => string.Compare(ecuInfo.Sgbd, ecuName, StringComparison.OrdinalIgnoreCase) == 0);
-                                        if ((searchStartIndex < 0) || (thisEcuInfo == null))
+
+                                        lock (_ecuListLock)
                                         {
-                                            detectCount++;
-                                        }
-                                        if (thisEcuInfo == null)
-                                        {
-                                            if ((ecuNameDict == null) || !ecuNameDict.TryGetValue(ecuEntry.Address, out string displayName))
+                                            thisEcuInfo = _ecuList.FirstOrDefault(ecuInfo => string.Compare(ecuInfo.Sgbd, ecuName, StringComparison.OrdinalIgnoreCase) == 0);
+                                            if ((searchStartIndex < 0) || (thisEcuInfo == null))
                                             {
-                                                displayName = ecuName;
+                                                detectCount++;
                                             }
-                                            thisEcuInfo = new EcuInfo(ecuName.ToUpperInvariant(), ecuEntry.Address, string.Empty, ecuName, string.Empty)
+                                            if (thisEcuInfo == null)
                                             {
-                                                PageName = displayName,
-                                                EcuName = displayName
-                                            };
-                                            _ecuList.Add(thisEcuInfo);
+                                                if ((ecuNameDict == null) || !ecuNameDict.TryGetValue(ecuEntry.Address, out string displayName))
+                                                {
+                                                    displayName = ecuName;
+                                                }
+                                                thisEcuInfo = new EcuInfo(ecuName.ToUpperInvariant(), ecuEntry.Address, string.Empty, ecuName, string.Empty)
+                                                {
+                                                    PageName = displayName,
+                                                    EcuName = displayName
+                                                };
+                                                _ecuList.Add(thisEcuInfo);
+                                            }
                                         }
                                     }
                                 }
@@ -4644,6 +5138,7 @@ namespace BmwDeepObd
                             if (ActivityCommon.CollectDebugInfo)
                             {
                                 // get more ecu infos
+                                ForceLoadSgbd();
                                 string readCommand = GetReadCommand(thisEcuInfo);
                                 foreach (Tuple<string, string> job in EcuInfoVagJobs)
                                 {
@@ -4716,14 +5211,13 @@ namespace BmwDeepObd
                         return;
                     }
                     progress.Dismiss();
-                    progress.Dispose();
                     progress = null;
                     _activityCommon.SetLock(ActivityCommon.LockType.None);
 
                     UpdateOptionsMenu();
                     UpdateDisplay();
 
-                    if (!_ediabasJobAbort && ((_ecuList.Count == 0) || (detectCount == 0)))
+                    if (!_ediabasJobAbort && ((EcuListCount == 0) || (detectCount == 0)))
                     {
                         _instanceData.CommErrorsOccurred = true;
                         ShowAlert(Resource.String.alert_title_error, Resource.String.xml_tool_no_response);
@@ -4735,6 +5229,11 @@ namespace BmwDeepObd
 
         private void PerformJobsRead(EcuInfo ecuInfo)
         {
+            if (ecuInfo == null)
+            {
+                return;
+            }
+
             if (IsJobRunning())
             {
                 return;
@@ -5417,70 +5916,91 @@ namespace BmwDeepObd
             EcuFunctionStructs.EcuVariant ecuVariant = ActivityCommon.EcuFunctionReader.GetEcuVariantCached(ecuSgbdName);
             ruleEvalBmw.UpdateEvalEcuProperties(ecuVariant);
 
-            string language = ActivityCommon.GetCurrentLanguage();
-            List<Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>> fixedFuncStructList = ActivityCommon.EcuFunctionReader.GetFixedFuncStructList(ecuVariant);
-            foreach (var ecuFixedFuncStructPair in fixedFuncStructList)
+            if (ecuVariant != null)
             {
-                EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct = ecuFixedFuncStructPair.Item1;
-                EcuFunctionStructs.EcuFuncStruct ecuFuncStruct = ecuFixedFuncStructPair.Item2;
-                EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType nodeClassType = ecuFixedFuncStruct.GetNodeClassType();
-                bool validId = ruleEvalBmw.EvaluateRule(ecuFixedFuncStruct.Id, RuleEvalBmw.RuleType.EcuFunc);
-                if (!validId)
+                string language = _activityCommon.GetCurrentLanguage();
+                List<Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>> fixedFuncStructList = ActivityCommon.EcuFunctionReader.GetFixedFuncStructList(ecuVariant);
+                foreach (var ecuFixedFuncStructPair in fixedFuncStructList)
                 {
-                    continue;
-                }
+                    EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct = ecuFixedFuncStructPair.Item1;
+                    EcuFunctionStructs.EcuFuncStruct ecuFuncStruct = ecuFixedFuncStructPair.Item2;
+                    EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType nodeClassType = ecuFixedFuncStruct.GetNodeClassType();
+                    bool validId = ruleEvalBmw.EvaluateRule(ecuFixedFuncStruct.Id, RuleEvalBmw.RuleType.EcuFunc);
+                    if (!validId)
+                    {
+                        continue;
+                    }
 
-                switch (nodeClassType)
-                {
-                    case EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType.Identification:
-                    case EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType.ReadState:
-                    case EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType.ControlActuator:
-                        {
-                            XmlToolEcuActivity.JobInfo jobInfo = new XmlToolEcuActivity.JobInfo(ecuFixedFuncStruct.Id);
-                            string displayName = ecuFixedFuncStruct.Title?.GetTitle(language);
-                            if (!string.IsNullOrWhiteSpace(displayName))
+                    switch (nodeClassType)
+                    {
+                        case EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType.Identification:
+                        case EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType.ReadState:
+                        case EcuFunctionStructs.EcuFixedFuncStruct.NodeClassType.ControlActuator:
                             {
-                                jobInfo.DisplayName = displayName;
-                            }
-
-                            jobInfo.Comments = new List<string>();
-                            jobInfo.EcuFixedFuncStruct = ecuFixedFuncStruct;
-                            jobInfo.EcuFuncStruct = ecuFuncStruct;
-
-                            foreach (EcuFunctionStructs.EcuJob ecuJob in ecuFixedFuncStruct.EcuJobList)
-                            {
-                                foreach (EcuFunctionStructs.EcuJobResult ecuJobResult in ecuJob.EcuJobResultList)
+                                XmlToolEcuActivity.JobInfo jobInfo = new XmlToolEcuActivity.JobInfo(ecuFixedFuncStruct.Id);
+                                string displayName = ecuFixedFuncStruct.Title?.GetTitle(language);
+                                if (!string.IsNullOrWhiteSpace(displayName))
                                 {
-                                    if (ecuJobResult.EcuFuncRelevant.ConvertToInt() > 0)
+                                    jobInfo.DisplayName = displayName;
+                                }
+
+                                jobInfo.Comments = new List<string>();
+                                jobInfo.EcuFixedFuncStruct = ecuFixedFuncStruct;
+                                jobInfo.EcuFuncStruct = ecuFuncStruct;
+
+                                foreach (EcuFunctionStructs.EcuJob ecuJob in ecuFixedFuncStruct.EcuJobList)
+                                {
+                                    foreach (EcuFunctionStructs.EcuJobResult ecuJobResult in ecuJob.EcuJobResultList)
                                     {
-                                        string resultTitle = ecuJobResult.Title?.GetTitle(language) ?? string.Empty;
-                                        string resultName = ecuJobResult.Name;
-                                        string resultType = DataTypeStringReal;
-                                        string comment = resultName + " (" + ecuJob.Name + ")";
-                                        List<string> resultCommentList = new List<string> { comment };
-                                        XmlToolEcuActivity.ResultInfo resultInfo =
-                                            new XmlToolEcuActivity.ResultInfo(resultName, resultTitle, resultType, null, resultCommentList);
-                                        resultInfo.CommentsTransRequired = false;
-                                        resultInfo.EcuJob = ecuJob;
-                                        resultInfo.EcuJobResult = ecuJobResult;
-                                        jobInfo.Results.Add(resultInfo);
-                                        jobInfo.Comments.Add(resultTitle);
+                                        if (ecuJobResult.EcuFuncRelevant.ConvertToInt() > 0)
+                                        {
+                                            string resultTitle = ecuJobResult.Title?.GetTitle(language) ?? string.Empty;
+                                            string resultName = ecuJobResult.Name;
+                                            string resultType = DataTypeStringReal;
+                                            string comment = resultName + " (" + ecuJob.Name + ")";
+                                            List<string> resultCommentList = new List<string> { comment };
+                                            XmlToolEcuActivity.ResultInfo resultInfo =
+                                                new XmlToolEcuActivity.ResultInfo(resultName, resultTitle, resultType, null, resultCommentList);
+                                            resultInfo.CommentsTransRequired = false;
+                                            resultInfo.EcuJob = ecuJob;
+                                            resultInfo.EcuJobResult = ecuJobResult;
+                                            jobInfo.Results.Add(resultInfo);
+                                        }
                                     }
                                 }
+
+                                int commentCount = jobInfo.Results.Count(resultInfo => !string.IsNullOrWhiteSpace(resultInfo.DisplayName));
+                                if (commentCount > 3)
+                                {
+                                    jobInfo.Comments.Add(string.Format(Culture, GetString(Resource.String.xml_tool_num_job_results), jobInfo.Results.Count));
+                                }
+                                else
+                                {
+                                    jobInfo.Comments.Add(GetString(Resource.String.xml_tool_job_results));
+                                    foreach (XmlToolEcuActivity.ResultInfo resultInfo in jobInfo.Results)
+                                    {
+                                        if (string.IsNullOrWhiteSpace(resultInfo.DisplayName))
+                                        {
+                                            continue;
+                                        }
+
+                                        jobInfo.Comments.Add("- " + resultInfo.DisplayName);
+                                    }
+                                }
+
+                                jobInfo.CommentsTransRequired = false;
+                                jobList.Add(jobInfo);
+                                break;
                             }
 
-                            jobInfo.CommentsTransRequired = false;
-                            jobList.Add(jobInfo);
-                            break;
-                        }
-
-                    default:
+                        default:
 #if DEBUG
-                        Log.Info(Tag, string.Format("ExecuteJobsRead: Unknown node class={0}, name={1}",
-                            ecuFixedFuncStruct.NodeClassName, ecuFixedFuncStruct.Title?.GetTitle(language)));
+                            Log.Info(Tag, string.Format("ExecuteJobsRead: Unknown node class={0}, name={1}",
+                                ecuFixedFuncStruct.NodeClassName, ecuFixedFuncStruct.Title?.GetTitle(language)));
 #endif
-                        break;
+                            break;
 
+                    }
                 }
             }
         }
@@ -5666,7 +6186,6 @@ namespace BmwDeepObd
         private void ReadJobThreadDone(EcuInfo ecuInfo, CustomProgressDialog progress, bool readFailed)
         {
             progress.Dismiss();
-            progress.Dispose();
             _activityCommon.SetLock(ActivityCommon.LockType.None);
 
             UpdateOptionsMenu();
@@ -5790,6 +6309,15 @@ namespace BmwDeepObd
                 return string.Empty;
             }
             return Is1281Ecu(ecuInfo) ? "WertEinmalLesen" : "LESEN";
+        }
+
+        private void ForceLoadSgbd()
+        {
+            _ediabas.ArgString = string.Empty;
+            _ediabas.ArgBinaryStd = null;
+            _ediabas.ResultsRequests = string.Empty;
+            _ediabas.NoInitForVJobs = false;
+            _ediabas.ExecuteJob("_JOBS");    // force to load file
         }
 
         private void SelectMwTabFromListInfo(List<string> fileNames, MwTabFileSelected handler)
@@ -6348,6 +6876,7 @@ namespace BmwDeepObd
                             codingRequestType = EcuInfo.CodingRequestType.CodingS22;
                             break;
                     }
+
                     if (string.IsNullOrEmpty(jobName) || !_ediabas.IsJobExisting(jobName))
                     {
                         continue;
@@ -7033,7 +7562,7 @@ namespace BmwDeepObd
             EdiabasOpen();
 
             UpdateDisplay();
-            if ((_ecuList.Count == 0) || (_activityCommon.SelectedInterface == ActivityCommon.InterfaceType.None))
+            if ((EcuListCount == 0) || (_activityCommon.SelectedInterface == ActivityCommon.InterfaceType.None))
             {
                 _translateEnabled = true;
                 handler?.Invoke(true);
@@ -7056,9 +7585,16 @@ namespace BmwDeepObd
                     ecuVagList = ActivityCommon.ReadVagEcuList(_ecuDir);
                     ecuNameDict = ActivityCommon.GetVagEcuNamesDict(_ecuDir);
                 }
-                for (int idx = 0; idx < _ecuList.Count; idx++)
+
+                List<EcuInfo> ecuListTemp = GetClonedEcuList();
+                for (int idx = 0; idx < ecuListTemp.Count; idx++)
                 {
-                    EcuInfo ecuInfo = _ecuList[idx];
+                    if (idx < 0)
+                    {
+                        continue;
+                    }
+
+                    EcuInfo ecuInfo = ecuListTemp[idx];
                     if (ecuInfo.Address >= 0)
                     {
                         continue;
@@ -7086,13 +7622,13 @@ namespace BmwDeepObd
                                 }
                                 else
                                 {
-                                    title = ecuVariant.Title?.GetTitle(ActivityCommon.GetCurrentLanguage());
+                                    title = ecuVariant.Title?.GetTitle(_activityCommon.GetCurrentLanguage());
                                 }
                             }
 
                             if (string.IsNullOrEmpty(title))
                             {
-                                ecuInfo.Description = GetEcuComment(_ediabas.ResultSets);
+                                ecuInfo.Description = DetectVehicleBmwBase.GetEcuComment(_ediabas.ResultSets);
                             }
                             else
                             {
@@ -7126,11 +7662,15 @@ namespace BmwDeepObd
                             ecuName = Path.GetFileNameWithoutExtension(_ediabas.SgbdFileName) ?? string.Empty;
                         }
 
-                        if (_ecuList.Any(info => !info.Equals(ecuInfo) && string.Compare(info.Sgbd, ecuName, StringComparison.OrdinalIgnoreCase) == 0))
+                        if (ecuListTemp.Any(info => !info.Equals(ecuInfo) && string.Compare(info.Sgbd, ecuName, StringComparison.OrdinalIgnoreCase) == 0))
                         {   // already existing
-                            _ecuList.Remove(ecuInfo);
+                            if (ecuListTemp.Remove(ecuInfo))
+                            {
+                                idx--;
+                            }
                             continue;
                         }
+
                         string displayName = ecuName;
                         if (ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw && ecuVagList != null && ecuNameDict != null)
                         {
@@ -7180,6 +7720,11 @@ namespace BmwDeepObd
                     }
                 }
 
+                lock (_ecuListLock)
+                {
+                    _ecuList = ecuListTemp;
+                }
+
                 RunOnUiThread(() =>
                 {
                     if (_activityCommon == null)
@@ -7187,7 +7732,6 @@ namespace BmwDeepObd
                         return;
                     }
                     progress.Dismiss();
-                    progress.Dispose();
                     progress = null;
 
                     _ecuListTranslated = false;
@@ -7203,72 +7747,6 @@ namespace BmwDeepObd
                 });
             });
             _jobThread.Start();
-        }
-
-        private string GetEcuComment(List<Dictionary<string, EdiabasNet.ResultData>> resultSets)
-        {
-            StringBuilder stringBuilder = new StringBuilder();
-            if (resultSets != null && resultSets.Count >= 2)
-            {
-                int dictIndex = 0;
-                foreach (Dictionary<string, EdiabasNet.ResultData> resultDict in resultSets)
-                {
-                    if (dictIndex == 0)
-                    {
-                        dictIndex++;
-                        continue;
-                    }
-                    for (int i = 0; ; i++)
-                    {
-                        if (resultDict.TryGetValue("ECUCOMMENT" + i.ToString(Culture), out EdiabasNet.ResultData resultData))
-                        {
-                            if (resultData.OpData is string)
-                            {
-                                if (stringBuilder.Length > 0)
-                                {
-                                    stringBuilder.Append(";");
-                                }
-                                stringBuilder.Append((string)resultData.OpData);
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-                    dictIndex++;
-                }
-            }
-            return stringBuilder.ToString();
-        }
-
-        private string GetEcuName(List<Dictionary<string, EdiabasNet.ResultData>> resultSets)
-        {
-            string ecuName = string.Empty;
-            if (resultSets != null && resultSets.Count >= 2)
-            {
-                int dictIndex = 0;
-                foreach (Dictionary<string, EdiabasNet.ResultData> resultDict in resultSets)
-                {
-                    if (dictIndex == 0)
-                    {
-                        dictIndex++;
-                        continue;
-                    }
-
-                    if (resultDict.TryGetValue("ECU", out EdiabasNet.ResultData resultData))
-                    {
-                        if (resultData.OpData is string)
-                        {
-                            ecuName = (string) resultData.OpData;
-                        }
-                    }
-
-                    dictIndex++;
-                }
-            }
-
-            return ecuName;
         }
 
         private void EcuCheckChanged(EcuInfo ecuInfo, View view)
@@ -7326,7 +7804,7 @@ namespace BmwDeepObd
                     return false;
                 }
 
-                foreach (EcuInfo ecuInfo in _ecuList)
+                foreach (EcuInfo ecuInfo in GetClonedEcuList())
                 {
                     string xmlPageFile = Path.Combine(xmlFileDir, ActivityCommon.CreateValidFileName(ecuInfo.Name + PageExtension));
                     if (string.Compare(xmlPageFile, pageFileName, StringComparison.OrdinalIgnoreCase) == 0)
@@ -7429,7 +7907,7 @@ namespace BmwDeepObd
                 }
             }
 
-            XAttribute fontSizeAttr = pageNode.Attribute("fontsize");
+            XAttribute fontSizeAttr = pageNode.Attribute(JobReader.PageFontSize);
             if (fontSizeAttr != null)
             {
                 if (Enum.TryParse(fontSizeAttr.Value, true, out DisplayFontSize fontSize))
@@ -7438,7 +7916,7 @@ namespace BmwDeepObd
                 }
             }
 
-            XAttribute gaugesPortraitAttr = pageNode.Attribute("gauges-portrait");
+            XAttribute gaugesPortraitAttr = pageNode.Attribute(JobReader.PageGaugesPortrait);
             if (gaugesPortraitAttr != null)
             {
                 try
@@ -7451,7 +7929,7 @@ namespace BmwDeepObd
                 }
             }
 
-            XAttribute gaugesLandscapeAttr = pageNode.Attribute("gauges-landscape");
+            XAttribute gaugesLandscapeAttr = pageNode.Attribute(JobReader.PageGaugesLandscape);
             if (gaugesLandscapeAttr != null)
             {
                 try
@@ -7537,7 +8015,7 @@ namespace BmwDeepObd
                                 result.Format = formatAttr.Value;
                             }
 
-                            XAttribute dispOrderAttr = displayNode.Attribute("display-order");
+                            XAttribute dispOrderAttr = displayNode.Attribute(JobReader.DisplayNodeOrder);
                             if (dispOrderAttr != null)
                             {
                                 try
@@ -7652,7 +8130,7 @@ namespace BmwDeepObd
                 }
             }
 
-            XAttribute fontSizeAttr = pageNode.Attribute("fontsize");
+            XAttribute fontSizeAttr = pageNode.Attribute(JobReader.PageFontSize);
             if (fontSizeAttr != null)
             {
                 if (!Enum.TryParse(fontSizeAttr.Value, true, out fontSize))
@@ -7661,7 +8139,7 @@ namespace BmwDeepObd
                 }
             }
 
-            XAttribute gaugesPortraitAttr = pageNode.Attribute("gauges-portrait");
+            XAttribute gaugesPortraitAttr = pageNode.Attribute(JobReader.PageGaugesPortrait);
             if (gaugesPortraitAttr != null)
             {
                 try
@@ -7674,7 +8152,7 @@ namespace BmwDeepObd
                 }
             }
 
-            XAttribute gaugesLandscapeAttr = pageNode.Attribute("gauges-landscape");
+            XAttribute gaugesLandscapeAttr = pageNode.Attribute(JobReader.PageGaugesLandscape);
             if (gaugesLandscapeAttr != null)
             {
                 try
@@ -7796,30 +8274,30 @@ namespace BmwDeepObd
                 }
 
                 string fontSizeName = ecuInfo.FontSize.ToString().ToLowerInvariant();
-                XAttribute pageFontSizeAttr = pageNode.Attribute("fontsize");
+                XAttribute pageFontSizeAttr = pageNode.Attribute(JobReader.PageFontSize);
                 if (pageFontSizeAttr == null)
                 {
-                    pageNode.Add(new XAttribute("fontsize", fontSizeName));
+                    pageNode.Add(new XAttribute(JobReader.PageFontSize, fontSizeName));
                 }
                 else
                 {
                     pageFontSizeAttr.Value = fontSizeName;
                 }
 
-                XAttribute pageGaugesPortraitAttr = pageNode.Attribute("gauges-portrait");
+                XAttribute pageGaugesPortraitAttr = pageNode.Attribute(JobReader.PageGaugesPortrait);
                 if (pageGaugesPortraitAttr == null)
                 {
-                    pageNode.Add(new XAttribute("gauges-portrait", ecuInfo.GaugesPortrait));
+                    pageNode.Add(new XAttribute(JobReader.PageGaugesPortrait, ecuInfo.GaugesPortrait));
                 }
                 else
                 {
                     pageGaugesPortraitAttr.Value = ecuInfo.GaugesPortrait.ToString(CultureInfo.InvariantCulture);
                 }
 
-                XAttribute pageGaugesLandscapeAttr = pageNode.Attribute("gauges-landscape");
+                XAttribute pageGaugesLandscapeAttr = pageNode.Attribute(JobReader.PageGaugesLandscape);
                 if (pageGaugesLandscapeAttr == null)
                 {
-                    pageNode.Add(new XAttribute("gauges-landscape", ecuInfo.GaugesLandscape));
+                    pageNode.Add(new XAttribute(JobReader.PageGaugesLandscape, ecuInfo.GaugesLandscape));
                 }
                 else
                 {
@@ -8037,7 +8515,7 @@ namespace BmwDeepObd
                             {
                                 displayNodeNew.ReplaceAttributes(from el in displayNodeOld.Attributes()
                                                                  where el.Name != "result" && el.Name != "ecu_job_id" && el.Name != "ecu_job_result_id" &&
-                                                                       el.Name != "format" && el.Name != "display-order" &&
+                                                                       el.Name != "format" && el.Name != JobReader.DisplayNodeOrder &&
                                                                        el.Name != "grid-type" && el.Name != "min-value" && el.Name != "max-value" &&
                                                                        el.Name != "log_tag"
                                                                  select new XAttribute(el));
@@ -8074,7 +8552,7 @@ namespace BmwDeepObd
                         displayNodeNew.Add(new XAttribute("format", result.Format));
                         if (result.GridType != JobReader.DisplayInfo.GridModeType.Hidden)
                         {
-                            displayNodeNew.Add(new XAttribute("display-order", result.DisplayOrder));
+                            displayNodeNew.Add(new XAttribute(JobReader.DisplayNodeOrder, result.DisplayOrder));
                             displayNodeNew.Add(new XAttribute("grid-type", result.GridType.ToString().ToLowerInvariant().Replace("_", "-")));
                             displayNodeNew.Add(new XAttribute("min-value", result.MinValue));
                             displayNodeNew.Add(new XAttribute("max-value", result.MaxValue));
@@ -8141,7 +8619,7 @@ namespace BmwDeepObd
                 return;
             }
 
-            foreach (EcuInfo ecuInfo in _ecuList)
+            foreach (EcuInfo ecuInfo in GetClonedEcuList())
             {
                 XElement ecuNode = GetEcuNode(ecuInfo, ns, errorsNode);
                 if (ecuNode != null)
@@ -8164,22 +8642,26 @@ namespace BmwDeepObd
                     string vagDataFileName = vagDataAttr?.Value;
                     XAttribute vagUdsAttr = ecuNode.Attribute("vag_uds_file");
                     string vagUdsFileName = vagUdsAttr?.Value;
-                    bool ecuFound = _ecuList.Any(ecuInfo => string.Compare(sgbdName, ecuInfo.Sgbd, StringComparison.OrdinalIgnoreCase) == 0);
-                    if (!ecuFound)
+
+                    lock (_ecuListLock)
                     {
-                        // ReSharper disable once PossibleNullReferenceException
-                        EcuInfo ecuInfo = new EcuInfo(sgbdName.ToUpperInvariant(), -1, string.Empty, sgbdName, string.Empty,
-                            JobReader.PageInfo.DisplayModeType.List, DisplayFontSize.Small, JobReader.GaugesPortraitDefault, JobReader.GaugesLandscapeDefault, string.Empty, null,
-                            vagDataFileName, vagUdsFileName)
+                        bool ecuFound = _ecuList.Any(ecuInfo => string.Compare(sgbdName, ecuInfo.Sgbd, StringComparison.OrdinalIgnoreCase) == 0);
+                        if (!ecuFound)
                         {
-                            PageName = string.Empty,
-                            EcuName = string.Empty
-                        };
-                        if (SetEcuNameFromStringsNode(ns, ecuInfo, stringsNode))
-                        {
-                            ecuInfo.PageName = ecuInfo.EcuName;
+                            // ReSharper disable once PossibleNullReferenceException
+                            EcuInfo ecuInfo = new EcuInfo(sgbdName.ToUpperInvariant(), -1, string.Empty, sgbdName, string.Empty,
+                                JobReader.PageInfo.DisplayModeType.List, DisplayFontSize.Small, JobReader.GaugesPortraitDefault, JobReader.GaugesLandscapeDefault, string.Empty, null,
+                                vagDataFileName, vagUdsFileName)
+                            {
+                                PageName = string.Empty,
+                                EcuName = string.Empty
+                            };
+                            if (SetEcuNameFromStringsNode(ns, ecuInfo, stringsNode))
+                            {
+                                ecuInfo.PageName = ecuInfo.EcuName;
+                            }
+                            _ecuList.Add(ecuInfo);
                         }
-                        _ecuList.Add(ecuInfo);
                     }
                 }
             }
@@ -8229,6 +8711,13 @@ namespace BmwDeepObd
                 if (pageNameAttr == null)
                 {
                     pageNode.Add(new XAttribute("name", DisplayNamePage));
+                }
+
+                XAttribute pageFontSizeAttr = pageNode.Attribute(JobReader.PageFontSize);
+                if (pageFontSizeAttr == null)
+                {
+                    string fontSizeName = DisplayFontSize.Small.ToString().ToLowerInvariant();
+                    pageNode.Add(new XAttribute(JobReader.PageFontSize, fontSizeName));
                 }
 
                 XElement stringsNode = GetDefaultStringsNode(ns, pageNode);
@@ -8281,7 +8770,7 @@ namespace BmwDeepObd
                     errorsNodeNew.Add(new XAttribute("brand_name", _instanceData.BrandName));
                 }
 
-                foreach (EcuInfo ecuInfo in _ecuList)
+                foreach (EcuInfo ecuInfo in GetClonedEcuList())
                 {
                     XElement ecuNode = null;
                     if (errorsNodeOld != null)
@@ -8393,12 +8882,15 @@ namespace BmwDeepObd
                             out string mwTabFileName, out Dictionary<long, EcuMwTabEntry> mwTabEcuDict, out string vagDataFileName, out string vagUdsFileName);
                         if (!string.IsNullOrEmpty(sgbdName))
                         {
-                            _ecuList.Add(new EcuInfo(ecuName, -1, string.Empty, sgbdName, string.Empty, displayMode, fontSize, gaugesPortrait, gaugesLandscape,
-                                            mwTabFileName, mwTabEcuDict, vagDataFileName, vagUdsFileName)
+                            lock (_ecuListLock)
                             {
-                                Selected = true,
-                                NoUpdate = noUpdate
-                            });
+                                _ecuList.Add(new EcuInfo(ecuName, -1, string.Empty, sgbdName, string.Empty, displayMode, fontSize, gaugesPortrait, gaugesLandscape,
+                                    mwTabFileName, mwTabEcuDict, vagDataFileName, vagUdsFileName)
+                                {
+                                    Selected = true,
+                                    NoUpdate = noUpdate
+                                });
+                            }
                         }
                     }
                     catch (Exception)
@@ -8427,19 +8919,23 @@ namespace BmwDeepObd
                         continue;
                     }
                     bool found = false;
-                    for (int i = 0; i < _ecuList.Count; i++)
+                    lock (_ecuListLock)
                     {
-                        EcuInfo ecuInfo = _ecuList[i];
-                        string ecuFileName = ActivityCommon.CreateValidFileName(ecuInfo.Name + PageExtension);
-                        if (string.Compare(ecuFileName, fileName, StringComparison.OrdinalIgnoreCase) == 0)
+                        for (int i = 0; i < _ecuList.Count; i++)
                         {
-                            found = true;
-                            ecuInfo.Selected = true;
-                            _ecuList.Remove(ecuInfo);
-                            _ecuList.Insert(0, ecuInfo);
-                            break;
+                            EcuInfo ecuInfo = _ecuList[i];
+                            string ecuFileName = ActivityCommon.CreateValidFileName(ecuInfo.Name + PageExtension);
+                            if (string.Compare(ecuFileName, fileName, StringComparison.OrdinalIgnoreCase) == 0)
+                            {
+                                found = true;
+                                ecuInfo.Selected = true;
+                                _ecuList.Remove(ecuInfo);
+                                _ecuList.Insert(0, ecuInfo);
+                                break;
+                            }
                         }
                     }
+
                     if (!found)
                     {
                         string ecuName = Path.GetFileNameWithoutExtension(fileName);
@@ -8452,12 +8948,16 @@ namespace BmwDeepObd
                                     out string mwTabFileName, out Dictionary<long, EcuMwTabEntry> mwTabEcuDict, out string vagDataFileName, out string vagUdsFileName);
                                 if (!string.IsNullOrEmpty(sgbdName))
                                 {
-                                    _ecuList.Insert(0, new EcuInfo(ecuName, -1, string.Empty, sgbdName, string.Empty, displayMode, fontSize, gaugesPortrait, gaugesLandscape,
-                                                        mwTabFileName, mwTabEcuDict, vagDataFileName, vagUdsFileName)
+                                    lock (_ecuListLock)
                                     {
-                                        Selected = true,
-                                        NoUpdate = noUpdate
-                                    });
+                                        _ecuList.Insert(0, new EcuInfo(ecuName, -1, string.Empty, sgbdName,
+                                            string.Empty, displayMode, fontSize, gaugesPortrait, gaugesLandscape,
+                                            mwTabFileName, mwTabEcuDict, vagDataFileName, vagUdsFileName)
+                                        {
+                                            Selected = true,
+                                            NoUpdate = noUpdate
+                                        });
+                                    }
                                 }
                             }
                             catch (Exception)
@@ -8505,7 +9005,7 @@ namespace BmwDeepObd
                     pagesNodeNew.ReplaceAttributes(from el in pagesNodeOld.Attributes() select new XAttribute(el));
                 }
 
-                foreach (EcuInfo ecuInfo in _ecuList)
+                foreach (EcuInfo ecuInfo in GetClonedEcuList())
                 {
                     string fileName = ActivityCommon.CreateValidFileName(ecuInfo.Name + PageExtension);
                     if (!ecuInfo.Selected || !File.Exists(Path.Combine(xmlFileDir, fileName)))
@@ -8798,7 +9298,7 @@ namespace BmwDeepObd
             {
                 Directory.CreateDirectory(xmlFileDir);
                 // page files
-                foreach (EcuInfo ecuInfo in _ecuList)
+                foreach (EcuInfo ecuInfo in GetClonedEcuList())
                 {
                     if (ecuInfo.JobList == null || !ecuInfo.JobListValid)
                     {
@@ -8932,7 +9432,7 @@ namespace BmwDeepObd
                 return false;
             }
 
-            if (_ecuList == null || _ecuList.Count == 0)
+            if (EcuListCount == 0)
             {
                 return false;
             }
@@ -8959,7 +9459,7 @@ namespace BmwDeepObd
                 return false;
             }
 
-            if (_ecuList == null || _ecuList.Count == 0)
+            if (EcuListCount == 0)
             {
                 return false;
             }
@@ -8972,6 +9472,57 @@ namespace BmwDeepObd
                     return false;
                 }
                 return _activityCommon.StoreTranslationCache(Path.Combine(xmlFileDir, TranslationFileName));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private bool StoreDetectVehicleInfo()
+        {
+            if (_activityCommon == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                _instanceData.DetectVehicleBmwFile = null;
+                DetectVehicleBmw detectVehicleBmw = _detectVehicleBmw;
+                if (detectVehicleBmw == null)
+                {
+                    return false;
+                }
+
+                string storageDir = XmlFileDir();
+                if (string.IsNullOrEmpty(storageDir) || !Directory.Exists(storageDir))
+                {
+                    storageDir = _appDataDir;
+                }
+
+                if (string.IsNullOrEmpty(storageDir) || !Directory.Exists(storageDir))
+                {
+                    return false;
+                }
+
+                string fileName = Path.Combine(storageDir, DetectVehicleBmwFileName);
+                lock (detectVehicleBmw.GlobalLockObject)
+                {
+                    detectVehicleBmw.Ediabas = _ediabas;
+                    if (!detectVehicleBmw.Valid)
+                    {
+                        return false;
+                    }
+
+                    if (!detectVehicleBmw.SaveDataToFile(fileName))
+                    {
+                        return false;
+                    }
+                }
+
+                _instanceData.DetectVehicleBmwFile = fileName;
+                return true;
             }
             catch (Exception)
             {
@@ -9350,6 +9901,7 @@ namespace BmwDeepObd
             }
         }
 
+#if !USE_DRAG_LIST
         private class EcuListAdapter : BaseAdapter<EcuInfo>
         {
             public delegate void ActionEventHandler(EcuInfo ecuInfo, View view);
@@ -9357,7 +9909,7 @@ namespace BmwDeepObd
             public event ActionEventHandler MenuOptionsSelected;
 
             private readonly List<EcuInfo> _items;
-            public List<EcuInfo> Items => _items;
+            public int ItemsCount => _items.Count;
             private readonly XmlToolActivity _context;
             private bool _ignoreCheckEvent;
 
@@ -9388,11 +9940,11 @@ namespace BmwDeepObd
                 checkBoxSelect.Checked = item.Selected;
                 _ignoreCheckEvent = false;
 
-                checkBoxSelect.Tag = new TagInfo(item);
+                checkBoxSelect.Tag = new EcuInfoWrapper(item);
                 checkBoxSelect.CheckedChange -= OnCheckChanged;
                 checkBoxSelect.CheckedChange += OnCheckChanged;
 
-                buttonEcuOptionsMenu.Tag = new TagInfo(item);
+                buttonEcuOptionsMenu.Tag = new EcuInfoWrapper(item);
                 buttonEcuOptionsMenu.Click -= OnEcuOptionsClick;
                 buttonEcuOptionsMenu.Click += OnEcuOptionsClick;
 
@@ -9450,12 +10002,27 @@ namespace BmwDeepObd
                 return view;
             }
 
+            public void ClearItems()
+            {
+                _items.Clear();
+            }
+
+            public void AppendItem(EcuInfo ecuInfo)
+            {
+                _items.Add(ecuInfo);
+            }
+
+            public int GetItemIndex(EcuInfo ecuInfo)
+            {
+                return _items.IndexOf(ecuInfo);
+            }
+
             private void OnCheckChanged(object sender, CompoundButton.CheckedChangeEventArgs args)
             {
                 if (!_ignoreCheckEvent)
                 {
                     CheckBox checkBox = sender as CheckBox;
-                    TagInfo tagInfo = checkBox?.Tag as TagInfo;
+                    EcuInfoWrapper tagInfo = checkBox?.Tag as EcuInfoWrapper;
                     if (tagInfo != null && tagInfo.Info.Selected != args.IsChecked)
                     {
                         tagInfo.Info.Selected = args.IsChecked;
@@ -9468,16 +10035,16 @@ namespace BmwDeepObd
             private void OnEcuOptionsClick(object sender, EventArgs args)
             {
                 ImageButton button = sender as ImageButton;
-                TagInfo tagInfo = button?.Tag as TagInfo;
-                if (tagInfo != null)
+                EcuInfoWrapper infoWrapper = button?.Tag as EcuInfoWrapper;
+                if (infoWrapper != null)
                 {
-                    MenuOptionsSelected?.Invoke(tagInfo.Info, button);
+                    MenuOptionsSelected?.Invoke(infoWrapper.Info, button);
                 }
             }
 
-            private class TagInfo : Java.Lang.Object
+            private class EcuInfoWrapper : Java.Lang.Object
             {
-                public TagInfo(EcuInfo info)
+                public EcuInfoWrapper(EcuInfo info)
                 {
                     Info = info;
                 }
@@ -9485,5 +10052,390 @@ namespace BmwDeepObd
                 public EcuInfo Info { get; }
             }
         }
+#else
+        private class DragEcuListAdapter : DragItemAdapter
+        {
+            public delegate void ActionEventHandler(EcuInfo ecuInfo, View view);
+            public event ActionEventHandler CheckChanged;
+            public event ActionEventHandler MenuOptionsSelected;
+            public event ActionEventHandler ItemClicked;
+            public int ItemsCount => ItemList.Count;
+
+            private readonly XmlToolActivity _context;
+            private readonly int _layoutId;
+            private readonly int _dragHandleId;
+            private readonly bool _dragOnLongPress;
+            private bool _ignoreCheckEvent;
+            private long _itemIdCurrent;
+            private readonly int? _backgroundResource;
+
+            public DragEcuListAdapter(XmlToolActivity context, int layoutId, int dragHandleId, bool dragOnLongPress)
+            {
+                _context = context;
+                _layoutId = layoutId;
+                _dragHandleId = dragHandleId;
+                _dragOnLongPress = dragOnLongPress;
+                _itemIdCurrent = 0;
+
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.Lollipop)
+                {
+                    TypedArray typedArray = context.Theme.ObtainStyledAttributes(new[] { Android.Resource.Attribute.SelectableItemBackground });
+                    _backgroundResource = typedArray.GetResourceId(0, 0);
+                }
+
+                ItemList = new List<EcuInfoWrapper>();
+            }
+
+            public override long GetUniqueItemId(int position)
+            {
+                EcuInfoWrapper infoWrapper = ItemList[position] as EcuInfoWrapper;
+                if (infoWrapper != null)
+                {
+                    return infoWrapper.ItemId;
+                }
+
+                return -1;
+            }
+
+            public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
+            {
+                View view = LayoutInflater.From(parent.Context)?.Inflate(_layoutId, parent, false);
+                return new CustomViewHolder(this, view, _dragHandleId, _dragOnLongPress);
+            }
+
+            public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
+            {
+                base.OnBindViewHolder(holder, position);
+
+                EcuInfoWrapper infoWrapper = ItemList[position] as EcuInfoWrapper;
+                EcuInfo item = infoWrapper?.Info;
+                if (item == null)
+                {
+                    return;
+                }
+
+                CustomViewHolder customHolder = holder as CustomViewHolder;
+                if (customHolder == null)
+                {
+                    return;
+                }
+
+                infoWrapper.BoundViewHolder = customHolder;
+                View grabView = customHolder.MGrabView;
+                if (_backgroundResource != null)
+                {
+                    grabView.SetBackgroundResource(_backgroundResource.Value);
+                }
+
+                grabView.Tag = infoWrapper;
+                grabView.Click -= OnGrabViewClick;
+                grabView.Click += OnGrabViewClick;
+
+                View view = customHolder.ItemView;
+                view.Tag = infoWrapper;
+
+                View itemDividerTop = view.FindViewById<View>(Resource.Id.item_divider_top);
+                View itemDividerBottom = view.FindViewById<View>(Resource.Id.item_divider_bottom);
+                itemDividerTop.Visibility = ViewStates.Invisible;
+                itemDividerBottom.Visibility = ViewStates.Visible;
+
+                CheckBox checkBoxSelect = view.FindViewById<CheckBox>(Resource.Id.checkBoxEcuSelect);
+                ImageButton buttonEcuOptionsMenu = view.FindViewById<ImageButton>(Resource.Id.buttonEcuOptionsMenu);
+
+                _ignoreCheckEvent = true;
+                checkBoxSelect.Checked = item.Selected;
+                _ignoreCheckEvent = false;
+
+                checkBoxSelect.Tag = infoWrapper;
+                checkBoxSelect.CheckedChange -= OnCheckChanged;
+                checkBoxSelect.CheckedChange += OnCheckChanged;
+
+                buttonEcuOptionsMenu.Tag = infoWrapper;
+                buttonEcuOptionsMenu.Click -= OnEcuOptionsClick;
+                buttonEcuOptionsMenu.Click += OnEcuOptionsClick;
+
+                TextView textEcuName = view.FindViewById<TextView>(Resource.Id.textEcuName);
+                TextView textEcuDesc = view.FindViewById<TextView>(Resource.Id.textEcuDesc);
+                TextView textEcuFunctions = view.FindViewById<TextView>(Resource.Id.textEcuFunctions);
+
+                StringBuilder stringBuilderName = new StringBuilder();
+                if (ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw && item.Address >= 0)
+                {
+                    stringBuilderName.Append(string.Format("{0:X02} ", item.Address));
+                }
+                stringBuilderName.Append(!string.IsNullOrEmpty(item.EcuName) ? item.EcuName : item.Name);
+                if (!string.IsNullOrEmpty(item.Description))
+                {
+                    stringBuilderName.Append(": ");
+                    stringBuilderName.Append(item.DescriptionTransRequired && !string.IsNullOrEmpty(item.DescriptionTrans)
+                        ? item.DescriptionTrans
+                        : item.Description);
+                }
+                textEcuName.Text = stringBuilderName.ToString();
+
+                StringBuilder stringBuilderInfo = new StringBuilder();
+                stringBuilderInfo.Append(_context.GetString(Resource.String.xml_tool_info_sgbd));
+                stringBuilderInfo.Append(": ");
+                stringBuilderInfo.Append(item.Sgbd);
+                if (!string.IsNullOrEmpty(item.Grp))
+                {
+                    stringBuilderInfo.Append(", ");
+                    stringBuilderInfo.Append(_context.GetString(Resource.String.xml_tool_info_grp));
+                    stringBuilderInfo.Append(": ");
+                    stringBuilderInfo.Append(item.Grp);
+                }
+                if (!string.IsNullOrEmpty(item.Vin))
+                {
+                    stringBuilderInfo.Append(", ");
+                    stringBuilderInfo.Append(_context.GetString(Resource.String.xml_tool_info_vin));
+                    stringBuilderInfo.Append(": ");
+                    stringBuilderInfo.Append(item.Vin);
+                }
+                textEcuDesc.Text = stringBuilderInfo.ToString();
+
+                string ecuFunctionNames = item.EcuFunctionNames;
+                if (!string.IsNullOrEmpty(ecuFunctionNames))
+                {
+                    textEcuFunctions.Visibility = ViewStates.Visible;
+                    textEcuFunctions.Text = ecuFunctionNames;
+                }
+                else
+                {
+                    textEcuFunctions.Visibility = ViewStates.Gone;
+                    textEcuFunctions.Text = string.Empty;
+                }
+            }
+
+            public void ClearItems()
+            {
+                while (ItemList.Count > 0)
+                {
+                    RemoveItem(0);
+                }
+            }
+
+            public void AppendItem(EcuInfo ecuInfo)
+            {
+                AddItem(ItemList.Count, new EcuInfoWrapper(this, ecuInfo));
+            }
+
+            public int GetItemIndex(EcuInfo ecuInfo)
+            {
+                for (int i = 0; i < ItemsCount; i++)
+                {
+                    EcuInfoWrapper infoWrapper = ItemList[i] as EcuInfoWrapper;
+                    if (infoWrapper != null)
+                    {
+                        if (infoWrapper.Info == ecuInfo)
+                        {
+                            return i;
+                        }
+                    }
+                }
+
+                return -1;
+            }
+
+            public CustomViewHolder GetItemViewHolder(int itemIndex)
+            {
+                if ((itemIndex < 0) || (itemIndex >= ItemsCount))
+                {
+                    return null;
+                }
+
+                EcuInfoWrapper infoWrapper = ItemList[itemIndex] as EcuInfoWrapper;
+                if (infoWrapper != null)
+                {
+                    return infoWrapper.BoundViewHolder;
+                }
+
+                return null;
+            }
+
+            private void OnGrabViewClick(object sender, EventArgs args)
+            {
+                View view = sender as View;
+                EcuInfoWrapper infoWrapper = view?.Tag as EcuInfoWrapper;
+                if (infoWrapper != null)
+                {
+                    ItemClicked?.Invoke(infoWrapper.Info, view);
+                }
+            }
+
+            private void OnCheckChanged(object sender, CompoundButton.CheckedChangeEventArgs args)
+            {
+                if (!_ignoreCheckEvent)
+                {
+                    CheckBox checkBox = sender as CheckBox;
+                    EcuInfoWrapper infoWrapper = checkBox?.Tag as EcuInfoWrapper;
+                    if (infoWrapper != null && infoWrapper.Info.Selected != args.IsChecked)
+                    {
+                        infoWrapper.Info.Selected = args.IsChecked;
+                        CheckChanged?.Invoke(infoWrapper.Info, checkBox);
+                        NotifyDataSetChanged();
+                    }
+                }
+            }
+
+            private void OnEcuOptionsClick(object sender, EventArgs args)
+            {
+                ImageButton button = sender as ImageButton;
+                EcuInfoWrapper infoWrapper = button?.Tag as EcuInfoWrapper;
+                if (infoWrapper != null)
+                {
+                    MenuOptionsSelected?.Invoke(infoWrapper.Info, button);
+                }
+            }
+
+            public class CustomViewHolder : ViewHolder
+            {
+                private readonly DragEcuListAdapter _adapter;
+
+                public CustomViewHolder(DragEcuListAdapter adapter, View itemView, int handleResId, bool dragOnLongPress) : base(itemView, handleResId, dragOnLongPress)
+                {
+                    _adapter = adapter;
+                }
+            }
+
+            private class EcuInfoWrapper : Java.Lang.Object
+            {
+                public EcuInfoWrapper(DragEcuListAdapter adapter, EcuInfo info)
+                {
+                    Info = info;
+                    if (info.ItemId == null)
+                    {
+                        info.ItemId = adapter._itemIdCurrent++;
+                    }
+                    ItemId = info.ItemId.Value;
+                    BoundViewHolder = null;
+                }
+
+                public EcuInfo Info { get; }
+
+                public long ItemId { get; }
+
+                public CustomViewHolder BoundViewHolder { get; set; }
+            }
+        }
+
+        private class CustomDragItem : DragItem
+        {
+            private readonly Context _context;
+            private readonly Android.Graphics.Color _backgroundColor;
+
+            public CustomDragItem(Context context, int layoutId) : base(context, layoutId)
+            {
+                _context = context;
+                _backgroundColor = ActivityCommon.GetStyleColor(context, Resource.Attribute.dragBackgroundColor);
+            }
+
+            public override void OnBindDragView(View clickedView, View dragView)
+            {
+                CheckBox checkBoxSelectClick = clickedView.FindViewById<CheckBox>(Resource.Id.checkBoxEcuSelect);
+                TextView textEcuNameClick = clickedView.FindViewById<TextView>(Resource.Id.textEcuName);
+                TextView textEcuDescClick = clickedView.FindViewById<TextView>(Resource.Id.textEcuDesc);
+                TextView textEcuFunctionsClick = clickedView.FindViewById<TextView>(Resource.Id.textEcuFunctions);
+
+                CheckBox checkBoxSelectDrag = dragView.FindViewById<CheckBox>(Resource.Id.checkBoxEcuSelect);
+                ImageButton buttonEcuOptionsMenu = dragView.FindViewById<ImageButton>(Resource.Id.buttonEcuOptionsMenu);
+                TextView textEcuNameDrag = dragView.FindViewById<TextView>(Resource.Id.textEcuName);
+                TextView textEcuDescDrag = dragView.FindViewById<TextView>(Resource.Id.textEcuDesc);
+                TextView textEcuFunctionsDrag = dragView.FindViewById<TextView>(Resource.Id.textEcuFunctions);
+
+                View itemDividerTopDrag = dragView.FindViewById<View>(Resource.Id.item_divider_top);
+                View itemDividerBottomDrag = dragView.FindViewById<View>(Resource.Id.item_divider_bottom);
+
+                checkBoxSelectDrag.Checked = checkBoxSelectClick.Checked;
+                textEcuNameDrag.Text = textEcuNameClick.Text;
+                textEcuNameDrag.Visibility = textEcuNameClick.Visibility;
+
+                textEcuDescDrag.Text = textEcuDescClick.Text;
+                textEcuDescDrag.Visibility = textEcuDescClick.Visibility;
+
+                textEcuFunctionsDrag.Text = textEcuFunctionsClick.Text;
+                textEcuFunctionsDrag.Visibility = textEcuFunctionsClick.Visibility;
+
+                itemDividerTopDrag.Visibility = ViewStates.Visible;
+                itemDividerBottomDrag.Visibility = ViewStates.Visible;
+                checkBoxSelectDrag.Enabled = false;
+                buttonEcuOptionsMenu.Enabled = false;
+                dragView.SetBackgroundColor(_backgroundColor);
+                dragView.JumpDrawablesToCurrentState();
+            }
+        }
+
+        private class CustomDragListener : Java.Lang.Object, DragListView.IDragListListener
+        {
+            private readonly XmlToolActivity _activity;
+
+            public CustomDragListener(XmlToolActivity activity)
+            {
+                _activity = activity;
+            }
+
+            public void OnItemDragStarted(int p0)
+            {
+            }
+
+            public void OnItemDragEnded(int p0, int p1)
+            {
+                if (p0 != p1)
+                {
+#if DEBUG
+                    Log.Debug(Tag, string.Format("OnItemDragEnded: {0} -> {1}", p0, p1));
+#endif
+                    int oldIndex = p0;
+                    int newIndex = p1;
+
+                    lock (_ecuListLock)
+                    {
+                        int ecuListCount = _ecuList.Count;
+                        if (oldIndex >= 0 && oldIndex < ecuListCount && newIndex >= 0 && newIndex < ecuListCount)
+                        {
+                            EcuInfo ecuInfo = _ecuList[oldIndex];
+                            _ecuList.RemoveAt(oldIndex);
+                            _ecuList.Insert(newIndex, ecuInfo);
+                        }
+                    }
+
+                    _activity.UpdateDisplay();
+                }
+            }
+
+            public void OnItemDragging(int p0, float p1, float p2)
+            {
+            }
+        }
+
+        private class CustomDragListCallback : Java.Lang.Object, DragListView.IDragListCallback
+        {
+            private readonly XmlToolActivity _activity;
+
+            public CustomDragListCallback(XmlToolActivity activity)
+            {
+                _activity = activity;
+            }
+
+            public bool CanDragItemAtPosition(int p0)
+            {
+                if (p0 < 0 || p0 >= EcuListCount)
+                {
+                    return false;
+                }
+
+                if (_activity.IsJobRunning())
+                {
+                    return false;
+                }
+
+                return true;
+            }
+
+            public bool CanDropItemAtPosition(int p0)
+            {
+                return CanDragItemAtPosition(p0);
+            }
+        }
+#endif
     }
 }

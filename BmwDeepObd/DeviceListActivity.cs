@@ -34,6 +34,7 @@ using Android.Content.PM;
 using AndroidX.AppCompat.App;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
+using BmwDeepObd.Dialogs;
 
 namespace BmwDeepObd
 {
@@ -223,22 +224,22 @@ namespace BmwDeepObd
             // Register for broadcasts when a device is discovered
             _receiver = new Receiver (this);
             var filter = new IntentFilter (BluetoothDevice.ActionFound);
-            RegisterReceiver (_receiver, filter);
+            RegisterReceiver (_receiver, filter);   // system broadcasts
 
             // Register for broadcasts when a device name changed
             filter = new IntentFilter(BluetoothDevice.ActionNameChanged);
-            RegisterReceiver(_receiver, filter);
+            RegisterReceiver(_receiver, filter);   // system broadcasts
 
             // Register for broadcasts when discovery has finished
             filter = new IntentFilter (BluetoothAdapter.ActionDiscoveryFinished);
-            RegisterReceiver (_receiver, filter);
+            RegisterReceiver (_receiver, filter);   // system broadcasts
 
             // register device changes
             filter = new IntentFilter();
             filter.AddAction(BluetoothDevice.ActionAclConnected);
             filter.AddAction(BluetoothDevice.ActionAclDisconnected);
             filter.AddAction(BluetoothDevice.ActionBondStateChanged);
-            RegisterReceiver(_receiver, filter);
+            RegisterReceiver(_receiver, filter);   // system broadcasts
 
             _adapterTypeDetect = new AdapterTypeDetect(_activityCommon);
             // Get the local Bluetooth adapter
@@ -1191,15 +1192,15 @@ namespace BmwDeepObd
                             {
                                 LogString("Connect with createRfcommSocket");
                                 // this socket sometimes looses data for long telegrams
-                                IntPtr createRfcommSocket = Android.Runtime.JNIEnv.GetMethodID(device.Class.Handle,
+                                nint createRfcommSocket = Android.Runtime.JNIEnv.GetMethodID(device.Class.Handle,
                                     "createRfcommSocket", "(I)Landroid/bluetooth/BluetoothSocket;");
-                                if (createRfcommSocket == IntPtr.Zero)
+                                if (createRfcommSocket == nint.Zero)
                                 {
                                     throw new Exception("No createRfcommSocket");
                                 }
-                                IntPtr rfCommSocket = Android.Runtime.JNIEnv.CallObjectMethod(device.Handle,
+                                nint rfCommSocket = Android.Runtime.JNIEnv.CallObjectMethod(device.Handle,
                                     createRfcommSocket, new Android.Runtime.JValue(1));
-                                if (rfCommSocket == IntPtr.Zero)
+                                if (rfCommSocket == nint.Zero)
                                 {
                                     throw new Exception("No rfCommSocket");
                                 }
@@ -1268,7 +1269,6 @@ namespace BmwDeepObd
                     }
 
                     progress.Dismiss();
-                    progress.Dispose();
 
                     switch (adapterType)
                     {

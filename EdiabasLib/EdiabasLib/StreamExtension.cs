@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -62,13 +64,32 @@ namespace EdiabasLib
 
             if (inStream is MemoryQueueBufferStream memoryStream)
             {
+                if (!memoryStream.IsDataAvailable(timeout, cancelEvent))
+                {
+                    return 0;
+                }
+
                 return memoryStream.Read(buffer, offset, count);
             }
 
             if (inStream is EscapeStreamReader escapeStream)
             {
+                if (!escapeStream.IsDataAvailable(timeout, cancelEvent))
+                {
+                    return 0;
+                }
+
                 return escapeStream.Read(buffer, offset, count);
             }
+
+#if !Android
+            if (inStream is NetworkStream)
+            {
+                // Cancel event is not supported on Windows
+                inStream.ReadTimeout = timeout;
+                return inStream.Read(buffer, offset, count);
+            }
+#endif
 
             long startTime = Stopwatch.GetTimestamp();
             int recLen = 0;

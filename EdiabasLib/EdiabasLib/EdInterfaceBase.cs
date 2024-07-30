@@ -88,12 +88,10 @@ namespace EdiabasLib
                     }
                     MutexAquired = true;
                 }
-#if !WindowsCE
                 catch (AbandonedMutexException)
                 {
                     MutexAquired = true;
                 }
-#endif
                 catch (Exception)
                 {
                     return false;
@@ -119,9 +117,16 @@ namespace EdiabasLib
                     }
                     catch (Exception)
                     {
-                        InterfaceMutex.Close();
-                        InterfaceMutex.Dispose();
-#if WindowsCE || Android
+                        try
+                        {
+                            InterfaceMutex.Dispose();
+                            InterfaceMutex = null;
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+#if Android
                         InterfaceMutex = new Mutex(false);
 #else
                         InterfaceMutex = new Mutex(false, InterfaceMutexName);
@@ -210,7 +215,7 @@ namespace EdiabasLib
 
         public virtual string InterfaceVerName
         {
-            get { return "IFH-STD Version 7.3.0"; }
+            get { return "IFH-STD Version 7.6.0"; }
         }
 
         public abstract byte[] KeyBytes { get; }

@@ -50,7 +50,24 @@ namespace EdiabasLib
             }
 
             string valueStr = arg1.GetStringData();
-            EdFloatType result = StringToFloat(valueStr);
+            EdFloatType result = StringToFloat(valueStr, out bool valid);
+            if (IsMinVersion760)
+            {
+                if (!valid)
+                {
+                    int compatMode = 0;
+                    string compatModeProp = ediabas.GetConfigProperty("CompatMode");
+                    if (compatModeProp != null)
+                    {
+                        compatMode = (int)StringToValue(compatModeProp);
+                    }
+
+                    if (compatMode == 0)
+                    {
+                        ediabas.RaiseError(ErrorCodes.EDIABAS_BIP_0011);
+                    }
+                }
+            }
 
             arg0.SetRawData(result);
         }
@@ -481,7 +498,14 @@ namespace EdiabasLib
             }
             catch (Exception)
             {
-                ediabas.SetError(ErrorCodes.EDIABAS_BIP_0007);
+                if (IsMinVersion760)
+                {
+                    ediabas.RaiseError(ErrorCodes.EDIABAS_BIP_0007);
+                }
+                else
+                {
+                    ediabas.SetError(ErrorCodes.EDIABAS_BIP_0007);
+                }
                 error = true;
             }
             ediabas._flags.Overflow = false;

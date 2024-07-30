@@ -14,6 +14,7 @@ using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
 using Ediabas;
 using EdiabasLib;
 using PsdzClient.Utility;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Core.Container
 {
@@ -75,8 +76,8 @@ namespace PsdzClient.Core.Container
             {
                 if (value != m_FromFastaConfig)
                 {
-                    //Log.Info(Log.CurrentMethod(), "Stack: " + GetStack());
-                    //Log.Info(Log.CurrentMethod(), $"Setting new value to {value}");
+                    Log.Info(Log.CurrentMethod(), "Stack: " + GetStack());
+                    Log.Info(Log.CurrentMethod(), $"Setting new value to {value}");
                     m_FromFastaConfig = value;
                 }
             }
@@ -160,9 +161,9 @@ namespace PsdzClient.Core.Container
             {
                 api.apiEnd();
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.End()", exception);
+                Log.WarningException("ECUKom.End()", exception);
             }
         }
 
@@ -225,9 +226,9 @@ namespace PsdzClient.Core.Container
                 result = InitVCI(VCI);
                 return result;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.ErrorException("ECUKom.Refresh()", exception);
+                Log.ErrorException("ECUKom.Refresh()", exception);
                 return result;
             }
         }
@@ -247,7 +248,7 @@ namespace PsdzClient.Core.Container
                     string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
                     if (logging)
                     {
-                        //Log.Info("ECUKom.SetEcuPath()", "found EcuPath config setting: {0} AppDomain.BaseDirectory: {1}", pathString, baseDirectory);
+                        Log.Info("ECUKom.SetEcuPath()", "found EcuPath config setting: {0} AppDomain.BaseDirectory: {1}", pathString, baseDirectory);
                     }
                     if (Path.IsPathRooted(pathString))
                     {
@@ -260,17 +261,17 @@ namespace PsdzClient.Core.Container
                     api.apiGetConfig("EcuPath", out var cfgValue);
                     if (logging)
                     {
-                        //Log.Info("ECUKom.SetEcuPath()", "Used EcuPath: {0}", cfgValue);
+                        Log.Info("ECUKom.SetEcuPath()", "Used EcuPath: {0}", cfgValue);
                     }
                 }
                 else if (logging)
                 {
-                    //Log.Info("ECUKom.SetEcuPath()", "no config for specific ecu path used; using default values from ediabas config");
+                    Log.Info("ECUKom.SetEcuPath()", "no config for specific ecu path used; using default values from ediabas config");
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.ErrorException("ECUKom.SetEcuPath()", exception);
+                Log.ErrorException("ECUKom.SetEcuPath()", exception);
             }
         }
 
@@ -311,9 +312,9 @@ namespace PsdzClient.Core.Container
                 eCUKom = (ECUKom)xmlSerializer.Deserialize(xmlTextReader);
                 xmlTextReader.Close();
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.DeSerialize()", exception);
+                Log.WarningException("ECUKom.DeSerialize()", exception);
                 eCUKom = new ECUKom("Rheingold", ediabas);
             }
             VCIDevice vCIDevice = new VCIDevice(VCIDeviceType.SIM, "SIM", filename);
@@ -325,7 +326,7 @@ namespace PsdzClient.Core.Container
             {
                 if (eCUKom.jobList != null)
                 {
-                    //Log.Info("ECUKom.DeSerialize()", "got {0} jobs from simulation container", eCUKom.jobList.Count);
+                    Log.Info("ECUKom.DeSerialize()", "got {0} jobs from simulation container", eCUKom.jobList.Count);
                     foreach (ECUJob job in eCUKom.jobList)
                     {
                         job.JobName = job.JobName.ToUpper(CultureInfo.InvariantCulture);
@@ -333,9 +334,9 @@ namespace PsdzClient.Core.Container
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                //Log.Warning("ECUKom.DeSerialize()", "failed to normalize EcuName and JobName tu uppercase with exception: {0}", ex.ToString());
+                Log.Warning("ECUKom.DeSerialize()", "failed to normalize EcuName and JobName tu uppercase with exception: {0}", ex.ToString());
             }
             return eCUKom;
         }
@@ -359,9 +360,9 @@ namespace PsdzClient.Core.Container
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.EdiabasBinPath()", exception);
+                Log.WarningException("ECUKom.EdiabasBinPath()", exception);
             }
             return null;
         }
@@ -376,9 +377,9 @@ namespace PsdzClient.Core.Container
                     return Path.Combine(path, "ediabas.ini");
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.EdiabasIniFilePath()", exception);
+                Log.WarningException("ECUKom.EdiabasIniFilePath()", exception);
             }
             return null;
         }
@@ -393,9 +394,9 @@ namespace PsdzClient.Core.Container
                     return Path.Combine(path, iniFilename);
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.EdiabasIniFilePath()", exception);
+                Log.WarningException("ECUKom.EdiabasIniFilePath()", exception);
             }
             return null;
         }
@@ -408,12 +409,12 @@ namespace PsdzClient.Core.Container
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(ECUKom));
                 xmlSerializer.Serialize(xmlTextWriter, ecuKom);
                 xmlTextWriter.Close();
-                //Log.Info("ECUKom.Serialize()", "successfully done");
+                Log.Info("ECUKom.Serialize()", "successfully done");
                 return true;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.Serialize()", exception);
+                Log.WarningException("ECUKom.Serialize()", exception);
             }
             return false;
         }
@@ -428,9 +429,9 @@ namespace PsdzClient.Core.Container
                     result = value;
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.getLogPath()", exception);
+                Log.WarningException("ECUKom.getLogPath()", exception);
             }
             return result;
         }
@@ -439,7 +440,7 @@ namespace PsdzClient.Core.Container
         {
             if (device == null)
             {
-                //Log.Warning("ECUKom.InitVCI()", "failed because device was null");
+                Log.Warning("ECUKom.InitVCI()", "failed because device was null");
                 return false;
             }
             try
@@ -484,7 +485,7 @@ namespace PsdzClient.Core.Container
                 }
                 if (api.apiErrorCode() != 0)
                 {
-                    //Log.Warning("ECUKom.InitVCI()", "failed when init IFH with : {0} / {1}", api.apiErrorCode(), api.apiErrorText());
+                    Log.Warning("ECUKom.InitVCI()", "failed when init IFH with : {0} / {1}", api.apiErrorCode(), api.apiErrorText());
                 }
                 string pathString = "..\\..\\..\\logs";
                 api.apiSetConfig("TracePath", Path.GetFullPath(pathString));
@@ -494,37 +495,37 @@ namespace PsdzClient.Core.Container
                     if (logging)
                     {
                         api.apiGetConfig("TracePath", out var cfgValue);
-                        //Log.Info("ECUKom.InitVCI()", "Ediabas TracePath is loaded: {0}", cfgValue);
+                        Log.Info("ECUKom.InitVCI()", "Ediabas TracePath is loaded: {0}", cfgValue);
                         api.apiGetConfig("EdiabasVersion", out var cfgValue2);
-                        //Log.Info("ECUKom.InitVCI()", "Ediabas version loaded: {0}", cfgValue2);
+                        Log.Info("ECUKom.InitVCI()", "Ediabas version loaded: {0}", cfgValue2);
                         api.apiGetConfig("IfhVersion", out var cfgValue3);
-                        //Log.Info("ECUKom.InitVCI()", "IfhVersion version loaded: {0}", cfgValue3);
+                        Log.Info("ECUKom.InitVCI()", "IfhVersion version loaded: {0}", cfgValue3);
                         api.apiGetConfig("Session", out var cfgValue4);
-                        //Log.Info("ECUKom.InitVCI()", "Session name: {0}", cfgValue4);
+                        Log.Info("ECUKom.InitVCI()", "Session name: {0}", cfgValue4);
                         api.apiGetConfig("Interface", out var cfgValue5);
-                        //Log.Info("ECUKom.InitVCI()", "Interface type loaded: {0}", cfgValue5);
+                        Log.Info("ECUKom.InitVCI()", "Interface type loaded: {0}", cfgValue5);
                         if (device.VCIType == VCIDeviceType.ICOM || (!string.IsNullOrEmpty(cfgValue5) && cfgValue5.StartsWith("remote", StringComparison.OrdinalIgnoreCase)))
                         {
                             string cfgValue6 = null;
                             api.apiGetConfig("DisconnectOnApiEnd", out var cfgValue7);
-                            //Log.Info("ECUKom.InitVCI()", "DisconnectOnApiEnd configured: {0}", cfgValue7);
+                            Log.Info("ECUKom.InitVCI()", "DisconnectOnApiEnd configured: {0}", cfgValue7);
                             api.apiGetConfig("TimeoutReceive", out var cfgValue8);
-                            //Log.Info("ECUKom.InitVCI()", "TimeoutConnect configured: {0}", cfgValue6);
+                            Log.Info("ECUKom.InitVCI()", "TimeoutConnect configured: {0}", cfgValue6);
                             api.apiGetConfig("TimeoutConnect", out cfgValue6);
-                            //Log.Info("ECUKom.InitVCI()", "TimeoutReceive configured: {0}", cfgValue8);
+                            Log.Info("ECUKom.InitVCI()", "TimeoutReceive configured: {0}", cfgValue8);
                             api.apiGetConfig("TimeoutFunction", out var cfgValue9);
-                            //Log.Info("ECUKom.InitVCI()", "TimeoutFunction configured: {0}", cfgValue9);
+                            Log.Info("ECUKom.InitVCI()", "TimeoutFunction configured: {0}", cfgValue9);
                             api.apiGetConfig("TimeResponsePending", out var cfgValue10);
-                            //Log.Info("ECUKom.InitVCI()", "TimeResponsePending configured: {0}", cfgValue10);
+                            Log.Info("ECUKom.InitVCI()", "TimeResponsePending configured: {0}", cfgValue10);
                         }
                     }
                     SetEcuPath(logging);
                 }
                 return flag;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.InitVCI()", exception);
+                Log.WarningException("ECUKom.InitVCI()", exception);
             }
             return true;
         }
@@ -534,7 +535,8 @@ namespace PsdzClient.Core.Container
             return apiJob(ecu, job, param, resultFilter, cacheAdding);
         }
 
-        public IEcuJob ApiJob(string ecu, string job, string param, string resultFilter, int retries, bool fastaActive)
+        // [UH] added default values
+        public IEcuJob ApiJob(string ecu, string job, string param, string resultFilter = "", int retries = 0, bool fastaActive = true)
         {
             return (retries == 0) ? apiJob(ecu, job, param, resultFilter) : apiJob(ecu, job, param, resultFilter, retries, 0);
         }
@@ -546,11 +548,23 @@ namespace PsdzClient.Core.Container
 
         public ECUJob apiJob(string variant, string job, string param, string resultFilter, int retries, string sgbd = "")
         {
+            if (FromFastaConfig && !string.IsNullOrEmpty(sgbd) && apiJobNamesToBeCached.Contains(job))
+            {
+                ECUJob jobFromCache = GetJobFromCache(sgbd, job, param, resultFilter);
+                if (jobFromCache != null && (CommunicationMode == CommMode.Simulation || (jobFromCache.JobErrorCode != 0 && jobFromCache.JobResult != null && jobFromCache.JobResult.Count > 0)))
+                {
+                    return jobFromCache;
+                }
+            }
             return apiJob(variant, job, param, resultFilter, retries, 0);
         }
 
         public ECUJob apiJob(string ecu, string jobName, string param, string resultFilter, int retries, int millisecondsTimeout)
         {
+            if (retries > 5)
+            {
+                Log.Warning("ECUKom.apiJob()", "Number of retries is set to {0}.", retries);
+            }
             try
             {
                 ECUJob eCUJob = apiJob(ecu, jobName, param, resultFilter);
@@ -562,15 +576,15 @@ namespace PsdzClient.Core.Container
                 while (num2 < retries && !eCUJob.IsDone())
                 {
                     Thread.Sleep(millisecondsTimeout);
-                    //Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJob()", "(Sgbd: {0}, {1}) - is retrying {2} times", ecu, jobName, num2);
+                    Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJob()", "(Sgbd: {0}, {1}) - is retrying {2} times", ecu, jobName, num2);
                     eCUJob = apiJob(ecu, jobName, param, resultFilter);
                     num2 = (ushort)(num2 + 1);
                 }
                 return eCUJob;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.apiJob()", exception);
+                Log.WarningException("ECUKom.apiJob()", exception);
                 ECUJob eCUJob = new ECUJob();
                 eCUJob.EcuName = ecu;
                 eCUJob.ExecutionStartTime = DateTime.Now;
@@ -603,9 +617,9 @@ namespace PsdzClient.Core.Container
                 }
                 return eCUJob;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.apiJob()", exception);
+                Log.WarningException("ECUKom.apiJob()", exception);
             }
             ECUJob eCUJob2 = new ECUJob();
             eCUJob2.EcuName = ecu;
@@ -616,6 +630,10 @@ namespace PsdzClient.Core.Container
             eCUJob2.JobErrorCode = 91;
             eCUJob2.JobErrorText = "SYS-0001: ILLEGAL FUNCTION";
             eCUJob2.JobResult = new List<ECUResult>();
+            if (VehicleCommunication.DebugLevel > 2)
+            {
+                ECUJob.Dump(eCUJob2);
+            }
             return eCUJob2;
         }
 
@@ -643,10 +661,11 @@ namespace PsdzClient.Core.Container
                 resultFilter = string.Empty;
             }
 
+            DateTimePrecise dateTimePrecise = new DateTimePrecise(10L);
             int num2 = 0;
             ECUJob eCUJob5 = new ECUJob();
             eCUJob5.EcuName = ecu;
-            eCUJob5.ExecutionStartTime = DateTime.Now;
+            eCUJob5.ExecutionStartTime = dateTimePrecise.Now;
             eCUJob5.JobName = jobName;
             eCUJob5.JobParam = param;
             eCUJob5.JobResultFilter = resultFilter;
@@ -658,7 +677,7 @@ namespace PsdzClient.Core.Container
                     api.apiEnd();
                     if (!InitVCI(vci, logging: false))
                     {
-                        //Log.Warning("ECUKom.apiJob()", "failed to switch/reinit ediabas API");
+                        Log.Warning("ECUKom.apiJob()", "failed to switch/reinit ediabas API");
                     }
                 }
                 api.apiJob(ecu, jobName, param, resultFilter);
@@ -672,12 +691,12 @@ namespace PsdzClient.Core.Container
                 eCUJob5.JobResultSets = rsets;
                 if (rsets > 0)
                 {
-                    //Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJob()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - successfully called: {4}:{5} RSets: {6}", ecu, jobName, param, resultFilter, eCUJob5.JobErrorCode, eCUJob5.JobErrorText, rsets);
-                    for (ushort num4 = 0; num4 <= rsets; num4 = (ushort)(num4 + 1))
+                    Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJob()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - successfully called: {4}:{5} RSets: {6}", ecu, jobName, param, resultFilter, eCUJob5.JobErrorCode, eCUJob5.JobErrorText, rsets);
+                    for (ushort num4 = 0; num4 <= rsets; num4++)
                     {
                         if (api.apiResultNumber(out var buffer, num4))
                         {
-                            for (ushort num5 = 1; num5 <= buffer; num5 = (ushort)(num5 + 1))
+                            for (ushort num5 = 1; num5 <= buffer; num5++)
                             {
                                 ECUResult eCUResult = new ECUResult();
                                 string buffer2 = string.Empty;
@@ -786,18 +805,18 @@ namespace PsdzClient.Core.Container
                 }
                 if (num2 != 0)
                 {
-                    //Log.Info("ECUKom.apiJob()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - failed with apiError: {4}:{5}", ecu, jobName, param, resultFilter, eCUJob5.JobErrorCode, eCUJob5.JobErrorText);
+                    Log.Info("ECUKom.apiJob()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - failed with apiError: {4}:{5}", ecu, jobName, param, resultFilter, eCUJob5.JobErrorCode, eCUJob5.JobErrorText);
                 }
             }
             catch (IndexOutOfRangeException)
             {
-                //Log.Warning("ECUKom.apiJob()", "buggy sgbd ({0}, {1}, {2}, {3}) apiError: {4} found; wrong result set length was set", ecu, jobName, param, resultFilter, eCUJob5.JobErrorText);
+                Log.Warning("ECUKom.apiJob()", "buggy sgbd ({0}, {1}, {2}, {3}) apiError: {4} found; wrong result set length was set", ecu, jobName, param, resultFilter, eCUJob5.JobErrorText);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.apiJob()", exception);
+                Log.WarningException("ECUKom.apiJob()", exception);
             }
-            eCUJob5.ExecutionEndTime = DateTime.Now;
+            eCUJob5.ExecutionEndTime = dateTimePrecise.Now;
             AddJobInCache(eCUJob5, cacheAdding);
             return eCUJob5;
         }
@@ -823,15 +842,15 @@ namespace PsdzClient.Core.Container
                 ushort num2 = 0;
                 while (num2 < retries && !eCUJob.IsDone())
                 {
-                    //Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJobData()", "(Sgbd: {0}, {1}) - is retrying {2} times", ecu, job, num2);
+                    Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJobData()", "(Sgbd: {0}, {1}) - is retrying {2} times", ecu, job, num2);
                     eCUJob = apiJobData(ecu, job, param, paramlen, resultFilter);
                     num2 = (ushort)(num2 + 1);
                 }
                 return eCUJob;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.apiJobData()", exception);
+                Log.WarningException("ECUKom.apiJobData()", exception);
                 ECUJob eCUJob = new ECUJob();
                 eCUJob.EcuName = ecu;
                 eCUJob.JobName = job;
@@ -874,11 +893,12 @@ namespace PsdzClient.Core.Container
                 paramlen = param.Length;
             }
 
+            DateTimePrecise dateTimePrecise = new DateTimePrecise(10L);
             int num2 = 0;
             ECUJob eCUJob4 = new ECUJob();
             eCUJob4.EcuName = ecu;
             eCUJob4.JobName = job;
-            eCUJob4.ExecutionStartTime = DateTime.Now;
+            eCUJob4.ExecutionStartTime = dateTimePrecise.Now;
             eCUJob4.ExecutionEndTime = eCUJob4.ExecutionStartTime;
             eCUJob4.JobResultFilter = resultFilter;
             eCUJob4.JobResult = new List<ECUResult>();
@@ -890,7 +910,7 @@ namespace PsdzClient.Core.Container
                     api.apiEnd();
                     if (!InitVCI(vci, logging: false))
                     {
-                        //Log.Warning("ECUKom.apiJob()", "failed to switch/reinit ediabas API");
+                        Log.Warning("ECUKom.apiJob()", "failed to switch/reinit ediabas API");
                     }
                 }
                 api.apiJobData(ecu, job, param, paramlen, resultFilter);
@@ -902,15 +922,15 @@ namespace PsdzClient.Core.Container
                 eCUJob4.JobErrorText = api.apiErrorText();
                 if (num2 == 0)
                 {
-                    //Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJobData()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - successfully called: {4}:{5}", ecu, job, param, resultFilter, eCUJob4.JobErrorCode, eCUJob4.JobErrorText);
+                    Log.Debug(VehicleCommunication.DebugLevel, "ECUKom.apiJobData()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - successfully called: {4}:{5}", ecu, job, param, resultFilter, eCUJob4.JobErrorCode, eCUJob4.JobErrorText);
                     if (api.apiResultSets(out var rsets))
                     {
                         eCUJob4.JobResultSets = rsets;
-                        for (ushort num4 = 0; num4 <= rsets; num4 = (ushort)(num4 + 1))
+                        for (ushort num4 = 0; num4 <= rsets; num4++)
                         {
                             if (api.apiResultNumber(out var buffer, num4))
                             {
-                                for (ushort num5 = 1; num5 <= buffer; num5 = (ushort)(num5 + 1))
+                                for (ushort num5 = 1; num5 <= buffer; num5++)
                                 {
                                     ECUResult eCUResult = new ECUResult();
                                     eCUResult.Set = num4;
@@ -1019,20 +1039,79 @@ namespace PsdzClient.Core.Container
                 }
                 else
                 {
-                    //Log.Warning("ECUKom.apiJobData()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - failed with apiError: {4}:{5}", ecu, job, param, resultFilter, eCUJob4.JobErrorCode, eCUJob4.JobErrorText);
+                    Log.Warning("ECUKom.apiJobData()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - failed with apiError: {4}:{5}", ecu, job, param, resultFilter, eCUJob4.JobErrorCode, eCUJob4.JobErrorText);
                 }
             }
             catch (IndexOutOfRangeException)
             {
-                //Log.Warning("ECUKom.apiJobData()", "buggy sgbd ({0}, {1}, {2}, {3}) apiError: {4} found; wrong result set length was set", ecu, job, param, resultFilter, eCUJob4.JobErrorText);
+                Log.Warning("ECUKom.apiJobData()", "buggy sgbd ({0}, {1}, {2}, {3}) apiError: {4} found; wrong result set length was set", ecu, job, param, resultFilter, eCUJob4.JobErrorText);
             }
-            catch (Exception)
+            catch (Exception ex3)
             {
-                //Log.Warning("ECUKom.apiJobData()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - failed with exception: {4}", ecu, job, param, resultFilter, ex3.ToString());
+                Log.Warning("ECUKom.apiJobData()", "(ecu: {0}, job: {1}, param: {2}, resultFilter {3}) - failed with exception: {4}", ecu, job, param, resultFilter, ex3.ToString());
             }
-            eCUJob4.ExecutionEndTime = DateTime.Now;
+            eCUJob4.ExecutionEndTime = dateTimePrecise.Now;
             AddJobInCache(eCUJob4);
             return eCUJob4;
+        }
+
+        public int getErrorCode()
+        {
+            return api.apiErrorCode();
+        }
+
+        public string getErrorText()
+        {
+            return api.apiErrorText();
+        }
+
+        public int getState(int suspendTime)
+        {
+            return api.apiStateExt(suspendTime);
+        }
+
+        public bool setConfig(string cfgName, string cfgValue)
+        {
+            return api.apiSetConfig(cfgName, cfgValue);
+        }
+
+        public ECUJob GetJobFromCache(string ecuName, string jobName, string jobParam, string jobResultFilter)
+        {
+            Log.Info("ECUKom.GetJobFromCache()", "Try retrieve from Cache: EcuName:{0}, JobName:{1}, JobParam:{2})", ecuName, jobName, jobParam);
+            if (!ecuJobDictionary.ContainsKey(ecuName + "-" + jobName))
+            {
+                ecuJobDictionary.Add(ecuName + "-" + jobName, new List<ECUJob>());
+            }
+            try
+            {
+                IEnumerable<ECUJob> enumerable = jobList.Where((ECUJob job) => string.Equals(job.EcuName, ecuName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobName, jobName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobParam, jobParam, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobResultFilter, jobResultFilter, StringComparison.OrdinalIgnoreCase) && job.ExecutionStartTime > lastJobExecution);
+                if (enumerable != null && enumerable.Count() > 0)
+                {
+                    return RetrieveEcuJob(enumerable, ecuName, jobName);
+                }
+                IEnumerable<ECUJob> enumerable2 = jobList.Where((ECUJob job) => string.Equals(job.EcuName, ecuName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobName, jobName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobParam, jobParam, StringComparison.OrdinalIgnoreCase) && job.ExecutionStartTime > lastJobExecution);
+                if (enumerable2 != null && enumerable2.Count() > 0)
+                {
+                    return RetrieveEcuJob(enumerable2, ecuName, jobName);
+                }
+                IEnumerable<ECUJob> enumerable3 = jobList.Where((ECUJob job) => string.Equals(job.EcuName, ecuName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobName, jobName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobParam, jobParam, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobResultFilter, jobResultFilter, StringComparison.OrdinalIgnoreCase));
+                if (enumerable3 != null && enumerable3.Count() > 0)
+                {
+                    return RetrieveEcuJobNoExecTime(enumerable3, ecuName, jobName);
+                }
+                IEnumerable<ECUJob> enumerable4 = jobList.Where((ECUJob job) => string.Equals(job.EcuName, ecuName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobName, jobName, StringComparison.OrdinalIgnoreCase) && string.Equals(job.JobParam, jobParam, StringComparison.OrdinalIgnoreCase));
+                if (enumerable4 != null && enumerable4.Count() > 0)
+                {
+                    return RetrieveEcuJobNoExecTime(enumerable4, ecuName, jobName);
+                }
+                CacheMissCounter++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("ECUKom.GetJobFromCache()", "job {0},{1}) - failed with exception {2}", ecuName, jobName, ex.ToString());
+            }
+            Log.Info("ECUKom.GetJobFromCache()", "No result! EcuName:{0}, JobName:{1}, JobParam:{2})", ecuName, jobName, jobParam);
+            return null;
         }
 
         public IEcuJob ExecuteJobOverEnet(string icomAddress, string ecu, string job, string param, string resultFilter = "", int retries = 0)
@@ -1041,18 +1120,18 @@ namespace PsdzClient.Core.Container
             string istaLogPath = GetIstaLogPath();
             if (string.IsNullOrEmpty(istaLogPath))
             {
-                //Log.Warning("EdiabasUtils.ExecuteJobOverEnet()", "Path to ista log cannot be found.");
+                Log.Warning("EdiabasUtils.ExecuteJobOverEnet()", "Path to ista log cannot be found.");
                 return null;
             }
             string text = (IsProblemHandlingTraceRunning ? "5" : "0");
             if (!ApiInitExt("ENET", "_", "Rheingold", "RemoteHost=" + icomAddress + ";DiagnosticPort=51560;ControlPort=51561;TracePath=" + istaLogPath + ";ApiTrace=" + text))
             {
-                //Log.Warning("EdiabasUtils.ExecuteJobOverEnet()", "Failed switching to ENET. The Job will not be executed. The EDIABAS connection will be refreshed.");
+                Log.Warning("EdiabasUtils.ExecuteJobOverEnet()", "Failed switching to ENET. The Job will not be executed. The EDIABAS connection will be refreshed.");
                 RefreshEdiabasConnection();
                 return null;
             }
             SetEcuPath(logging: true);
-            IEcuJob result = ApiJob(ecu, job, param, resultFilter, retries, true);
+            IEcuJob result = ApiJob(ecu, job, param, resultFilter, retries);
             RefreshEdiabasConnection();
             return result;
         }
@@ -1061,11 +1140,11 @@ namespace PsdzClient.Core.Container
         {
             if (Refresh())
             {
-                //Log.Info("EdiabasUtils.RefreshEdiabasConnection()", "Successfully connected to current VCI device.");
+                Log.Info("EdiabasUtils.RefreshEdiabasConnection()", "Successfully connected to current VCI device.");
             }
             else
             {
-                //Log.Error("EdiabasUtils.RefreshEdiabasConnection()", "Failed to connect to current VCI device!");
+                Log.Error("EdiabasUtils.RefreshEdiabasConnection()", "Failed to connect to current VCI device!");
             }
         }
 
@@ -1074,12 +1153,12 @@ namespace PsdzClient.Core.Container
             string result = string.Empty;
             try
             {
-                string pathString = "..\\..\\..\\logs";
+                string pathString = ConfigSettings.getPathString("BMW.Rheingold.Logging.Directory.Current", "..\\..\\..\\logs");
                 result = Path.GetFullPath(pathString);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                //Log.Warning("EdiabasUtils.GetIstaLogPath()", "Exception occurred: ", ex);
+                Log.Warning("EdiabasUtils.GetIstaLogPath()", "Exception occurred: ", ex);
             }
             return result;
         }
@@ -1095,7 +1174,7 @@ namespace PsdzClient.Core.Container
                         lastJobExecution = GetLastExecutionTime(item.ExecutionStartTime);
                     }
                     ecuJobDictionary[ecuName + "-" + jobName].Add(item);
-                    //Log.Debug(VehicleCommunication.DebugLevel, 2, "ECUKom.GetJobFromCache()", "4th try: found job {0}/{1}/{2}/{3}/{4} at {5}", item.EcuName, item.JobName, item.JobParam, item.JobErrorCode, item.JobErrorText, item.ExecutionStartTime);
+                    Log.Debug(VehicleCommunication.DebugLevel, 2, "ECUKom.GetJobFromCache()", "4th try: found job {0}/{1}/{2}/{3}/{4} at {5}", item.EcuName, item.JobName, item.JobParam, item.JobErrorCode, item.JobErrorText, item.ExecutionStartTime);
                     CacheHitCounter++;
                     return item;
                 }
@@ -1106,7 +1185,28 @@ namespace PsdzClient.Core.Container
             {
                 lastJobExecution = GetLastExecutionTime(query.First().ExecutionStartTime);
             }
-            //Log.Debug(VehicleCommunication.DebugLevel, 2, "ECUKom.GetJobFromCache()", "1st try: found job {0}/{1}/{2}/{3}/{4} at {5}", query.First().EcuName, query.First().JobName, query.First().JobParam, query.First().JobErrorCode, query.First().JobErrorText, query.First().ExecutionStartTime);
+            Log.Debug(VehicleCommunication.DebugLevel, 2, "ECUKom.GetJobFromCache()", "1st try: found job {0}/{1}/{2}/{3}/{4} at {5}", query.First().EcuName, query.First().JobName, query.First().JobParam, query.First().JobErrorCode, query.First().JobErrorText, query.First().ExecutionStartTime);
+            CacheHitCounter++;
+            return query.First();
+        }
+
+        private ECUJob RetrieveEcuJob(IEnumerable<ECUJob> query, string ecuName, string jobName)
+        {
+            foreach (ECUJob item in query)
+            {
+                if (!ecuJobDictionary[ecuName + "-" + jobName].Contains(item))
+                {
+                    ecuJobDictionary[ecuName + "-" + jobName].Add(item);
+                    lastJobExecution = GetLastExecutionTime(item.ExecutionStartTime);
+                    Log.Debug(VehicleCommunication.DebugLevel, 2, "ECUKom.GetJobFromCache()", "1st try: found job {0}/{1}/{2}/{3}/{4} at {5}", item.EcuName, item.JobName, item.JobParam, item.JobErrorCode, item.JobErrorText, item.ExecutionStartTime);
+                    CacheHitCounter++;
+                    return item;
+                }
+            }
+            ecuJobDictionary[ecuName + "-" + jobName].Clear();
+            ecuJobDictionary[ecuName + "-" + jobName].Add(query.First());
+            lastJobExecution = GetLastExecutionTime(query.First().ExecutionStartTime);
+            Log.Debug(VehicleCommunication.DebugLevel, 2, "ECUKom.GetJobFromCache()", "1st try: found job {0}/{1}/{2}/{3}/{4} at {5}", query.First().EcuName, query.First().JobName, query.First().JobParam, query.First().JobErrorCode, query.First().JobErrorText, query.First().ExecutionStartTime);
             CacheHitCounter++;
             return query.First();
         }
@@ -1124,13 +1224,12 @@ namespace PsdzClient.Core.Container
             return executionStartTime;
         }
 
-
         private void AddJobInCache(ECUJob job, bool cacheCondition = true)
         {
             if (jobList != null && cacheCondition)
             {
-                //string msg = "Store in Cache: EcuName:" + job.EcuName + ", JobName:" + job.JobName + ", JobParam:" + job.JobParam;
-                //Log.Info("ECUKom.AddJobInCache()", msg);
+                string msg = "Store in Cache: EcuName:" + job.EcuName + ", JobName:" + job.JobName + ", JobParam:" + job.JobParam;
+                Log.Info("ECUKom.AddJobInCache()", msg);
                 jobList.Add(job);
             }
         }
@@ -1150,9 +1249,9 @@ namespace PsdzClient.Core.Container
                 }
                 while (num2 < 10);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException(Log.CurrentMethod(), exception);
+                Log.WarningException(Log.CurrentMethod(), exception);
             }
             return stringBuilder.ToString();
         }
@@ -1176,9 +1275,9 @@ namespace PsdzClient.Core.Container
                 while (!eCUJob.IsDone() || eCUJob.IsJobState("ERROR_ECU_REQUEST_CORRECTLY_RECEIVED__RESPONSE_PENDING"));
                 return eCUJob;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ECUKom.apiJobWaitWhenPending()", exception);
+                Log.WarningException("ECUKom.apiJobWaitWhenPending()", exception);
                 eCUJob = new ECUJob();
                 eCUJob.EcuName = ecu;
                 eCUJob.ExecutionStartTime = DateTime.Now;
@@ -1202,6 +1301,11 @@ namespace PsdzClient.Core.Container
         public int getState()
         {
             return api.apiState();
+        }
+
+        public int waitJobDone(int suspendTime)
+        {
+            return getState(suspendTime);
         }
     }
 }

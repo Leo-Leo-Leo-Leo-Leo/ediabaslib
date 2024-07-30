@@ -919,6 +919,59 @@ namespace Ediabas
             return true;
         }
 
+        public bool apiResultLongLong(out long buffer, string result, ushort rset)
+        {
+            logFormat(ApiLogLevel.Normal, "apiResultLongLong({0}, {1})", result, rset);
+
+            buffer = 0;
+            if (!waitJobFinish())
+            {
+                logFormat(ApiLogLevel.Normal, "={0}", false);
+                return false;
+            }
+
+            setLocalError(EDIABAS_ERR_NONE);
+            if (!getResultInt64(out Int64 int64Buffer, out EdiabasLib.EdiabasNet.ResultType resultType, result, rset))
+            {
+                return false;
+            }
+
+            if (resultType == EdiabasNet.ResultType.TypeD)
+            {
+                buffer = (uint)int64Buffer;
+            }
+            else
+            {
+                buffer = (int)int64Buffer;
+            }
+
+            logFormat(ApiLogLevel.Normal, "={0} ({1})", true, buffer);
+            return true;
+        }
+
+        public bool apiResultQWord(out ulong buffer, string result, ushort rset)
+        {
+            logFormat(ApiLogLevel.Normal, "apiResultQWord({0}, {1})", result, rset);
+
+            buffer = 0;
+            if (!waitJobFinish())
+            {
+                logFormat(ApiLogLevel.Normal, "={0}", false);
+                return false;
+            }
+
+            setLocalError(EDIABAS_ERR_NONE);
+            if (!getResultInt64(out Int64 int64Buffer, out EdiabasLib.EdiabasNet.ResultType resultType, result, rset))
+            {
+                return false;
+            }
+
+            buffer = (uint)int64Buffer;
+
+            logFormat(ApiLogLevel.Normal, "={0} ({1})", true, buffer);
+            return true;
+        }
+
         public bool apiResultReal(out double buffer, string result, ushort rset)
         {
             logFormat(ApiLogLevel.Normal, "apiResultReal({0}, {1})", result, rset);
@@ -1550,13 +1603,21 @@ namespace Ediabas
 
         private bool getResultInt64(out Int64 buffer, string result, ushort rset)
         {
+            return getResultInt64(out buffer, out _, result, rset);
+        }
+
+        private bool getResultInt64(out Int64 buffer, out EdiabasNet.ResultType resultType, string result, ushort rset)
+        {
             buffer = 0;
+            resultType = EdiabasNet.ResultType.TypeL;
             EdiabasNet.ResultData resultData = getResultData(result, rset);
             if (resultData == null)
             {
                 logFormat(ApiLogLevel.Normal, "={0}", false);
                 return false;
             }
+
+            resultType = resultData.ResType;
             if ((resultData.OpData is long))
             {
                 buffer = (Int64)resultData.OpData;

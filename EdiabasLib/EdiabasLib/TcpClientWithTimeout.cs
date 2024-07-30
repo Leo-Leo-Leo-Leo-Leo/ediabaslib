@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -23,12 +22,7 @@ namespace EdiabasLib
         private readonly bool? _noDelay;
         private readonly int? _sendBufferSize;
         private TcpClient _connection;
-#if WindowsCE
-        private bool _connected;
-        private Exception _exception;
-#else
         public static readonly long TickResolMs = System.Diagnostics.Stopwatch.Frequency / 1000;
-#endif
 
 #if __ANDROID__
         public class NetworkData
@@ -80,7 +74,6 @@ namespace EdiabasLib
                 _connection.SendBufferSize = _sendBufferSize.Value;
             }
 
-#if !WindowsCE
             using (System.Threading.CancellationTokenSource cts = new System.Threading.CancellationTokenSource())
             {
                 System.Threading.AutoResetEvent threadFinishEvent = null;
@@ -128,59 +121,7 @@ namespace EdiabasLib
             }
 
             return _connection;
-#else
-            // kick off the thread that tries to connect
-            _connected = false;
-            _exception = null;
-            Thread thread = new Thread(BeginConnect)
-            {
-                IsBackground = true
-            };
-            // So that a failed connection attempt
-            // wont prevent the process from terminating while it does the long timeout
-            thread.Start();
-
-            // wait for either the timeout or the thread to finish
-            thread.Join(_timeoutMilliseconds);
-
-            if (_connected)
-            {
-                // it succeeded, so return the connection
-                thread.Abort();
-                return _connection;
-            }
-            if (_exception != null)
-            {
-                // it crashed, so return the exception to the caller
-                thread.Abort();
-                throw _exception;
-            }
-            else
-            {
-                // if it gets here, it timed out, so abort the thread and throw an exception
-                thread.Abort();
-                throw new TimeoutException("Connect timeout");
-            }
-#endif
         }
-
-#if WindowsCE
-        private void BeginConnect()
-        {
-            try
-            {
-                IPEndPoint ipTcp = new IPEndPoint(_host, _port);
-                _connection.Connect(ipTcp);
-                // record that it succeeded, for the main thread to return to the caller
-                _connected = true;
-            }
-            catch (Exception ex)
-            {
-                // record the exception for the main thread to re-throw back to the calling code
-                _exception = ex;
-            }
-        }
-#endif
 
         public static void ExecuteNetworkCommand(ExecuteNetworkDelegate command, IPAddress ipAddr, object networkDataObject)
         {
@@ -230,22 +171,9 @@ namespace EdiabasLib
 
                                         foreach (Java.Net.InterfaceAddress interfaceAddress in interfaceAdresses)
                                         {
-                                            if (interfaceAddress.Address is Java.Net.Inet4Address)
+                                            if (interfaceAddress.Address is Java.Net.Inet4Address interface4Addr)
                                             {
-                                                byte[] linkAddrBytes = interfaceAddress.Address.GetAddress();
-                                                byte[] inet4AddrBytes = inet4Addr.GetAddress();
-                                                if (linkAddrBytes.Length == inet4AddrBytes.Length)
-                                                {
-                                                    for (int bit = interfaceAddress.NetworkPrefixLength; bit < linkAddrBytes.Length * 8; bit++)
-                                                    {
-                                                        int index = bit >> 3;
-                                                        byte mask = (byte)(0x80 >> (bit & 0x07));
-                                                        linkAddrBytes[index] |= mask;
-                                                        inet4AddrBytes[index] |= mask;
-                                                    }
-                                                }
-
-                                                if (linkAddrBytes.SequenceEqual(inet4AddrBytes))
+                                                if (IsIpMatchingSubnet(inet4Addr, interface4Addr, interfaceAddress.NetworkPrefixLength))
                                                 {
                                                     linkValid = true;
                                                     break;
@@ -274,6 +202,7 @@ namespace EdiabasLib
             if (Android.OS.Build.VERSION.SdkInt < Android.OS.BuildVersionCodes.M)
             {
 #pragma warning disable 618
+#pragma warning disable CA1422
                 Android.Net.Network defaultNetwork = Android.Net.ConnectivityManager.ProcessDefaultNetwork;
                 try
                 {
@@ -284,6 +213,7 @@ namespace EdiabasLib
                 {
                     Android.Net.ConnectivityManager.SetProcessDefaultNetwork(defaultNetwork);
                 }
+#pragma warning restore CA1422
 #pragma warning restore 618
                 return;
             }
@@ -349,6 +279,40 @@ namespace EdiabasLib
             catch (Exception)
             {
                 return null;
+            }
+        }
+
+        public static bool IsIpMatchingSubnet(Java.Net.Inet4Address ipAddr, Java.Net.Inet4Address networkAddr, int prefixLen)
+        {
+            try
+            {
+                byte[] ipAddrBytes = ipAddr.GetAddress();
+                byte[] networkBytes = networkAddr.GetAddress();
+
+                if (ipAddrBytes != null && networkBytes != null)
+                {
+                    if (ipAddrBytes.Length == networkBytes.Length)
+                    {
+                        for (int bit = prefixLen; bit < networkBytes.Length * 8; bit++)
+                        {
+                            int index = bit >> 3;
+                            byte mask = (byte)(0x80 >> (bit & 0x07));
+                            ipAddrBytes[index] |= mask;
+                            networkBytes[index] |= mask;
+                        }
+                    }
+
+                    if (ipAddrBytes.SequenceEqual(networkBytes))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception)
+            {
+                return false;
             }
         }
 #endif

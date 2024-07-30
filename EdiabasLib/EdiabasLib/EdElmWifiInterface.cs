@@ -34,13 +34,13 @@ namespace EdiabasLib
         protected static object NetworkData;
         private static EdElmInterface _edElmInterface;
 
-        static EdElmWifiInterface()
-        {
-        }
-
         public static NetworkStream NetworkStream => TcpElmStream;
 
         public static EdiabasNet Ediabas { get; set; }
+
+        static EdElmWifiInterface()
+        {
+        }
 
         public static bool InterfaceConnect(string port, object parameter)
         {
@@ -132,7 +132,7 @@ namespace EdiabasLib
             {
                 if (TcpElmStream != null)
                 {
-                    TcpElmStream.Close();
+                    TcpElmStream.Dispose();
                     TcpElmStream = null;
                 }
             }
@@ -145,7 +145,7 @@ namespace EdiabasLib
             {
                 if (TcpElmClient != null)
                 {
-                    TcpElmClient.Close();
+                    TcpElmClient.Dispose();
                     TcpElmClient = null;
                 }
             }

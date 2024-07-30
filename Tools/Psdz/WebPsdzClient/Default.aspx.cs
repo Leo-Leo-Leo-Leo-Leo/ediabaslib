@@ -15,46 +15,19 @@ using WebPsdzClient.App_Data;
 
 namespace WebPsdzClient
 {
-    public partial class _Default : Page
+    public partial class _Default : BasePage
     {
         private static readonly ILog log = LogManager.GetLogger(typeof(_Default));
-
-        protected override void InitializeCulture()
-        {
-            SessionContainer.SetLogInfo(Session.SessionID);
-            SessionContainer sessionContainer = GetSessionContainer();
-            if (sessionContainer == null)
-            {
-                return;
-            }
-
-            string language = sessionContainer.GetLanguage();
-            if (!string.IsNullOrEmpty(language))
-            {
-                try
-                {
-                    CultureInfo culture = CultureInfo.CreateSpecificCulture(language.ToLowerInvariant());
-                    Thread.CurrentThread.CurrentCulture = culture;
-                    Thread.CurrentThread.CurrentUICulture = culture;
-                    Culture = culture.TwoLetterISOLanguageName;
-                    UICulture = culture.TwoLetterISOLanguageName;
-                }
-                catch (Exception ex)
-                {
-                    log.ErrorFormat("InitializeCulture Exception: {0}", ex.Message);
-                }
-            }
-            base.InitializeCulture();
-        }
 
         protected void Page_Init(object sender, EventArgs e)
         {
             //log.InfoFormat("_Default Page_Init");
         }
 
-        protected void Page_Load(object sender, EventArgs e)
+        protected override void Page_Load(object sender, EventArgs e)
         {
             //log.InfoFormat("_Default Page_Load");
+            base.Page_Load(sender, e);
             SessionContainer sessionContainer = GetSessionContainer();
             if (sessionContainer == null)
             {
@@ -69,7 +42,7 @@ namespace WebPsdzClient
             }
             else
             {
-                Control postbackControl = GetPostBackControl(this);
+                Control postbackControl = GetPostBackControl();
                 if (postbackControl == UpdatePanelStatus)
                 {
                     UpdateStatus(true);
@@ -437,17 +410,6 @@ namespace WebPsdzClient
             UpdateTimerPanel();
         }
 
-        private SessionContainer GetSessionContainer()
-        {
-            if (Session.Contents[Global.SessionContainerName] is SessionContainer sessionContainer)
-            {
-                return sessionContainer;
-            }
-
-            log.ErrorFormat("GetSessionContainer No SessionContainer");
-            return null;
-        }
-
         private void UpdateStatus(bool updatePanel = false)
         {
             log.InfoFormat("UpdateStatus Update panel: {0}", updatePanel);
@@ -590,27 +552,7 @@ namespace WebPsdzClient
                 return;
             }
 
-            if (sessionContainer.DeepObdVersion > 0)
-            {
-                sessionContainer.ReloadPage();
-            }
-            else
-            {
-                try
-                {
-                    Request.ValidateInput();
-                    string url = Request.RawUrl;
-                    log.InfoFormat("UpdateOptions Reload Url: {0}", url);
-                    if (!string.IsNullOrEmpty(url))
-                    {
-                        Response.Redirect(url, false);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    log.ErrorFormat("UpdateOptions Exception: {0}", ex.Message);
-                }
-            }
+            sessionContainer.ReloadPage();
         }
 
         private void UpdateCurrentOptions(bool updatePanel = false)
@@ -806,31 +748,6 @@ namespace WebPsdzClient
             log.InfoFormat("GetSelectedSwiActions Count: {0}", selectedSwiActions.Count);
 
             return selectedSwiActions;
-        }
-
-        public static Control GetPostBackControl(Page page)
-        {
-            Control control = null;
-            string ctrlname = page.Request.Params.Get("__EVENTTARGET");
-            if (!string.IsNullOrEmpty(ctrlname))
-            {
-                control = page.FindControl(ctrlname);
-            }
-            else
-            {
-                foreach (string ctl in page.Request.Form)
-                {
-                    Control c = page.FindControl(ctl);
-                    if (c is System.Web.UI.WebControls.Button)
-                    {
-                        control = c;
-                        break;
-                    }
-                }
-
-            }
-
-            return control;
         }
     }
 }

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Xml.Serialization;
 
 namespace BmwFileReader
@@ -16,45 +18,91 @@ namespace BmwFileReader
         public const string RulesXmlFile = "RulesInfo.xml";
         public const string RulesCsFile = "RulesInfo.cs";
         public const string HashPrefix = "HASH_";
+        public const int MaxEcuAddr = 255;
 
         [XmlType("VEI")]
-        public class VehicleEcuInfo
+        public class VehicleEcuInfo : ICloneable
         {
             public VehicleEcuInfo()
             {
             }
 
-            public VehicleEcuInfo(int diagAddr, string name, string groupSgbd)
+            public VehicleEcuInfo(int diagAddr, string name, string groupSgbd, string sgbd = null)
             {
                 DiagAddr = diagAddr;
                 Name = name;
                 GroupSgbd = groupSgbd;
+                Sgbd = sgbd;
+            }
+
+            public override string ToString()
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append("Diag: ");
+                sb.Append(DiagAddr.ToString(CultureInfo.InvariantCulture));
+
+                if (!string.IsNullOrEmpty(Name))
+                {
+                    sb.Append(", Name: '");
+                    sb.Append(Name);
+                    sb.Append("'");
+                }
+
+                if (!string.IsNullOrEmpty(GroupSgbd))
+                {
+                    sb.Append(", Group: '");
+                    sb.Append(GroupSgbd);
+                    sb.Append("'");
+                }
+
+                if (!string.IsNullOrEmpty(Sgbd))
+                {
+                    sb.Append(", SGBD: '");
+                    sb.Append(Sgbd);
+                    sb.Append("'");
+                }
+
+                return sb.ToString();
+            }
+
+            public VehicleEcuInfo Clone()
+            {
+                VehicleEcuInfo other = (VehicleEcuInfo)MemberwiseClone();
+                return other;
+            }
+
+            object ICloneable.Clone()
+            {
+                return Clone();
             }
 
             [XmlElement("DA")] public int DiagAddr { get; set; }
             [XmlElement("Nm"), DefaultValue(null)] public string Name { get; set; }
             [XmlElement("GS"), DefaultValue(null)] public string GroupSgbd { get; set; }
+            [XmlElement("SG"), DefaultValue(null)] public string Sgbd { get; set; }
         }
 
         [XmlInclude(typeof(VehicleEcuInfo))]
         [XmlType("VSI")]
-        public class VehicleSeriesInfo
+        public class VehicleSeriesInfo : ICloneable
         {
             public VehicleSeriesInfo()
             {
             }
 
-            public VehicleSeriesInfo(string series, string modelSeries, string brSgbd, List<string> sgdbAdd, string bnType, List<string> brandList = null, List<VehicleEcuInfo> ecuList = null, string date = null, string dateCompare = null)
+            public VehicleSeriesInfo(string series, string modelSeries, string brSgbd, string sgbdAdd, string bnType, string brand = null, string date = null, string dateCompare = null, List <VehicleEcuInfo> ruleEcus = null, List <VehicleEcuInfo> ecuList = null, string ruleFormula = null)
             {
                 Series = series;
                 ModelSeries = modelSeries;
                 BrSgbd = brSgbd;
-                SgdbAdd = sgdbAdd;
+                SgbdAdd = sgbdAdd;
                 BnType = bnType;
-                BrandList = brandList;
-                EcuList = ecuList;
+                Brand = brand;
                 Date = date;
                 DateCompare = dateCompare;
+                RuleEcus = ruleEcus;
+                EcuList = ecuList;
+                RuleFormula = ruleFormula;
             }
 
             public void ResetDate()
@@ -63,15 +111,30 @@ namespace BmwFileReader
                 DateCompare = null;
             }
 
+            public VehicleSeriesInfo Clone()
+            {
+                VehicleSeriesInfo other = (VehicleSeriesInfo) MemberwiseClone();
+                other.RuleEcus = RuleEcus.ConvertAll(x => x.Clone()).ToList();
+                other.EcuList = EcuList.ConvertAll(x => x.Clone()).ToList();
+                return other;
+            }
+
+            object ICloneable.Clone()
+            {
+                return Clone();
+            }
+
             [XmlElement("Sr"), DefaultValue(null)] public string Series { get; set; }
             [XmlElement("MS"), DefaultValue(null)] public string ModelSeries { get; set; }
             [XmlElement("BS"), DefaultValue(null)] public string BrSgbd { get; set; }
-            [XmlElement("SA"), DefaultValue(null)] public List<string> SgdbAdd { get; set; }
+            [XmlElement("SA"), DefaultValue(null)] public string SgbdAdd { get; set; }
             [XmlElement("BT"), DefaultValue(null)] public string BnType { get; set; }
-            [XmlElement("BL"), DefaultValue(null)] public List<string> BrandList { get; set; }
-            [XmlElement("EL"), DefaultValue(null)] public List<VehicleEcuInfo> EcuList { get; set; }
+            [XmlElement("BL"), DefaultValue(null)] public string Brand { get; set; }
             [XmlElement("Dt"), DefaultValue(null)] public string Date { get; set; }
             [XmlElement("DtC"), DefaultValue(null)] public string DateCompare { get; set; }
+            [XmlElement("RE"), DefaultValue(null)] public List<VehicleEcuInfo> RuleEcus { get; set; }
+            [XmlElement("EL"), DefaultValue(null)] public List<VehicleEcuInfo> EcuList { get; set; }
+            [XmlIgnore] public string RuleFormula { get; set; }
         }
 
         [XmlType("VersionInfo")]

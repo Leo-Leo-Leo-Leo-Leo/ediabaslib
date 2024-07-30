@@ -266,7 +266,8 @@ namespace EdiabasLib
                 Ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Sending @1 failed");
                 return false;
             }
-            string elmDevDesc = Elm327ReceiveAnswer(Elm327CommandTimeout);
+
+            string elmDevDesc = TrimElmResponse(Elm327ReceiveAnswer(Elm327CommandTimeout));
             Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "ELM ID: {0}", elmDevDesc);
             if (elmDevDesc.ToUpperInvariant().Contains(Elm327CarlyIdentifier))
             {
@@ -278,13 +279,13 @@ namespace EdiabasLib
                 Ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Sending #1 failed");
                 return false;
             }
-            string elmManufact = Elm327ReceiveAnswer(Elm327CommandTimeout);
+
+            string elmManufact = TrimElmResponse(Elm327ReceiveAnswer(Elm327CommandTimeout));
             Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "ELM Manufacturer: {0}", elmManufact);
 
             if (_elm327TransportType == TransportType.Standard && elmManufact.ToUpperInvariant().Contains(Elm327WgSoftIdentifier))
             {
-                string verString = elmDevDesc.Trim('\r', '\n', '>', ' ');
-                if (double.TryParse(verString, NumberStyles.Float, CultureInfo.InvariantCulture, out double version))
+                if (double.TryParse(elmDevDesc, NumberStyles.Float, CultureInfo.InvariantCulture, out double version))
                 {
                     if (version < Elm327WgSoftMinVer)
                     {
@@ -298,10 +299,22 @@ namespace EdiabasLib
                 Ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Sending STI failed");
                 return false;
             }
-            string stnVers = Elm327ReceiveAnswer(Elm327CommandTimeout);
+
+            string stnVers = TrimElmResponse(Elm327ReceiveAnswer(Elm327CommandTimeout));
             if (stnVers.ToUpperInvariant().Contains("STN"))
             {
                 Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "STN Version: {0}", stnVers);
+                if (!Elm327SendCommand("STIX", false))
+                {
+                    Ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Sending STIX failed");
+                    return false;
+                }
+
+                string stnVersExt = TrimElmResponse(Elm327ReceiveAnswer(Elm327CommandTimeout));
+                if (!string.IsNullOrEmpty(stnVersExt))
+                {
+                    Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "STN Ext Version: {0}", stnVersExt);
+                }
             }
 
             Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "ELM transport type: {0}", _elm327TransportType);
@@ -1606,6 +1619,16 @@ namespace EdiabasLib
             {
                 return '.';
             }
+        }
+
+        public static string TrimElmResponse(string elmResponse)
+        {
+            if (string.IsNullOrWhiteSpace(elmResponse))
+            {
+                return string.Empty;
+            }
+
+            return elmResponse.Trim('\r', '\n', '>', ' ');
         }
 
         public void Dispose()

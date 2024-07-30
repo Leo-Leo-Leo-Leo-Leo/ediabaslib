@@ -143,8 +143,8 @@ public class AdapterTypeDetect
                     }
 
                     bool escapeMode = _activityCommon.MtcBtEscapeMode;
-                    EscapeStreamReader inStream = new EscapeStreamReader(adapterInStream);
-                    EscapeStreamWriter outStream = new EscapeStreamWriter(adapterOutStream);
+                    using EscapeStreamReader inStream = new EscapeStreamReader(adapterInStream);
+                    using EscapeStreamWriter outStream = new EscapeStreamWriter(adapterOutStream);
                     if (!SetCustomEscapeMode(inStream, outStream, cancelEvent, ref escapeMode, out bool noEscapeSupport))
                     {
                         LogString("*** Set escape mode failed");
@@ -851,8 +851,11 @@ public class AdapterTypeDetect
                         case 2100:
                         case 2120:
                         case 2230:  // OBDLink EX
+                            minVer = 50801;
+                            break;
+
                         case 2255:  // OBDLink MX+
-                            minVer = 50701;
+                            minVer = 50904;
                             break;
                     }
 

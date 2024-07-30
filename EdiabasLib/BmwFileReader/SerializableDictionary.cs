@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Xml;
 using System.Xml.Schema;
@@ -11,7 +12,7 @@ namespace BmwFileReader
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TValue"></typeparam>
     [XmlRoot("dictionary")]
-    public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, IXmlSerializable
+    public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, IXmlSerializable, ICloneable
     {
         // XmlSerializer.Deserialize() will create a new Object, and then call ReadXml()
         // So cannot use instance field, use class field.
@@ -19,6 +20,25 @@ namespace BmwFileReader
         public static string itemTag = "item";
         public static string keyTag = "key";
         public static string valueTag = "value";
+
+        public SerializableDictionary()
+        {
+        }
+
+        public SerializableDictionary(IDictionary<TKey, TValue> dictionary) :
+            base(dictionary)
+        {
+        }
+
+        public SerializableDictionary(IEqualityComparer<TKey> comparer) :
+            base(comparer)
+        {
+        }
+
+        public SerializableDictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey> comparer) :
+            base(dictionary, comparer)
+        {
+        }
 
         public XmlSchema GetSchema()
         {
@@ -77,6 +97,21 @@ namespace BmwFileReader
 
                 writer.WriteEndElement();
             }
+        }
+
+        public SerializableDictionary<TKey, TValue> Clone()
+        {
+            SerializableDictionary<TKey, TValue> other = new SerializableDictionary<TKey, TValue>(Comparer);
+            foreach (KeyValuePair<TKey, TValue> keyValue in this)
+            {
+                other.Add(keyValue.Key, keyValue.Value);
+            }
+            return other;
+        }
+
+        object ICloneable.Clone()
+        {
+            return Clone();
         }
     }
 }

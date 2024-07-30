@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -93,6 +92,64 @@ namespace BmwFileReader
             }
         }
 
+        public class EbcdicVIN7Comparer : IComparer<string>
+        {
+            public int Compare(string x, string y)
+            {
+                if (x == null)
+                {
+                    if (y == null)
+                    {
+                        throw new ArgumentNullException("y");
+                    }
+                    return 1;
+                }
+                else
+                {
+                    if (y == null)
+                    {
+                        throw new ArgumentNullException("x");
+                    }
+                    if (x.Length == 7)
+                    {
+                        if (y.Length == 7)
+                        {
+                            int num = 0;
+                            for (int i = 0; i < 7; i++)
+                            {
+                                if (char.IsDigit(x[i]))
+                                {
+                                    if (!char.IsDigit(y[i]))
+                                    {
+                                        return 1;
+                                    }
+                                    num = x[i].CompareTo(y[i]);
+                                    if (num != 0)
+                                    {
+                                        return num;
+                                    }
+                                }
+                                else
+                                {
+                                    if (char.IsDigit(y[i]))
+                                    {
+                                        return -1;
+                                    }
+                                    num = x[i].CompareTo(y[i]);
+                                    if (num != 0)
+                                    {
+                                        return num;
+                                    }
+                                }
+                            }
+                            return num;
+                        }
+                    }
+                    throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, "Vin must be of length 7: {0}, {1}", x, y));
+                }
+            }
+        }
+
 #if Android
         public class TypeKeyInfo
         {
@@ -174,8 +231,11 @@ namespace BmwFileReader
 
         public class VinRangeInfo
         {
-            public VinRangeInfo(string typeKey, string prodYear, string prodMonth, string releaseState, string gearBox)
+            public VinRangeInfo(string rangeFrom, string rangeTo, string vin17_4_7, string typeKey, string prodYear, string prodMonth, string releaseState, string gearBox)
             {
+                RangeFrom = rangeFrom;
+                RangeTo = rangeTo;
+                Vin17_4_7 = vin17_4_7;
                 TypeKey = typeKey;
                 ProdYear = prodYear;
                 ProdMonth = prodMonth;
@@ -183,6 +243,9 @@ namespace BmwFileReader
                 GearBox = gearBox;
             }
 
+            public string RangeFrom { get; }
+            public string RangeTo { get; }
+            public string Vin17_4_7 { get; }
             public string TypeKey { get; }
             public string ProdYear { get; }
             public string ProdMonth { get; }
@@ -197,6 +260,8 @@ namespace BmwFileReader
         public const string VehicleSeriesName = "E-Bezeichnung";
         public const string ProductTypeName = "Produktart";
         public const string BrandName = "Marke";
+        public const string TransmisionName = "Getriebe";
+        public const string MotorName = "Motor";
 
         private static VehicleStructsBmw.VehicleSeriesInfoData _vehicleSeriesInfoData;
         private static VehicleStructsBmw.RulesInfoData _rulesInfoData;
@@ -248,7 +313,7 @@ namespace BmwFileReader
                     return _vehicleSeriesInfoData;
                 }
 
-                string resourceName = FindResourceName(VehicleStructsBmw.VehicleSeriesXmlFile);
+                string resourceName = FindResourceName(VehicleStructsBmw.VehicleSeriesZipFile);
                 if (string.IsNullOrEmpty(resourceName))
                 {
                     ResourceFailure = FailureSource.Resource;
@@ -260,8 +325,38 @@ namespace BmwFileReader
                 {
                     if (stream != null)
                     {
-                        XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.VehicleSeriesInfoData));
-                        _vehicleSeriesInfoData = serializer.Deserialize(stream) as VehicleStructsBmw.VehicleSeriesInfoData;
+                        ZipFile zf = null;
+                        try
+                        {
+                            zf = new ZipFile(stream);
+                            foreach (ZipEntry zipEntry in zf)
+                            {
+                                if (!zipEntry.IsFile)
+                                {
+                                    continue; // Ignore directories
+                                }
+
+                                if (string.Compare(zipEntry.Name, VehicleStructsBmw.VehicleSeriesXmlFile, StringComparison.OrdinalIgnoreCase) == 0)
+                                {
+                                    using (Stream zipStream = zf.GetInputStream(zipEntry))
+                                    {
+                                        using (TextReader reader = new StreamReader(zipStream))
+                                        {
+                                            XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.VehicleSeriesInfoData));
+                                            _vehicleSeriesInfoData = serializer.Deserialize(reader) as VehicleStructsBmw.VehicleSeriesInfoData;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            if (zf != null)
+                            {
+                                zf.IsStreamOwner = true; // Makes close also shut the underlying stream
+                                zf.Close(); // Ensure we release resources
+                            }
+                        }
                     }
                 }
 
@@ -353,11 +448,13 @@ namespace BmwFileReader
                             }
                             if (string.Compare(zipEntry.Name, VehicleStructsBmw.RulesXmlFile, StringComparison.OrdinalIgnoreCase) == 0)
                             {
-                                Stream zipStream = zf.GetInputStream(zipEntry);
-                                using (StreamReader sr = new StreamReader(zipStream))
+                                using (Stream zipStream = zf.GetInputStream(zipEntry))
                                 {
-                                    XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.RulesInfoData));
-                                    _rulesInfoData = serializer.Deserialize(sr) as VehicleStructsBmw.RulesInfoData;
+                                    using (StreamReader sr = new StreamReader(zipStream))
+                                    {
+                                        XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.RulesInfoData));
+                                        _rulesInfoData = serializer.Deserialize(sr) as VehicleStructsBmw.RulesInfoData;
+                                    }
                                 }
 
                                 break;
@@ -406,11 +503,13 @@ namespace BmwFileReader
                             }
                             if (string.Compare(zipEntry.Name, VehicleStructsBmw.ServiceDataXmlFile, StringComparison.OrdinalIgnoreCase) == 0)
                             {
-                                Stream zipStream = zf.GetInputStream(zipEntry);
-                                using (StreamReader sr = new StreamReader(zipStream))
+                                using (Stream zipStream = zf.GetInputStream(zipEntry))
                                 {
-                                    XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.ServiceData));
-                                    _serviceData = serializer.Deserialize(sr) as VehicleStructsBmw.ServiceData;
+                                    using (StreamReader sr = new StreamReader(zipStream))
+                                    {
+                                        XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.ServiceData));
+                                        _serviceData = serializer.Deserialize(sr) as VehicleStructsBmw.ServiceData;
+                                    }
                                 }
 
                                 break;
@@ -525,39 +624,41 @@ namespace BmwFileReader
 
                             if (string.Compare(zipEntry.Name, "typekeyinfo.txt", StringComparison.OrdinalIgnoreCase) == 0)
                             {
-                                Stream zipStream = zf.GetInputStream(zipEntry);
-                                using (StreamReader sr = new StreamReader(zipStream))
+                                using (Stream zipStream = zf.GetInputStream(zipEntry))
                                 {
-                                    while (sr.Peek() >= 0)
+                                    using (StreamReader sr = new StreamReader(zipStream, Encoding.UTF8, true, 0x1000))
                                     {
-                                        string line = sr.ReadLine();
-                                        if (line == null)
+                                        while (!sr.EndOfStream)
                                         {
-                                            break;
-                                        }
-
-                                        bool isHeader = line.StartsWith("#");
-                                        if (isHeader)
-                                        {
-                                            line = line.TrimStart('#');
-                                        }
-
-                                        string[] lineArray = line.Split('|');
-                                        if (isHeader)
-                                        {
-                                            itemNames = lineArray.ToList();
-                                            continue;
-                                        }
-
-                                        if (lineArray.Length > 1)
-                                        {
-                                            string key = lineArray[0].Trim();
-
-                                            if (!string.IsNullOrEmpty(key))
+                                            string line = sr.ReadLine();
+                                            if (line == null)
                                             {
-                                                List<string> lineList = lineArray.ToList();
-                                                lineList.RemoveAt(0);
-                                                typeKeyDict.TryAdd(key, lineList);
+                                                break;
+                                            }
+
+                                            bool isHeader = line.StartsWith("#");
+                                            if (isHeader)
+                                            {
+                                                line = line.TrimStart('#');
+                                            }
+
+                                            string[] lineArray = line.Split('|');
+                                            if (isHeader)
+                                            {
+                                                itemNames = lineArray.ToList();
+                                                continue;
+                                            }
+
+                                            if (lineArray.Length > 1)
+                                            {
+                                                string key = lineArray[0].Trim();
+
+                                                if (!string.IsNullOrEmpty(key))
+                                                {
+                                                    List<string> lineList = lineArray.ToList();
+                                                    lineList.RemoveAt(0);
+                                                    typeKeyDict.TryAdd(key, lineList);
+                                                }
                                             }
                                         }
                                     }
@@ -592,14 +693,18 @@ namespace BmwFileReader
             {
                 return null;
             }
-            string serialNumber;
+
+            string vin7 = null;
+            string vinType = null;
+
             if (vin.Length == 7)
             {
-                serialNumber = vin;
+                vin7 = vin;
             }
             else if (vin.Length == 17)
             {
-                serialNumber = vin.Substring(10, 7);
+                vin7 = vin.Substring(10, 7);
+                vinType = vin.Substring(3, 4);
             }
             else
             {
@@ -607,11 +712,18 @@ namespace BmwFileReader
                 return null;
             }
 
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Matching Vin7: {0}, VinType: {1}", vin7, vinType);
+            string bandType = vin7.Substring(0, 1).ToLowerInvariant();
+            string fileName = string.Format(CultureInfo.InvariantCulture, "vinranges_{0}.txt", bandType);
+
             try
             {
                 ZipFile zf = null;
                 try
                 {
+                    IComparer<string> comparer = new EbcdicVIN7Comparer();
+                    List<VinRangeInfo> vinRangeList = new List<VinRangeInfo>();
+
                     using (FileStream fs = File.OpenRead(Path.Combine(databaseDir, EcuFunctionReader.EcuFuncFileName)))
                     {
                         zf = new ZipFile(fs);
@@ -621,56 +733,94 @@ namespace BmwFileReader
                             {
                                 continue; // Ignore directories
                             }
-                            if (string.Compare(zipEntry.Name, "vinranges.txt", StringComparison.OrdinalIgnoreCase) == 0)
+
+                            if (string.Compare(zipEntry.Name, fileName, StringComparison.OrdinalIgnoreCase) == 0)
                             {
-                                Stream zipStream = zf.GetInputStream(zipEntry);
-                                using (StreamReader sr = new StreamReader(zipStream))
+                                using (Stream zipStream = zf.GetInputStream(zipEntry))
                                 {
-                                    while (sr.Peek() >= 0)
+                                    using (StreamReader sr = new StreamReader(zipStream, Encoding.UTF8, true, 0x1000))
                                     {
-                                        string line = sr.ReadLine();
-                                        if (line == null)
+                                        while (!sr.EndOfStream)
                                         {
-                                            break;
-                                        }
-
-                                        bool isComment = line.StartsWith("#");
-                                        if (isComment)
-                                        {
-                                            continue;
-                                        }
-
-                                        string[] lineArray = line.Split(',');
-                                        if (lineArray.Length >= 3 &&
-                                            lineArray[0].Length == 7 && lineArray[1].Length == 7)
-                                        {
-                                            if (string.Compare(serialNumber, lineArray[0], StringComparison.OrdinalIgnoreCase) >= 0 &&
-                                                string.Compare(serialNumber, lineArray[1], StringComparison.OrdinalIgnoreCase) <= 0)
+                                            string line = sr.ReadLine();
+                                            if (line == null)
                                             {
-                                                string typeKey = lineArray[2];
+                                                break;
+                                            }
 
-                                                string prodYear = null;
-                                                string prodMonth = null;
-                                                if (lineArray.Length >= 5)
+                                            bool isComment = line.StartsWith("#");
+                                            if (isComment)
+                                            {
+                                                continue;
+                                            }
+
+                                            string[] lineArray = line.Split(',');
+                                            if (lineArray.Length >= 4 &&
+                                                lineArray[0].Length == 7 && lineArray[1].Length == 7)
+                                            {
+                                                try
                                                 {
-                                                    prodYear = lineArray[3];
-                                                    prodMonth = lineArray[4];
-                                                }
+                                                    string rangeFrom = lineArray[0];
+                                                    string rangeTo = lineArray[1];
+                                                    int rangeFromCompare = string.Compare(vin7, rangeFrom, StringComparison.OrdinalIgnoreCase);
+                                                    int rangeToCompare = string.Compare(vin7, rangeTo, StringComparison.OrdinalIgnoreCase);
 
-                                                string releaseState = null;
-                                                if (lineArray.Length >= 6)
+                                                    if (rangeFromCompare >= 0 && rangeToCompare <= 0)
+                                                    {
+                                                        if (!string.IsNullOrEmpty(vinType) &&
+                                                            string.Compare(vinType, lineArray[2], StringComparison.OrdinalIgnoreCase) != 0)
+                                                        {
+                                                            continue;
+                                                        }
+
+                                                        bool rangeValid = comparer.Compare(rangeFrom, vin7) <= 0 && comparer.Compare(rangeTo, vin7) >= 0;
+                                                        if (!rangeValid)
+                                                        {
+                                                            continue;
+                                                        }
+
+                                                        string vin17_4_7 = lineArray[2];
+                                                        string typeKey = lineArray[3];
+                                                        ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "VIN matched: '{0}'-'{1}', TypeKey='{2}'",
+                                                            lineArray[0], lineArray[1], typeKey);
+
+                                                        string prodYear = null;
+                                                        string prodMonth = null;
+                                                        if (lineArray.Length >= 6)
+                                                        {
+                                                            prodYear = lineArray[4];
+                                                            prodMonth = lineArray[5];
+                                                        }
+
+                                                        string releaseState = null;
+                                                        if (lineArray.Length >= 7)
+                                                        {
+                                                            releaseState = lineArray[6];
+                                                        }
+
+                                                        string gearBox = null;
+                                                        if (lineArray.Length >= 8)
+                                                        {
+                                                            gearBox = lineArray[7];
+                                                        }
+
+                                                        bool exactMatch = rangeFromCompare == 0 && rangeToCompare == 0;
+                                                        if (exactMatch)
+                                                        {   // remove all other matches
+                                                            vinRangeList.Clear();
+                                                        }
+
+                                                        vinRangeList.Add(new VinRangeInfo(rangeFrom, rangeTo, vin17_4_7, typeKey, prodYear, prodMonth, releaseState, gearBox));
+                                                        if (exactMatch)
+                                                        {
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                catch (Exception ex)
                                                 {
-                                                    releaseState = lineArray[5];
+                                                    ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "VIN range exception: {0}", EdiabasNet.GetExceptionText(ex));
                                                 }
-
-                                                string gearBox = null;
-                                                if (lineArray.Length >= 7)
-                                                {
-                                                    gearBox = lineArray[6];
-                                                }
-
-                                                VinRangeInfo vinRangeInfo = new VinRangeInfo(typeKey, prodYear, prodMonth, releaseState, gearBox);
-                                                return vinRangeInfo;
                                             }
                                         }
                                     }
@@ -678,8 +828,28 @@ namespace BmwFileReader
                                 break;
                             }
                         }
-                        ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Type key not found in vin ranges");
-                        return null;
+
+                        ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "VIN ranges count: {0}", vinRangeList.Count);
+                        if (vinRangeList.Count < 1)
+                        {
+                            return null;
+                        }
+
+                        if (vinRangeList.Count > 1)
+                        {
+                            if (!string.IsNullOrEmpty(vinType))
+                            {
+                                ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Too many VIN range matches");
+                                return null;
+                            }
+
+                            VinRangeInfo vinRangeInfo = vinRangeList[0];
+                            // remove vin17_4_7 and gear box
+                            return new VinRangeInfo(vinRangeInfo.RangeFrom, vinRangeInfo.RangeTo, string.Empty, vinRangeInfo.TypeKey, vinRangeInfo.ProdYear,
+                                vinRangeInfo.ProdMonth, vinRangeInfo.ReleaseState, string.Empty);
+                        }
+
+                        return vinRangeList[0];
                     }
                 }
                 finally
@@ -718,11 +888,17 @@ namespace BmwFileReader
                 return null;
             }
 
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Type key: {0}", vinRangeInfo.TypeKey);
             Dictionary<string, string> propertyDict = _typeKeyInfo.GetTypeKeyProperties(vinRangeInfo.TypeKey);
             if (propertyDict == null)
             {
                 ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "No type key properties present");
                 return null;
+            }
+
+            foreach (KeyValuePair<string, string> keyValuePair in propertyDict)
+            {
+                ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Property: {0}, Value: {1}", keyValuePair.Key, keyValuePair.Value);
             }
 
             return propertyDict;
@@ -843,19 +1019,36 @@ namespace BmwFileReader
             return vehicleSeriesInfoData.Version;
         }
 
-        public static VehicleStructsBmw.VehicleSeriesInfo GetVehicleSeriesInfo(string series, string constructionYear, string constructionstMonth, EdiabasNet ediabas)
+        public static VehicleStructsBmw.VehicleSeriesInfo GetVehicleSeriesInfo(DetectVehicleBmwBase detectVehicleBmw)
         {
-            long dateValue = -1;
-            if (!string.IsNullOrEmpty(constructionYear) && !string.IsNullOrEmpty(constructionstMonth))
+            string series = detectVehicleBmw?.Series;
+            string constructYear = detectVehicleBmw?.ConstructYear;
+            string constructMonth = detectVehicleBmw?.ConstructMonth;
+            string iLevelShip = detectVehicleBmw?.ILevelShip;
+            EdiabasNet ediabas = detectVehicleBmw?.Ediabas;
+
+            string modelSeries = null;
+            if (!string.IsNullOrEmpty(iLevelShip) && iLevelShip.Length >= 4)
             {
-                if (Int32.TryParse(constructionYear, NumberStyles.Integer, CultureInfo.InvariantCulture, out Int32 year) &&
-                    Int32.TryParse(constructionstMonth, NumberStyles.Integer, CultureInfo.InvariantCulture, out Int32 month))
+                string[] iLevelParts = iLevelShip.Split('-');
+                if (iLevelParts.Length > 1 && iLevelParts[0].Length >= 3)
+                {
+                    modelSeries = iLevelParts[0];
+                }
+            }
+
+            long dateValue = -1;
+            if (!string.IsNullOrEmpty(constructYear) && !string.IsNullOrEmpty(constructMonth))
+            {
+                if (Int32.TryParse(constructYear, NumberStyles.Integer, CultureInfo.InvariantCulture, out Int32 year) &&
+                    Int32.TryParse(constructMonth, NumberStyles.Integer, CultureInfo.InvariantCulture, out Int32 month))
                 {
                     dateValue = year * 100 + month;
                 }
             }
 
-            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle series info from vehicle series: {0}, date: {1}", series ?? "No series", dateValue);
+            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle series info from vehicle series: {0}, modelSeries: {1}, date: {2}",
+                series ?? string.Empty, modelSeries ?? string.Empty, dateValue);
             if (series == null)
             {
                 return null;
@@ -882,14 +1075,77 @@ namespace BmwFileReader
                     return vehicleSeriesInfoList[0];
                 }
 
+                List<string> modelSeriesList = new List<string>();
+                List<string> brSgbdList = new List<string>();
+                List<string> sgbdAddList = new List<string>();
+                List<string> bnTypeList = new List<string>();
+                List<VehicleStructsBmw.VehicleSeriesInfo> vehicleSeriesInfoMatches = new List<VehicleStructsBmw.VehicleSeriesInfo>();
+                foreach (VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo in vehicleSeriesInfoList)
+                {
+                    if (!string.IsNullOrEmpty(vehicleSeriesInfo.ModelSeries))
+                    {
+                        if (!modelSeriesList.Contains(vehicleSeriesInfo.ModelSeries, StringComparer.OrdinalIgnoreCase))
+                        {
+                            modelSeriesList.Add(vehicleSeriesInfo.ModelSeries);
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(vehicleSeriesInfo.BrSgbd))
+                    {
+                        if (!brSgbdList.Contains(vehicleSeriesInfo.BrSgbd, StringComparer.OrdinalIgnoreCase))
+                        {
+                            brSgbdList.Add(vehicleSeriesInfo.BrSgbd);
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(vehicleSeriesInfo.SgbdAdd))
+                    {
+                        if (!sgbdAddList.Contains(vehicleSeriesInfo.SgbdAdd, StringComparer.OrdinalIgnoreCase))
+                        {
+                            sgbdAddList.Add(vehicleSeriesInfo.SgbdAdd);
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(vehicleSeriesInfo.BnType))
+                    {
+                        if (!bnTypeList.Contains(vehicleSeriesInfo.BnType, StringComparer.OrdinalIgnoreCase))
+                        {
+                            bnTypeList.Add(vehicleSeriesInfo.BnType);
+                        }
+                    }
+
+                    bool matched = false;
+                    if (!string.IsNullOrEmpty(modelSeries) && !string.IsNullOrEmpty(vehicleSeriesInfo.ModelSeries))
+                    {
+                        ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Checking model series");
+                        if (string.Compare(vehicleSeriesInfo.ModelSeries, modelSeries, StringComparison.OrdinalIgnoreCase) == 0)
+                        {
+                            ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Matched model series: {0}", modelSeries);
+                            matched = true;
+                        }
+                    }
+
+                    if (matched)
+                    {
+                        vehicleSeriesInfoMatches.Add(vehicleSeriesInfo);
+                    }
+                }
+
+                ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle series info matches: {0}", vehicleSeriesInfoMatches.Count);
+                if (vehicleSeriesInfoMatches.Count == 1)
+                {
+                    return vehicleSeriesInfoMatches[0];
+                }
+
                 if (dateValue >= 0)
                 {
-                    ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Checking date");
-
-                    foreach (VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo in vehicleSeriesInfoList)
+                    for (int i = 0; i < vehicleSeriesInfoMatches.Count; i++)
                     {
+                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo = vehicleSeriesInfoMatches[i];
                         if (!string.IsNullOrEmpty(vehicleSeriesInfo.Date) && !string.IsNullOrEmpty(vehicleSeriesInfo.DateCompare))
                         {
+                            ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Checking date");
+
                             VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoMatch = null;
                             if (long.TryParse(vehicleSeriesInfo.Date, NumberStyles.Integer, CultureInfo.InvariantCulture, out long dateCompare))
                             {
@@ -933,12 +1189,100 @@ namespace BmwFileReader
                             if (vehicleSeriesInfoMatch != null)
                             {
                                 ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Matched date expression: {0} {1}", vehicleSeriesInfoMatch.DateCompare, vehicleSeriesInfoMatch.Date);
-                                return vehicleSeriesInfoMatch;
+                            }
+                            else
+                            {
+                                vehicleSeriesInfoMatches.Remove(vehicleSeriesInfo);
+                                i--;
                             }
                         }
                     }
+
+                    ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle series info matches date: {0}", vehicleSeriesInfoMatches.Count);
+                    if (vehicleSeriesInfoMatches.Count == 1)
+                    {
+                        return vehicleSeriesInfoMatches[0];
+                    }
                 }
-                ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "No date matched");
+
+                if (detectVehicleBmw != null)
+                {
+                    for (int i = 0; i < vehicleSeriesInfoMatches.Count; i++)
+                    {
+                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo = vehicleSeriesInfoMatches[i];
+                        if (vehicleSeriesInfo.RuleEcus != null && vehicleSeriesInfo.RuleEcus.Count > 0)
+                        {
+                            VehicleStructsBmw.VehicleEcuInfo ecuInfoMatch = null;
+                            foreach (VehicleStructsBmw.VehicleEcuInfo ecuInfo in vehicleSeriesInfo.RuleEcus)
+                            {
+                                if (!string.IsNullOrEmpty(ecuInfo.GroupSgbd) && !string.IsNullOrEmpty(ecuInfo.Sgbd))
+                                {
+                                    ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Checking ecu name Group: {0}, Name: {1}", ecuInfo.GroupSgbd, ecuInfo.Name);
+                                    string ecuName = detectVehicleBmw.GetEcuNameByIdentCached(ecuInfo.GroupSgbd);
+                                    if (!string.IsNullOrEmpty(ecuName))
+                                    {
+                                        ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Resolved ecu name: {0}", ecuName);
+                                        if (string.Compare(ecuName, ecuInfo.Sgbd, StringComparison.OrdinalIgnoreCase) == 0)
+                                        {
+                                            ecuInfoMatch = ecuInfo;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (ecuInfoMatch != null)
+                            {
+                                ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Matched ecu name Group: {0}, Name: {1}", ecuInfoMatch.GroupSgbd, ecuInfoMatch.Name);
+                            }
+                            else
+                            {
+                                vehicleSeriesInfoMatches.Remove(vehicleSeriesInfo);
+                                i--;
+                            }
+                        }
+                    }
+
+                    ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle series info matches ECU: {0}", vehicleSeriesInfoMatches.Count);
+                    if (vehicleSeriesInfoMatches.Count == 1)
+                    {
+                        return vehicleSeriesInfoMatches[0];
+                    }
+                }
+
+                ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Vehicle info counts: ModelSerie: {0}, BrSgbd: {1}, SgbdAdd: {2}, BnType: {3}",
+                    modelSeriesList.Count, brSgbdList.Count, sgbdAddList.Count, bnTypeList.Count);
+                string modelSeriesInfo = null;
+                string brSgbdInfo = null;
+                string sgbdAddInfo = null;
+                string bnTypeInfo = null;
+
+                if (modelSeriesList.Count == 1)
+                {
+                    modelSeriesInfo = modelSeriesList[0];
+                }
+
+                if (brSgbdList.Count == 1)
+                {
+                    brSgbdInfo = brSgbdList[0];
+                }
+
+                if (sgbdAddList.Count == 1)
+                {
+                    sgbdAddInfo = sgbdAddList[0];
+                }
+
+                if (bnTypeList.Count == 1)
+                {
+                    bnTypeInfo = bnTypeList[0];
+                }
+
+                if (!string.IsNullOrEmpty(modelSeriesInfo))
+                {
+                    ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Using detected ModelSeries: {0}, BrSgbd: {1}, SgbdAdd: {2}, BnType: {3}",
+                        modelSeriesInfo ?? string.Empty, brSgbdInfo ?? string.Empty, sgbdAddInfo ?? string.Empty, bnTypeInfo ?? string.Empty);
+                    return new VehicleStructsBmw.VehicleSeriesInfo(series, modelSeriesInfo, brSgbdInfo, sgbdAddInfo, bnTypeInfo);
+                }
             }
 
             switch (key[0])
@@ -946,10 +1290,12 @@ namespace BmwFileReader
                 case 'F':
                 case 'G':
                 case 'I':
-                case 'J':
                 case 'U':
-                    ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Using fallback from first letter");
-                    return new VehicleStructsBmw.VehicleSeriesInfo(series, null, "F01", null, "BN2020");
+                {
+                    string brSgbd = "F01";
+                    ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Using fallback BrSgbd: {0}", brSgbd);
+                    return new VehicleStructsBmw.VehicleSeriesInfo(series, null, brSgbd, null, "BN2020");
+                }
             }
 
             ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "No vehicle series info found");
@@ -958,6 +1304,11 @@ namespace BmwFileReader
 
         public static VehicleStructsBmw.VehicleEcuInfo GetEcuInfoByGroupName(VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo, string name)
         {
+            if (vehicleSeriesInfo?.EcuList == null)
+            {
+                return null;
+            }
+
             string nameLower = name.ToLowerInvariant();
             foreach (VehicleStructsBmw.VehicleEcuInfo ecuInfo in vehicleSeriesInfo.EcuList)
             {
@@ -1009,11 +1360,11 @@ namespace BmwFileReader
                             break;
                         }
                     }
-                }
 
-                if (valid)
-                {
-                    serviceDataItems.Add(serviceDataItem);
+                    if (valid)
+                    {
+                        serviceDataItems.Add(serviceDataItem);
+                    }
                 }
             }
 
@@ -1125,6 +1476,11 @@ namespace BmwFileReader
                 ServiceTreeItem serviceTreeItemCurrent = serviceTreeItemRoot;
                 foreach (string diagObjId in serviceDataItem.DiagObjIds)
                 {
+                    if (string.IsNullOrEmpty(diagObjId))
+                    {
+                        continue;
+                    }
+
                     ServiceTreeItem childItemDiagMatch = null;
                     foreach (ServiceTreeItem childItem in serviceTreeItemCurrent.ChildItems)
                     {

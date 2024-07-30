@@ -4,7 +4,7 @@
 
 <html lang="en">
 <head runat="server">
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><%: Page.Title %></title>
@@ -289,6 +289,28 @@
                     catch (e)
                     {
                     }
+                }
+                else
+                {
+                    setTimeout(function reloadPage()
+                    {
+                        if (typeof isPostBack === "function")
+                        {
+                            if (isPostBack())
+                            {
+                                console.log("PostBack is active");
+                                setTimeout(reloadPage, 500);
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            console.log("isPostBack not existing");
+                        }
+
+                        console.log("Reloading page delayed");
+                        location.href = location.href;
+                    }, 500);
                 }
             }
 

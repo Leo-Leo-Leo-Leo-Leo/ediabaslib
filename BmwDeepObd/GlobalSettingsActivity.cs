@@ -1,12 +1,15 @@
 ﻿using System;
 using System.IO;
 using Android.Content;
+using Android.Content.PM;
 using Android.OS;
+using Android.OS.Storage;
 using Android.Views;
 using Android.Widget;
 using AndroidX.AppCompat.App;
 using AndroidX.DocumentFile.Provider;
 using BmwDeepObd.FilePicker;
+using Skydoves.BalloonLib;
 
 namespace BmwDeepObd
 {
@@ -14,7 +17,7 @@ namespace BmwDeepObd
         Name = ActivityCommon.AppNameSpace + "." + nameof(GlobalSettingsActivity),
         WindowSoftInputMode = SoftInput.StateAlwaysHidden,
         ConfigurationChanges = ActivityConfigChanges)]
-    public class GlobalSettingsActivity : BaseActivity
+    public class GlobalSettingsActivity : BaseActivity, View.IOnTouchListener
     {
         public class InstanceData
         {
@@ -22,6 +25,7 @@ namespace BmwDeepObd
             public string CopyToAppDstPath { get; set; }
             public string CopyFromAppSrcPath { get; set; }
             public string CopyFromAppDstUri { get; set; }
+            public bool BootHintShown { get; set; }
         }
 
         // Intent extra
@@ -35,11 +39,13 @@ namespace BmwDeepObd
         public const string ExtraImportFile = "import_file";
         public const string ExtraSettingsMode = "settigs_mode";
 
-        public const string SettingsFileName = "DeepObdSetting.xml";
+        public const string SettingsFileName = "DeepObdSettings.xml";
+        public const string ExportsDir = "Exports";
 
         private enum ActivityRequest
         {
             RequestDevelopmentSettings,
+            RequestApplicationSettings,
             RequestNotificationSettings,
             RequestOpenDocumentTreeToApp,
             RequestOpenDocumentTreeFromApp,
@@ -53,6 +59,11 @@ namespace BmwDeepObd
         private string _copyFileName;
         private bool _deleteFile;
         private string _selection;
+        private bool _internalStorageLocation;
+        private bool _hasAppConfigUtility;
+#pragma warning disable CS0414 // Field is assigned but its value is never used
+        private bool _ignoreCheckChange;
+#pragma warning restore CS0414 // Field is assigned but its value is never used
         private ActivityCommon _activityCommon;
         private string _exportFileName;
 
@@ -75,6 +86,7 @@ namespace BmwDeepObd
         private RadioButton _radioButtonAskForBtEnable;
         private RadioButton _radioButtonAlwaysEnableBt;
         private RadioButton _radioButtonNoBtHandling;
+        private TextView _textViewCaptionBtDisable;
         private CheckBox _checkBoxDisableBtAtExit;
         private RadioButton _radioButtonCommLockNone;
         private RadioButton _radioButtonCommLockCpu;
@@ -88,6 +100,8 @@ namespace BmwDeepObd
         private RadioButton _radioButtonStartOffline;
         private RadioButton _radioButtonStartConnect;
         private RadioButton _radioButtonStartConnectClose;
+        private RadioButton _radioButtonStartBoot;
+        private Button _buttonManageSysConfig;
         private CheckBox _checkBoxDoubleClickForAppExit;
         private CheckBox _checkBoxSendDataBroadcast;
         private RadioButton _radioButtonUpdateOff;
@@ -109,6 +123,7 @@ namespace BmwDeepObd
         private TextView _textViewCaptionNotifications;
         private Button _buttonManageNotifications;
         private CheckBox _checkBoxCollectDebugInfo;
+        private CheckBox _checkBoxUncompressedTrace;
         private CheckBox _checkBoxHciSnoopLog;
         private Button _buttonHciSnoopLog;
         private Button _buttonDefaultSettings;
@@ -133,7 +148,7 @@ namespace BmwDeepObd
             SupportActionBar.SetHomeButtonEnabled(true);
             SupportActionBar.SetDisplayShowHomeEnabled(true);
             SupportActionBar.SetDisplayHomeAsUpEnabled(true);
-            SetContentView(Resource.Layout.settings);
+            SetContentView(Resource.Layout.global_settings);
 
             SetResult(Android.App.Result.Canceled);
             _appDataDir = Intent.GetStringExtra(ExtraAppDataDir);
@@ -142,6 +157,8 @@ namespace BmwDeepObd
             _selection = Intent.GetStringExtra(ExtraSelection);
 
             _activityCommon = new ActivityCommon(this);
+            _internalStorageLocation = _activityCommon.IsAppStorageLocationInternal();
+            _hasAppConfigUtility = _activityCommon.IsAppInstalled(ActivityCommon.FreeflaxAutosetAppName);
 
             bool allowExport = false;
             bool allowImport = false;
@@ -149,7 +166,7 @@ namespace BmwDeepObd
             {
                 if (!string.IsNullOrEmpty(_appDataDir))
                 {
-                    _exportFileName = Path.Combine(_appDataDir, SettingsFileName);
+                    _exportFileName = Path.Combine(_appDataDir, ExportsDir, SettingsFileName);
                     allowExport = true;
                     allowImport = true;
                 }
@@ -191,7 +208,11 @@ namespace BmwDeepObd
             _radioButtonAlwaysEnableBt = FindViewById<RadioButton>(Resource.Id.radioButtonAlwaysEnableBt);
             _radioButtonNoBtHandling = FindViewById<RadioButton>(Resource.Id.radioButtonNoBtHandling);
 
+            ViewStates viewStateDisableBt = Build.VERSION.SdkInt < BuildVersionCodes.Tiramisu ? ViewStates.Visible : ViewStates.Gone;
+            _textViewCaptionBtDisable = FindViewById<TextView>(Resource.Id.textViewCaptionBtDisable);
             _checkBoxDisableBtAtExit = FindViewById<CheckBox>(Resource.Id.checkBoxDisableBtAtExit);
+            _textViewCaptionBtDisable.Visibility = viewStateDisableBt;
+            _checkBoxDisableBtAtExit.Visibility = viewStateDisableBt;
 
             _radioButtonCommLockNone = FindViewById<RadioButton>(Resource.Id.radioButtonCommLockNone);
             _radioButtonCommLockCpu = FindViewById<RadioButton>(Resource.Id.radioButtonCommLockCpu);
@@ -206,8 +227,54 @@ namespace BmwDeepObd
             _checkBoxStoreDataLogSettings = FindViewById<CheckBox>(Resource.Id.checkBoxStoreDataLogSettings);
 
             _radioButtonStartOffline = FindViewById<RadioButton>(Resource.Id.radioButtonStartOffline);
+            _radioButtonStartOffline.SetOnTouchListener(this);
+
             _radioButtonStartConnect = FindViewById<RadioButton>(Resource.Id.radioButtonStartConnect);
+            _radioButtonStartConnect.SetOnTouchListener(this);
+
             _radioButtonStartConnectClose = FindViewById<RadioButton>(Resource.Id.radioButtonStartConnectClose);
+            _radioButtonStartConnectClose.SetOnTouchListener(this);
+
+            _radioButtonStartBoot = FindViewById<RadioButton>(Resource.Id.radioButtonStartBoot);
+            _radioButtonStartBoot.Enabled = _internalStorageLocation;
+            _radioButtonStartBoot.SetOnTouchListener(this);
+
+            _buttonManageSysConfig = FindViewById<Button>(Resource.Id.buttonManageSysConfig);
+            _buttonManageSysConfig.Visibility = _hasAppConfigUtility || _activityCommon.MtcBtService ? ViewStates.Visible : ViewStates.Gone;
+            _buttonManageSysConfig.Click += (sender, args) =>
+            {
+                if (_activityCommon == null)
+                {
+                    return;
+                }
+
+                if (_hasAppConfigUtility)
+                {
+                    if (!_activityCommon.StartApp(ActivityCommon.FreeflaxAutosetAppName))
+                    {
+                        _activityCommon.ShowAlert(GetString(Resource.String.settings_start_app_failed), Resource.String.alert_title_error);
+                    }
+                    return;
+                }
+
+                bool hasAutomationApp = _activityCommon.IsAppInstalled(ActivityCommon.AutomationAppName);
+                bool hasMacrodroidApp = _activityCommon.IsAppInstalled(ActivityCommon.MacrodroidAppName);
+                bool installApp = !hasAutomationApp && !hasMacrodroidApp;
+
+                if (hasAutomationApp || installApp)
+                {
+                    if (!_activityCommon.StartApp(ActivityCommon.AutomationAppName, installApp))
+                    {
+                        _activityCommon.ShowAlert(GetString(Resource.String.settings_start_app_failed), Resource.String.alert_title_error);
+                    }
+                    return;
+                }
+
+                if (!_activityCommon.StartApp(ActivityCommon.MacrodroidAppName))
+                {
+                    _activityCommon.ShowAlert(GetString(Resource.String.settings_start_app_failed), Resource.String.alert_title_error);
+                }
+            };
 
             _checkBoxDoubleClickForAppExit = FindViewById<CheckBox>(Resource.Id.checkBoxDoubleClickForAppExit);
             _checkBoxSendDataBroadcast = FindViewById<CheckBox>(Resource.Id.checkBoxSendDataBroadcast);
@@ -273,6 +340,7 @@ namespace BmwDeepObd
             _buttonManageNotifications.Visibility = viewStateNotifications;
 
             _checkBoxCollectDebugInfo = FindViewById<CheckBox>(Resource.Id.checkBoxCollectDebugInfo);
+            _checkBoxUncompressedTrace = FindViewById<CheckBox>(Resource.Id.checkBoxUncompressedTrace);
 
             ViewStates viewStateSnoopLog = _activityCommon.GetConfigHciSnoopLog(out bool _) ? ViewStates.Visible : ViewStates.Gone;
             _checkBoxHciSnoopLog = FindViewById<CheckBox>(Resource.Id.checkBoxHciSnoopLog);
@@ -299,11 +367,11 @@ namespace BmwDeepObd
                 new AlertDialog.Builder(this)
                     .SetPositiveButton(Resource.String.button_yes, (o, eventArgs) =>
                     {
-                        ExportSettings(ActivityMain.SettingsMode.Private);
+                        ExportSettings(ActivityCommon.SettingsMode.Private);
                     })
                     .SetNegativeButton(Resource.String.button_no, (o, eventArgs) =>
                     {
-                        ExportSettings(ActivityMain.SettingsMode.Public);
+                        ExportSettings(ActivityCommon.SettingsMode.Public);
                     })
                     .SetNeutralButton(Resource.String.button_abort, (o, eventArgs) => { })
                     .SetCancelable(true)
@@ -366,11 +434,67 @@ namespace BmwDeepObd
             return base.OnOptionsItemSelected(item);
         }
 
+        public bool OnTouch(View v, MotionEvent e)
+        {
+            if (_activityCommon == null)
+            {
+                return false;
+            }
+
+            switch (e.Action)
+            {
+                case MotionEventActions.Down:
+                    if (v == _radioButtonStartOffline || v == _radioButtonStartConnect ||
+                        v == _radioButtonStartConnectClose || v == _radioButtonStartBoot)
+                    {
+                        string message = null;
+                        if (!_radioButtonStartBoot.Enabled)
+                        {
+                            message = GetString(Resource.String.settings_internal_location_boot_hint);
+                        }
+                        else
+                        {
+                            if (v == _radioButtonStartBoot && (_hasAppConfigUtility || _activityCommon.MtcBtService))
+                            {
+                                message = GetString(Resource.String.settings_mtc_boot_hint_title) + "\r\n";
+                                if (_hasAppConfigUtility)
+                                {
+                                    message += GetString(Resource.String.settings_mtc_boot_hint_app_manger);
+                                }
+                                else
+                                {
+                                    message += GetString(Resource.String.settings_mtc_boot_hint_start);
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(message))
+                        {
+                            if (!_instanceData.BootHintShown)
+                            {
+                                Balloon.Builder balloonBuilder = ActivityCommon.GetBalloonBuilder(this);
+                                balloonBuilder.Text = message;
+                                Balloon balloon = balloonBuilder.Build();
+                                balloon.Show(_radioButtonStartBoot);
+
+                                _instanceData.BootHintShown = true;
+                            }
+                        }
+                    }
+                    break;
+            }
+            return false;
+        }
+
         protected override void OnActivityResult(int requestCode, Android.App.Result resultCode, Intent data)
         {
             switch ((ActivityRequest) requestCode)
             {
                 case ActivityRequest.RequestDevelopmentSettings:
+                    UpdateDisplay();
+                    break;
+
+                case ActivityRequest.RequestApplicationSettings:
                     UpdateDisplay();
                     break;
 
@@ -507,155 +631,173 @@ namespace BmwDeepObd
 
         private void ReadSettings()
         {
-            string locale = ActivityCommon.SelectedLocale ?? string.Empty;
-            switch (locale.ToLowerInvariant())
+            try
             {
-                case "en":
-                    _radioButtonLocaleEn.Checked = true;
-                    break;
+                _ignoreCheckChange = true;
+                string locale = ActivityCommon.SelectedLocale ?? string.Empty;
+                switch (locale.ToLowerInvariant())
+                {
+                    case "en":
+                        _radioButtonLocaleEn.Checked = true;
+                        break;
 
-                case "de":
-                    _radioButtonLocaleDe.Checked = true;
-                    break;
+                    case "de":
+                        _radioButtonLocaleDe.Checked = true;
+                        break;
 
-                case "ru":
-                    _radioButtonLocaleRu.Checked = true;
-                    break;
+                    case "ru":
+                        _radioButtonLocaleRu.Checked = true;
+                        break;
 
-                default:
-                    _radioButtonLocaleDefault.Checked = true;
-                    break;
+                    default:
+                        _radioButtonLocaleDefault.Checked = true;
+                        break;
+                }
+
+                switch (ActivityCommon.SelectedTheme ?? ActivityCommon.ThemeDefault)
+                {
+                    case ActivityCommon.ThemeType.Light:
+                        _radioButtonThemeLight.Checked = true;
+                        break;
+
+                    default:
+                        _radioButtonThemeDark.Checked = true;
+                        break;
+                }
+
+                _checkBoxAutoHideTitleBar.Checked = ActivityCommon.AutoHideTitleBar;
+                _checkBoxSuppressTitleBar.Checked = ActivityCommon.SuppressTitleBar;
+                _checkBoxFullScreenMode.Checked = ActivityCommon.FullScreenMode;
+
+                _checkBoxSwapMultiWindowOrientation.Checked = ActivityCommon.SwapMultiWindowOrientation;
+
+                switch (ActivityCommon.SelectedInternetConnection)
+                {
+                    case ActivityCommon.InternetConnectionType.Wifi:
+                        _radioButtonInternetWifi.Checked = true;
+                        break;
+
+                    case ActivityCommon.InternetConnectionType.Ethernet:
+                        _radioButtonInternetEthernet.Checked = true;
+                        break;
+
+                    default:
+                        _radioButtonInternetCellular.Checked = true;
+                        break;
+                }
+
+                switch (ActivityCommon.BtEnbaleHandling)
+                {
+                    case ActivityCommon.BtEnableType.Ask:
+                        _radioButtonAskForBtEnable.Checked = true;
+                        break;
+
+                    case ActivityCommon.BtEnableType.Always:
+                        _radioButtonAlwaysEnableBt.Checked = true;
+                        break;
+
+                    default:
+                        _radioButtonNoBtHandling.Checked = true;
+                        break;
+                }
+
+                _checkBoxDisableBtAtExit.Checked = ActivityCommon.BtDisableHandling == ActivityCommon.BtDisableType.DisableIfByApp;
+
+                switch (ActivityCommon.LockTypeCommunication)
+                {
+                    case ActivityCommon.LockType.None:
+                        _radioButtonCommLockNone.Checked = true;
+                        break;
+
+                    case ActivityCommon.LockType.Cpu:
+                        _radioButtonCommLockCpu.Checked = true;
+                        break;
+
+                    case ActivityCommon.LockType.ScreenDim:
+                        _radioButtonCommLockDim.Checked = true;
+                        break;
+
+                    case ActivityCommon.LockType.ScreenBright:
+                        _radioButtonCommLockBright.Checked = true;
+                        break;
+                }
+
+                switch (ActivityCommon.LockTypeLogging)
+                {
+                    case ActivityCommon.LockType.None:
+                        _radioButtonLogLockNone.Checked = true;
+                        break;
+
+                    case ActivityCommon.LockType.Cpu:
+                        _radioButtonLogLockCpu.Checked = true;
+                        break;
+
+                    case ActivityCommon.LockType.ScreenDim:
+                        _radioButtonLogLockDim.Checked = true;
+                        break;
+
+                    case ActivityCommon.LockType.ScreenBright:
+                        _radioButtonLogLockBright.Checked = true;
+                        break;
+                }
+
+                _checkBoxStoreDataLogSettings.Checked = ActivityCommon.StoreDataLogSettings;
+
+                switch (ActivityCommon.AutoConnectHandling)
+                {
+                    case ActivityCommon.AutoConnectType.Offline:
+                        _radioButtonStartOffline.Checked = true;
+                        break;
+
+                    case ActivityCommon.AutoConnectType.Connect:
+                        _radioButtonStartConnect.Checked = true;
+                        break;
+
+                    case ActivityCommon.AutoConnectType.ConnectClose:
+                        _radioButtonStartConnectClose.Checked = true;
+                        break;
+
+                    case ActivityCommon.AutoConnectType.StartBoot:
+                        if (!_radioButtonStartBoot.Enabled)
+                        {
+                            _radioButtonStartOffline.Checked = true;
+                            break;
+                        }
+                        _radioButtonStartBoot.Checked = true;
+                        break;
+                }
+
+                _checkBoxDoubleClickForAppExit.Checked = ActivityCommon.DoubleClickForAppExit;
+
+                if (ActivityCommon.UpdateCheckDelay == TimeSpan.TicksPerDay * 7)
+                {
+                    _radioButtonUpdate1Week.Checked = true;
+                }
+                else if (ActivityCommon.UpdateCheckDelay < 0)
+                {
+                    _radioButtonUpdateOff.Checked = true;
+                }
+                else
+                {
+                    _radioButtonUpdate1Day.Checked = true;
+                }
+
+                _checkBoxSendDataBroadcast.Checked = ActivityCommon.SendDataBroadcast;
+                _checkBoxCheckCpuUsage.Checked = ActivityCommon.CheckCpuUsage;
+                _checkBoxCheckEcuFiles.Checked = ActivityCommon.CheckEcuFiles;
+                _checkBoxShowBatteryVoltageWarning.Checked = ActivityCommon.ShowBatteryVoltageWarning;
+                _checkBoxOldVagMode.Checked = ActivityCommon.OldVagMode;
+                _checkBoxUseBmwDatabase.Checked = ActivityCommon.UseBmwDatabase;
+                _checkBoxShowOnlyRelevantErrors.Checked = ActivityCommon.ShowOnlyRelevantErrors;
+                _checkBoxScanAllEcus.Checked = ActivityCommon.ScanAllEcus;
+                _checkBoxCollectDebugInfo.Checked = ActivityCommon.CollectDebugInfo;
+                _checkBoxUncompressedTrace.Checked = !ActivityCommon.CompressTrace;
+            }
+            finally
+            {
+                _ignoreCheckChange = false;
             }
 
-            switch (ActivityCommon.SelectedTheme ?? ActivityCommon.ThemeDefault)
-            {
-                case ActivityCommon.ThemeType.Light:
-                    _radioButtonThemeLight.Checked = true;
-                    break;
-
-                default:
-                    _radioButtonThemeDark.Checked = true;
-                    break;
-            }
-
-            _checkBoxAutoHideTitleBar.Checked = ActivityCommon.AutoHideTitleBar;
-            _checkBoxSuppressTitleBar.Checked = ActivityCommon.SuppressTitleBar;
-            _checkBoxFullScreenMode.Checked = ActivityCommon.FullScreenMode;
-
-            _checkBoxSwapMultiWindowOrientation.Checked = ActivityCommon.SwapMultiWindowOrientation;
-
-            switch (ActivityCommon.SelectedInternetConnection)
-            {
-                case ActivityCommon.InternetConnectionType.Wifi:
-                    _radioButtonInternetWifi.Checked = true;
-                    break;
-
-                case ActivityCommon.InternetConnectionType.Ethernet:
-                    _radioButtonInternetEthernet.Checked = true;
-                    break;
-
-                default:
-                    _radioButtonInternetCellular.Checked = true;
-                    break;
-            }
-
-            switch (ActivityCommon.BtEnbaleHandling)
-            {
-                case ActivityCommon.BtEnableType.Ask:
-                    _radioButtonAskForBtEnable.Checked = true;
-                    break;
-
-                case ActivityCommon.BtEnableType.Always:
-                    _radioButtonAlwaysEnableBt.Checked = true;
-                    break;
-
-                default:
-                    _radioButtonNoBtHandling.Checked = true;
-                    break;
-            }
-
-            _checkBoxDisableBtAtExit.Enabled = Build.VERSION.SdkInt < BuildVersionCodes.Tiramisu;
-            _checkBoxDisableBtAtExit.Checked = ActivityCommon.BtDisableHandling == ActivityCommon.BtDisableType.DisableIfByApp;
-
-            switch (ActivityCommon.LockTypeCommunication)
-            {
-                case ActivityCommon.LockType.None:
-                    _radioButtonCommLockNone.Checked = true;
-                    break;
-
-                case ActivityCommon.LockType.Cpu:
-                    _radioButtonCommLockCpu.Checked = true;
-                    break;
-
-                case ActivityCommon.LockType.ScreenDim:
-                    _radioButtonCommLockDim.Checked = true;
-                    break;
-
-                case ActivityCommon.LockType.ScreenBright:
-                    _radioButtonCommLockBright.Checked = true;
-                    break;
-            }
-
-            switch (ActivityCommon.LockTypeLogging)
-            {
-                case ActivityCommon.LockType.None:
-                    _radioButtonLogLockNone.Checked = true;
-                    break;
-
-                case ActivityCommon.LockType.Cpu:
-                    _radioButtonLogLockCpu.Checked = true;
-                    break;
-
-                case ActivityCommon.LockType.ScreenDim:
-                    _radioButtonLogLockDim.Checked = true;
-                    break;
-
-                case ActivityCommon.LockType.ScreenBright:
-                    _radioButtonLogLockBright.Checked = true;
-                    break;
-            }
-
-            _checkBoxStoreDataLogSettings.Checked = ActivityCommon.StoreDataLogSettings;
-
-            switch (ActivityCommon.AutoConnectHandling)
-            {
-                case ActivityCommon.AutoConnectType.Offline:
-                    _radioButtonStartOffline.Checked = true;
-                    break;
-
-                case ActivityCommon.AutoConnectType.Connect:
-                    _radioButtonStartConnect.Checked = true;
-                    break;
-
-                case ActivityCommon.AutoConnectType.ConnectClose:
-                    _radioButtonStartConnectClose.Checked = true;
-                    break;
-            }
-
-            _checkBoxDoubleClickForAppExit.Checked = ActivityCommon.DoubleClickForAppExit;
-
-            if (ActivityCommon.UpdateCheckDelay == TimeSpan.TicksPerDay * 7)
-            {
-                _radioButtonUpdate1Week.Checked = true;
-            }
-            else if (ActivityCommon.UpdateCheckDelay < 0)
-            {
-                _radioButtonUpdateOff.Checked = true;
-            }
-            else
-            {
-                _radioButtonUpdate1Day.Checked = true;
-            }
-
-            _checkBoxSendDataBroadcast.Checked = ActivityCommon.SendDataBroadcast;
-            _checkBoxCheckCpuUsage.Checked = ActivityCommon.CheckCpuUsage;
-            _checkBoxCheckEcuFiles.Checked = ActivityCommon.CheckEcuFiles;
-            _checkBoxShowBatteryVoltageWarning.Checked = ActivityCommon.ShowBatteryVoltageWarning;
-            _checkBoxOldVagMode.Checked = ActivityCommon.OldVagMode;
-            _checkBoxUseBmwDatabase.Checked = ActivityCommon.UseBmwDatabase;
-            _checkBoxShowOnlyRelevantErrors.Checked = ActivityCommon.ShowOnlyRelevantErrors;
-            _checkBoxScanAllEcus.Checked = ActivityCommon.ScanAllEcus;
-            _checkBoxCollectDebugInfo.Checked = ActivityCommon.CollectDebugInfo;
             UpdateDisplay();
         }
 
@@ -742,7 +884,14 @@ namespace BmwDeepObd
             }
             ActivityCommon.BtEnbaleHandling = enableType;
 
-            ActivityCommon.BtDisableHandling = _checkBoxDisableBtAtExit.Checked ? ActivityCommon.BtDisableType.DisableIfByApp : ActivityCommon.BtDisableType.Nothing;
+            if (_checkBoxDisableBtAtExit.Visibility == ViewStates.Visible)
+            {
+                ActivityCommon.BtDisableHandling = _checkBoxDisableBtAtExit.Checked ? ActivityCommon.BtDisableType.DisableIfByApp : ActivityCommon.BtDisableType.Nothing;
+            }
+            else
+            {
+                ActivityCommon.BtDisableHandling = ActivityCommon.BtDisableType.Nothing;
+            }
 
             ActivityCommon.LockType lockType = ActivityCommon.LockTypeCommunication;
             if (_radioButtonCommLockNone.Checked)
@@ -797,6 +946,10 @@ namespace BmwDeepObd
             {
                 autoConnectType = ActivityCommon.AutoConnectType.ConnectClose;
             }
+            else if (_radioButtonStartBoot.Checked)
+            {
+                autoConnectType = ActivityCommon.AutoConnectType.StartBoot;
+            }
             ActivityCommon.AutoConnectHandling = autoConnectType;
 
             ActivityCommon.DoubleClickForAppExit = _checkBoxDoubleClickForAppExit.Checked;
@@ -825,6 +978,7 @@ namespace BmwDeepObd
             ActivityCommon.ShowOnlyRelevantErrors = _checkBoxShowOnlyRelevantErrors.Checked;
             ActivityCommon.ScanAllEcus = _checkBoxScanAllEcus.Checked;
             ActivityCommon.CollectDebugInfo = _checkBoxCollectDebugInfo.Checked;
+            ActivityCommon.CompressTrace = !_checkBoxUncompressedTrace.Checked;
         }
 
         private void UpdateDisplay()
@@ -908,7 +1062,7 @@ namespace BmwDeepObd
         }
 
         // ReSharper disable once UnusedMethodReturnValue.Local
-            private bool ShowDevelopmentSettings()
+        private bool ShowDevelopmentSettings()
         {
             try
             {
@@ -1045,7 +1199,7 @@ namespace BmwDeepObd
             ReadSettings();
         }
 
-        private void ExportSettings(ActivityMain.SettingsMode settingsMode)
+        private void ExportSettings(ActivityCommon.SettingsMode settingsMode)
         {
             Intent intent = new Intent();
             intent.PutExtra(ExtraExportFile, _exportFileName);

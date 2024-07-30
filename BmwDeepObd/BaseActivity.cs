@@ -9,11 +9,13 @@ using Android.Content;
 using Android.Content.PM;
 using Android.Content.Res;
 using Android.OS;
+using Android.Util;
 using Android.Views;
 using Android.Widget;
 using AndroidX.Activity;
 using AndroidX.AppCompat.App;
 using AndroidX.Core.View;
+using Skydoves.BalloonLib;
 
 namespace BmwDeepObd
 {
@@ -68,7 +70,7 @@ namespace BmwDeepObd
         public const string InstanceDataKeyBase = "InstanceDataBase";
         protected InstanceDataBase _instanceDataBase = new InstanceDataBase();
         protected bool _activityDestroyed;
-        private GestureDetectorCompat _gestureDetector;
+        private GestureDetector _gestureDetector;
         protected Configuration _currentConfiguration;
         private Android.App.ActivityManager _activityManager;
         protected View _decorView;
@@ -100,7 +102,7 @@ namespace BmwDeepObd
             ResetTitle();
 
             GestureListener gestureListener = new GestureListener(this);
-            _gestureDetector = new GestureDetectorCompat(this, gestureListener);
+            _gestureDetector = new GestureDetector(this, gestureListener);
 
             BackPressCallback backPressCallback = new BackPressCallback(this);
             OnBackPressedDispatcher.AddCallback(backPressCallback);
@@ -135,11 +137,6 @@ namespace BmwDeepObd
                     {
                         SupportActionBar.Show();
                         _instanceDataBase.ActionBarVisible = true;
-                        if (!_instanceDataBase.LongClickShown)
-                        {
-                            _instanceDataBase.LongClickShown = true;
-                            Toast.MakeText(this, GetString(Resource.String.long_click_show_title), ToastLength.Short)?.Show();
-                        }
                     }
                 });
 
@@ -181,7 +178,6 @@ namespace BmwDeepObd
                 try
                 {
                     _baseUpdateHandler.RemoveCallbacksAndMessages(null);
-                    _baseUpdateHandler.Dispose();
                 }
                 catch (Exception)
                 {
@@ -396,6 +392,24 @@ namespace BmwDeepObd
                     if (ActivityCommon.AutoHideTitleBar || ActivityCommon.SuppressTitleBar)
                     {
                         _baseUpdateHandler.PostDelayed(_longPressRunnable, LongPressTimeout);
+
+                        if (_touchShowTitle && !SupportActionBar.IsShowing)
+                        {
+                            if (!_instanceDataBase.LongClickShown)
+                            {
+                                View contentView = FindViewById<View>(Android.Resource.Id.Content);
+                                View rootView = contentView?.RootView;
+                                if (rootView != null)
+                                {
+                                    Balloon.Builder balloonBuilder = ActivityCommon.GetBalloonBuilder(this);
+                                    balloonBuilder.Text = GetString(Resource.String.long_click_show_title);
+                                    Balloon balloon = balloonBuilder.Build();
+                                    balloon.Show(rootView);
+
+                                    _instanceDataBase.LongClickShown = true;
+                                }
+                            }
+                        }
                     }
                     break;
             }
@@ -403,16 +417,21 @@ namespace BmwDeepObd
             return base.DispatchTouchEvent(ev);
         }
 
+        public virtual bool OnFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY)
+        {
+            return false;
+        }
+
         protected override void AttachBaseContext(Context @base)
         {
-            base.AttachBaseContext(SetLocale(@base, ActivityMain.GetLocaleSetting()));
+            base.AttachBaseContext(SetLocale(@base, ActivityCommon.GetLocaleSetting()));
         }
 
         public override void OnConfigurationChanged(Configuration newConfig)
         {
             base.OnConfigurationChanged(newConfig);
             _currentConfiguration = newConfig;
-            SetLocale(this, ActivityMain.GetLocaleSetting());
+            SetLocale(this, ActivityCommon.GetLocaleSetting());
         }
 
         public override void Finish()
@@ -478,6 +497,35 @@ namespace BmwDeepObd
 
         public virtual void CloseSearchView()
         {
+        }
+
+        public virtual bool ShowServiceBusy(int requestCode)
+        {
+            try
+            {
+                Intent serverIntent = new Intent(this, typeof(ServiceBusyActivity));
+                StartActivityForResult(serverIntent, requestCode);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public virtual bool CheckForegroundService(int requestCode)
+        {
+            if (ForegroundService.IsCommThreadRunning())
+            {
+#if DEBUG
+                Log.Info(Tag, "CheckForegroundService: ForegroundService is active");
+#endif
+                ShowServiceBusy(requestCode);
+                return true;
+            }
+
+            return false;
         }
 
         public static void ClearActivityStack()
@@ -600,61 +648,40 @@ namespace BmwDeepObd
 
         public virtual void OnBackPressedEvent()
         {
+            _instanceDataBase.LongClickShown = false;
             Finish();
         }
 
         public void EnableFullScreenMode(bool enable)
         {
-            if (Build.VERSION.SdkInt <= BuildVersionCodes.Q)
+            if (Window != null && _decorView != null)
             {
-                if (_decorView != null)
+                WindowCompat.SetDecorFitsSystemWindows(Window, true);
+                if (Window.Attributes != null)
                 {
-                    if (enable)
+                    if (Build.VERSION.SdkInt >= BuildVersionCodes.P)
                     {
-#pragma warning disable 618
-                        _decorView.SystemUiVisibility = (StatusBarVisibility)(SystemUiFlags.Immersive | SystemUiFlags.HideNavigation | SystemUiFlags.Fullscreen);
-#pragma warning restore 618
-                    }
-                    else
-                    {
-#pragma warning disable 618
-                        _decorView.SystemUiVisibility = (StatusBarVisibility)(SystemUiFlags.HideNavigation);
-#pragma warning restore 618
+                        Window.Attributes.LayoutInDisplayCutoutMode =
+                            enable ? LayoutInDisplayCutoutMode.ShortEdges : LayoutInDisplayCutoutMode.Default;
                     }
                 }
-            }
-            else
-            {
-                if (Window != null && Window.InsetsController != null)
+
+                WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(Window, _decorView);
+                if (enable)
                 {
-                    if (enable)
-                    {
-                        if (Build.VERSION.SdkInt > BuildVersionCodes.Q)
-                        {
-                            Window.InsetsController.SystemBarsBehavior = (int) WindowInsetsControllerBehavior.ShowTransientBarsBySwipe;
-                            Window.InsetsController.SetSystemBarsAppearance((int) (WindowInsetsControllerAppearance.LightNavigationBars | WindowInsetsControllerAppearance.LightStatusBars),
-                                (int)(WindowInsetsControllerAppearance.LightNavigationBars | WindowInsetsControllerAppearance.LightStatusBars));
-                        }
+                    controller.SystemBarsBehavior = WindowInsetsControllerCompat.BehaviorShowTransientBarsBySwipe;
+                    controller.AppearanceLightNavigationBars = true;
+                    controller.AppearanceLightStatusBars = true;
 
-                        Window.SetDecorFitsSystemWindows(false);
-                        Window.InsetsController.Hide(WindowInsets.Type.StatusBars());
-                        Window.InsetsController.Hide(WindowInsets.Type.CaptionBar());
-                        Window.InsetsController.Hide(WindowInsets.Type.SystemBars());
-                    }
-                    else
-                    {
-                        if (Build.VERSION.SdkInt > BuildVersionCodes.Q)
-                        {
-                            Window.InsetsController.SystemBarsBehavior = (int)WindowInsetsControllerBehavior.ShowBarsByTouch;
-                            Window.InsetsController.SetSystemBarsAppearance(0,
-                                (int)(WindowInsetsControllerAppearance.LightNavigationBars | WindowInsetsControllerAppearance.LightStatusBars));
-                        }
+                    controller.Hide(WindowInsetsCompat.Type.SystemBars());
+                }
+                else
+                {
+                    controller.SystemBarsBehavior = WindowInsetsControllerCompat.BehaviorDefault;
+                    controller.AppearanceLightNavigationBars = false;
+                    controller.AppearanceLightStatusBars = false;
 
-                        Window.SetDecorFitsSystemWindows(true);
-                        Window.InsetsController.Show(WindowInsets.Type.StatusBars());
-                        Window.InsetsController.Show(WindowInsets.Type.CaptionBar());
-                        Window.InsetsController.Show(WindowInsets.Type.SystemBars());
-                    }
+                    controller.Show(WindowInsetsCompat.Type.SystemBars());
                 }
             }
         }
@@ -668,7 +695,7 @@ namespace BmwDeepObd
                 {
                     AndroidX.Core.OS.LocaleListCompat localeList =
                         AndroidX.Core.OS.ConfigurationCompat.GetLocales(Resources.System.Configuration);
-                    if (localeList != null && localeList.Size() > 0)
+                    if (localeList.Size() > 0)
                     {
                         locale = localeList.Get(0);
                     }
@@ -679,30 +706,37 @@ namespace BmwDeepObd
                     locale = new Java.Util.Locale(!string.IsNullOrEmpty(language) ? language : "en");
                 }
 
-                Java.Util.Locale.Default = locale;
-
                 Resources resources = context.Resources;
-                Configuration configuration = resources.Configuration;
-                if (Build.VERSION.SdkInt < BuildVersionCodes.JellyBeanMr1)
+                Configuration configuration = resources?.Configuration;
+                if (configuration != null)
                 {
-#pragma warning disable CS0618 // Typ oder Element ist veraltet
-                    configuration.Locale = locale;
-#pragma warning restore CS0618 // Typ oder Element ist veraltet
-                }
-                else
-                {
-                    configuration.SetLocale(locale);
+                    if (Build.VERSION.SdkInt < BuildVersionCodes.JellyBeanMr1)
+                    {
+#pragma warning disable CS0618
+#pragma warning disable CA1422
+                        configuration.Locale = locale;
+#pragma warning restore CA1422
+#pragma warning restore CS0618
+                    }
+                    else
+                    {
+                        configuration.SetLocale(locale);
+                    }
+
+                    if (Build.VERSION.SdkInt < BuildVersionCodes.JellyBeanMr1)
+                    {
+    #pragma warning disable 618
+    #pragma warning disable CA1422
+                        resources.UpdateConfiguration(configuration, resources.DisplayMetrics);
+    #pragma warning restore CA1422
+    #pragma warning restore 618
+                        return context;
+                    }
+
+                    return context.CreateConfigurationContext(configuration);
                 }
 
-                if (Build.VERSION.SdkInt < BuildVersionCodes.JellyBeanMr1)
-                {
-#pragma warning disable 618
-                    resources.UpdateConfiguration(configuration, resources.DisplayMetrics);
-#pragma warning restore 618
-                    return context;
-                }
-
-                return context.CreateConfigurationContext(configuration);
+                return context;
             }
             catch (Exception)
             {
@@ -745,7 +779,12 @@ namespace BmwDeepObd
                 XmlSerializer xmlSerializer = new XmlSerializer(instanceData.GetType());
                 using (StringWriter sw = new StringWriter())
                 {
-                    using (XmlWriter writer = XmlWriter.Create(sw))
+                    XmlWriterSettings settings = new XmlWriterSettings
+                    {
+                        Indent = true,
+                        IndentChars = "\t"
+                    };
+                    using (XmlWriter writer = XmlWriter.Create(sw, settings))
                     {
                         xmlSerializer.Serialize(writer, instanceData);
                         string xml = sw.ToString();
@@ -776,7 +815,7 @@ namespace BmwDeepObd
             }
         }
 
-        private class GestureListener : GestureDetector.SimpleOnGestureListener
+        protected class GestureListener : GestureDetector.SimpleOnGestureListener
         {
             private const int flingMinDiff = 100;
             private const int flingMinVel = 100;
@@ -799,6 +838,11 @@ namespace BmwDeepObd
             public override bool OnFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY)
             {
                 if (_activity._activityDestroyed)
+                {
+                    return true;
+                }
+
+                if (_activity.OnFling(e1, e2, velocityX, velocityY))
                 {
                     return true;
                 }

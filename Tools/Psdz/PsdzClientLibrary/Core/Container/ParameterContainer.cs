@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Core.Container
 {
@@ -69,9 +70,9 @@ namespace PsdzClient.Core.Container
                 }
                 stringBuilder.Append("]");
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.ToString()", exception);
+                Log.WarningException("ParameterContainer.ToString()", exception);
             }
             return stringBuilder.ToString();
         }
@@ -85,9 +86,9 @@ namespace PsdzClient.Core.Container
                     parameters.Remove(name);
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.clearParameter()", exception);
+                Log.WarningException("ParameterContainer.clearParameter()", exception);
             }
         }
 
@@ -97,9 +98,9 @@ namespace PsdzClient.Core.Container
             {
                 parameters.Clear();
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.clearParameters()", exception);
+                Log.WarningException("ParameterContainer.clearParameters()", exception);
             }
         }
 
@@ -116,9 +117,9 @@ namespace PsdzClient.Core.Container
                     setParameter(item.Key, item.Value);
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.cloneParameters()", exception);
+                Log.WarningException("ParameterContainer.cloneParameters()", exception);
             }
         }
 
@@ -131,10 +132,14 @@ namespace PsdzClient.Core.Container
                 {
                     return result;
                 }
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Warning("ParameterContainer.getKeyValuePair()", "Parameter \"{0}\" unknown.", name);
+                }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.getKeyValuePair()", exception);
+                Log.WarningException("ParameterContainer.getKeyValuePair()", exception);
             }
             return null;
         }
@@ -148,10 +153,14 @@ namespace PsdzClient.Core.Container
                 {
                     return result;
                 }
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Warning("ParameterContainer.getKeyValuePairContains()", "Parameter \"{0}\" unknown.", keyContains);
+                }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.getKeyValuePairContains()", exception);
+                Log.WarningException("ParameterContainer.getKeyValuePairContains()", exception);
             }
             return null;
         }
@@ -165,10 +174,14 @@ namespace PsdzClient.Core.Container
                 {
                     return result;
                 }
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Warning("ParameterContainer.getKeyValuePairEndsWith()", "Parameter \"{0}\" unknown.", keyEndsWith);
+                }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.getKeyValuePairEndsWith()", exception);
+                Log.WarningException("ParameterContainer.getKeyValuePairEndsWith()", exception);
             }
             return null;
         }
@@ -182,10 +195,14 @@ namespace PsdzClient.Core.Container
                 {
                     return result;
                 }
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Warning("ParameterContainer.getKeyValuePairStartsWith()", "Parameter \"{0}\" unknown.", keyStartsWith);
+                }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.getKeyValuePairStartsWith()", exception);
+                Log.WarningException("ParameterContainer.getKeyValuePairStartsWith()", exception);
             }
             return null;
         }
@@ -196,13 +213,22 @@ namespace PsdzClient.Core.Container
             {
                 if (parameters.ContainsKey(name))
                 {
+                    if (CoreFramework.DebugLevel > 0)
+                    {
+                        Type type = null;
+                        if (parameters[name] != null)
+                        {
+                            type = parameters[name].GetType();
+                        }
+                        Log.Info("ParameterContainer.getParameter()", "Parameter name=\"{0}\", type=\"{1}\", value=\"{2}\".", name, type, parameters[name]);
+                    }
                     return parameters[name];
                 }
-                //Log.Warning("ParameterContainer.getParameter()", "Parameter \"{0}\" unknown.", name);
+                Log.Warning("ParameterContainer.getParameter()", "Parameter \"{0}\" unknown.", name);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                //Log.Warning("ParameterContainer.getParameter()", "failed for name \"{0}\" with exception: {1}", name, ex.ToString());
+                Log.Warning("ParameterContainer.getParameter()", "failed for name \"{0}\" with exception: {1}", name, ex.ToString());
             }
             return null;
         }
@@ -213,13 +239,26 @@ namespace PsdzClient.Core.Container
             {
                 if (parameters.ContainsKey(name))
                 {
+                    if (CoreFramework.DebugLevel > 0)
+                    {
+                        Type type = null;
+                        if (parameters[name] != null)
+                        {
+                            type = parameters[name].GetType();
+                        }
+                        Log.Info("ParameterContainer.getParameter()", "Parameter name=\"{0}\", type=\"{1}\", value=\"{2}\".", name, type, parameters[name]);
+                    }
                     return parameters[name];
+                }
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Info("ParameterContainer.getParameter()", "Parameter \"{0}\" unknown. Using default value: {1}", name, defaultValue);
                 }
                 return defaultValue;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                //Log.Warning("ParameterContainer.getParameter()", "Failed for name \"{0}\" with exception: {1}", name, ex.ToString());
+                Log.Warning("ParameterContainer.getParameter()", "Failed for name \"{0}\" with exception: {1}", name, ex.ToString());
                 return defaultValue;
             }
         }
@@ -233,10 +272,14 @@ namespace PsdzClient.Core.Container
                 {
                     return keyValuePair.Value;
                 }
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Warning("ParameterContainer.getParameterEndsWith()", "Parameter \"{0}\" unknown.", nameEndsWith);
+                }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.getParameterEndsWith()", exception);
+                Log.WarningException("ParameterContainer.getParameterEndsWith()", exception);
             }
             return null;
         }
@@ -250,10 +293,14 @@ namespace PsdzClient.Core.Container
                 {
                     return keyValuePair.Value;
                 }
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Warning("ParameterContainer.getParameterStartsWith()", "Parameter \"{0}\" unknown.", nameStartsWith);
+                }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.getParameterStartsWith()", exception);
+                Log.WarningException("ParameterContainer.getParameterStartsWith()", exception);
             }
             return null;
         }
@@ -271,9 +318,9 @@ namespace PsdzClient.Core.Container
                     parameters.Add(name, parameter);
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("ParameterContainer.setParameter()", exception);
+                Log.WarningException("ParameterContainer.setParameter()", exception);
             }
         }
     }

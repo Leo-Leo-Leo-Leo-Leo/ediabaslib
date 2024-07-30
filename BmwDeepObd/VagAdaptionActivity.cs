@@ -464,17 +464,7 @@ namespace BmwDeepObd
                     AbortJobFunc = AbortEdiabasJob
                 };
                 _ediabas.SetConfigProperty("EcuPath", _ecuDir);
-                if (!string.IsNullOrEmpty(_traceDir))
-                {
-                    _ediabas.SetConfigProperty("TracePath", _traceDir);
-                    _ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
-                    _ediabas.SetConfigProperty("AppendTrace", _traceAppend ? "1" : "0");
-                    _ediabas.SetConfigProperty("CompressTrace", "1");
-                }
-                else
-                {
-                    _ediabas.SetConfigProperty("IfhTrace", "0");
-                }
+                ActivityCommon.SetEdiabasConfigProperties(_ediabas, _traceDir, _traceAppend);
             }
 
             _activityCommon.SetEdiabasInterface(_ediabas, _deviceAddress);

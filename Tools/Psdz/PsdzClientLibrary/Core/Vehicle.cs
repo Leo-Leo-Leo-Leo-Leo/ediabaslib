@@ -16,11 +16,12 @@ using System.Xml.Serialization;
 using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
 using PsdzClient.Contracts;
 using PsdzClient.Utility;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Core
 {
-	public class Vehicle : typeVehicle, INotifyPropertyChanged, IVehicle
-	{
+	public class Vehicle : typeVehicle, INotifyPropertyChanged, IVehicle, IReactorVehicle
+    {
 		public Vehicle(ClientContext clientContext) : base(clientContext)
         {
             TransmissionDataType = new TransmissionDataType();
@@ -40,6 +41,7 @@ namespace PsdzClient.Core
             clamp15MinValue = 0.0;
             clamp30MinValue = 9.95; //new VoltageThreshold(BatteryEnum.Pb).MinError;
             //RxSwin = new RxSwinData();
+            Reactor = new Reactor(this, new DataHolder());
         }
 
 #if false
@@ -191,7 +193,7 @@ namespace PsdzClient.Core
             PsdzDatabase database = ClientContext.GetDatabase(this);
             if (database != null && !"XXXXXXX".Equals(this.VIN7) && !string.IsNullOrEmpty(this.VIN7) && !this.VIN7.Equals(this.vinRangeTypeLastResolvedType, StringComparison.OrdinalIgnoreCase))
             {
-                PsdzDatabase.VinRanges vinRangesByVin = database.GetVinRangesByVin17(this.VINType, this.VIN7, IsVehicleWithOnlyVin7());
+                PsdzDatabase.VinRanges vinRangesByVin = database.GetVinRangesByVin17(this.VINType, this.VIN7, false, IsVehicleWithOnlyVin7());
 				if (vinRangesByVin != null)
 				{
                     this.vinRangeTypeLastResolvedType = this.VIN7;
@@ -231,6 +233,7 @@ namespace PsdzClient.Core
             }
         }
 
+        [XmlIgnore]
         public bool IsEcuIdentSuccessfull { get; set; }
 #if false
 
@@ -249,9 +252,9 @@ namespace PsdzClient.Core
                     }
                     return base.VIN17.Substring(0, 10);
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
-                    //Log.WarningException("Vehicle.VIN10Prefix", exception);
+                    Log.WarningException("Vehicle.VIN10Prefix", exception);
                     return null;
                 }
             }
@@ -281,9 +284,9 @@ namespace PsdzClient.Core
                     }
                     return base.VIN17.Substring(10, 7);
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
-                    //Log.WarningException("Vehicle.get_VIN7", exception);
+                    Log.WarningException("Vehicle.get_VIN7", exception);
                 }
                 return null;
             }
@@ -347,9 +350,9 @@ namespace PsdzClient.Core
                         return text2;
                     }
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
-                    //Log.WarningException("Vehicle.get_VINType", exception);
+                    Log.WarningException("Vehicle.get_VINType", exception);
                 }
                 return null;
             }
@@ -367,9 +370,9 @@ namespace PsdzClient.Core
                     }
                     return null;
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
-                    //Log.WarningException("Vehicle.get_VINType", exception);
+                    Log.WarningException("Vehicle.get_VINType", exception);
                 }
                 return null;
             }
@@ -574,7 +577,7 @@ namespace PsdzClient.Core
             }
             set
             {
-                //Log.Info("Vehicle.IsPowerSafeModeActiveByOldEcus_set", "Setting vehicle power safe modus from \"{0}\" to \"{1}\".", powerSafeModeByOldEcus, value);
+                Log.Info("Vehicle.IsPowerSafeModeActiveByOldEcus_set", "Setting vehicle power safe modus from \"{0}\" to \"{1}\".", powerSafeModeByOldEcus, value);
                 powerSafeModeByOldEcus = value;
             }
         }
@@ -601,7 +604,7 @@ namespace PsdzClient.Core
             }
             set
             {
-                //Log.Info("Vehicle.IsPowerSafeModeActiveByNewEcus_set", "Setting vehicle power safe modus from \"{0}\" to \"{1}\".", powerSafeModeByNewEcus, value);
+                Log.Info("Vehicle.IsPowerSafeModeActiveByNewEcus_set", "Setting vehicle power safe modus from \"{0}\" to \"{1}\".", powerSafeModeByNewEcus, value);
                 powerSafeModeByNewEcus = value;
             }
         }
@@ -640,9 +643,9 @@ namespace PsdzClient.Core
                         return cDatetimeByModelYearMonth;
                     }
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
-                    //Log.WarningException("Vehicle.get_C_DATETIME()", exception);
+                    Log.WarningException("Vehicle.get_C_DATETIME()", exception);
                 }
                 return null;
             }
@@ -806,7 +809,7 @@ namespace PsdzClient.Core
             }
             catch
             {
-                //Log.Warning("Vehicle.ValidateFSC", "Exception Occurred validating HDDUpdateIndex {0}", updateIndex);
+                Log.Warning("Vehicle.ValidateFSC", "Exception Occurred validating HDDUpdateIndex {0}", updateIndex);
                 return "-";
             }
         }
@@ -829,9 +832,9 @@ namespace PsdzClient.Core
                     return obj;
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException(Log.CurrentMethod() + "()", exception);
+                Log.WarningException(Log.CurrentMethod() + "()", exception);
                 throw;
             }
         }
@@ -980,9 +983,9 @@ namespace PsdzClient.Core
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.getECUTransaction()", exception);
+                Log.WarningException("Vehicle.getECUTransaction()", exception);
             }
             return null;
         }
@@ -1006,7 +1009,7 @@ namespace PsdzClient.Core
         {
             if (string.IsNullOrEmpty(checkSA))
             {
-                //Log.Warning("CoreFramework.hasSA()", "checkSA was null or empty");
+                Log.Warning("CoreFramework.hasSA()", "checkSA was null or empty");
                 return false;
             }
             if (base.FA == null)
@@ -1077,7 +1080,7 @@ namespace PsdzClient.Core
         {
             if (string.IsNullOrEmpty(checkFFM))
             {
-                //Log.Warning("CoreFramework.hasFFM()", "checkFFM was null or empty");
+                Log.Warning("CoreFramework.hasFFM()", "checkFFM was null or empty");
                 return true;
             }
             if (base.FFM != null)
@@ -1142,9 +1145,9 @@ namespace PsdzClient.Core
                     return item;
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.getECU()", exception);
+                Log.WarningException("Vehicle.getECU()", exception);
             }
             return null;
         }
@@ -1161,9 +1164,9 @@ namespace PsdzClient.Core
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehcile.getECU()", exception);
+                Log.WarningException("Vehcile.getECU()", exception);
             }
             return null;
         }
@@ -1198,9 +1201,9 @@ namespace PsdzClient.Core
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.getECUbyECU_SGBD()", exception);
+                Log.WarningException("Vehicle.getECUbyECU_SGBD()", exception);
             }
             return null;
         }
@@ -1221,9 +1224,9 @@ namespace PsdzClient.Core
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.getECUbyTITLE_ECUTREE()", exception);
+                Log.WarningException("Vehicle.getECUbyTITLE_ECUTREE()", exception);
             }
             return null;
         }
@@ -1232,12 +1235,12 @@ namespace PsdzClient.Core
         {
             if (string.IsNullOrEmpty(ECU_GRUPPE))
             {
-                //Log.Warning("Vehicle.getECUbyECU_GRUPPE()", "parameter was null or empty");
+                Log.Warning("Vehicle.getECUbyECU_GRUPPE()", "parameter was null or empty");
                 return null;
             }
             if (base.ECU == null)
             {
-                //Log.Warning("Vehicle.getECUbyECU_GRUPPE()", "ECU was null");
+                Log.Warning("Vehicle.getECUbyECU_GRUPPE()", "ECU was null");
                 return null;
             }
             try
@@ -1263,9 +1266,9 @@ namespace PsdzClient.Core
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.getECUbyECU_GRUPPE()", exception);
+                Log.WarningException("Vehicle.getECUbyECU_GRUPPE()", exception);
             }
             return null;
         }
@@ -1284,9 +1287,9 @@ namespace PsdzClient.Core
                 }
                 return num2;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehcile.getECU()", exception);
+                Log.WarningException("Vehcile.getECU()", exception);
                 return num2;
             }
         }
@@ -1311,7 +1314,7 @@ namespace PsdzClient.Core
             }
             catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.getCBSMeasurementValue()", exception);
+                Log.WarningException("Vehicle.getCBSMeasurementValue()", exception);
             }
             return null;
         }
@@ -1342,7 +1345,7 @@ namespace PsdzClient.Core
             }
             catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.addOrUpdateCBSMeasurementValue()", exception);
+                Log.WarningException("Vehicle.addOrUpdateCBSMeasurementValue()", exception);
             }
             return false;
         }
@@ -1384,7 +1387,7 @@ namespace PsdzClient.Core
             }
             catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.addOrUpdateCBSMeasurementValue()", exception);
+                Log.WarningException("Vehicle.addOrUpdateCBSMeasurementValue()", exception);
             }
             return false;
         }
@@ -1400,7 +1403,7 @@ namespace PsdzClient.Core
             {
                 if (nECU == null)
                 {
-                    //Log.Warning("Vehicle.AddOrUpdateECU()", "ecu was null");
+                    Log.Warning("Vehicle.AddOrUpdateECU()", "ecu was null");
                     return false;
                 }
                 if (base.ECU == null)
@@ -1415,23 +1418,23 @@ namespace PsdzClient.Core
                         if (num2 >= 0 && num2 < base.ECU.Count)
                         {
                             base.ECU[num2] = nECU;
-                            //Log.Info("Vehicle.AddOrUpdateECU()", "updating ecu: \"{0:X2}\" (hex.), slave address: \"{1:X2}\" (hex.).", nECU.ID_SG_ADR, nECU.ID_LIN_SLAVE_ADR);
+                            Log.Info("Vehicle.AddOrUpdateECU()", "updating ecu: \"{0:X2}\" (hex.), slave address: \"{1:X2}\" (hex.).", nECU.ID_SG_ADR, nECU.ID_LIN_SLAVE_ADR);
                             return true;
                         }
                     }
                 }
                 base.ECU.Add(nECU);
-                //Log.Info("Vehicle.AddOrUpdateECU()", "adding ecu: \"{0:X2}\" (hex.), slave address: \"{1:X2}\" (hex.).", nECU.ID_SG_ADR, nECU.ID_LIN_SLAVE_ADR);
+                Log.Info("Vehicle.AddOrUpdateECU()", "adding ecu: \"{0:X2}\" (hex.), slave address: \"{1:X2}\" (hex.).", nECU.ID_SG_ADR, nECU.ID_LIN_SLAVE_ADR);
                 return true;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.AddOrUpdateECU()", exception);
+                Log.WarningException("Vehicle.AddOrUpdateECU()", exception);
             }
             return false;
         }
 
-        public bool getISTACharacteristics(decimal id, out string value, long datavalueId, ValidationRuleInternalResults internalResult)
+        public bool getISTACharacteristics(decimal id, out string value, long datavalueId, ValidationRuleInternalResults internalResult, Vehicle vehicle = null)
 		{
             PsdzDatabase.CharacteristicRoots characteristicRootsById = ClientContext.GetDatabase(this)?.GetCharacteristicRootsById(id.ToString(CultureInfo.InvariantCulture));
 			if (characteristicRootsById != null)
@@ -1448,7 +1451,7 @@ namespace PsdzClient.Core
             {
                 string status_FunctionName = base.Status_FunctionName;
                 StateType status_FunctionState = base.Status_FunctionState;
-                //Log.Info("Vehicle.UpdateStatus()", "Change state from '{0}/{1}' to '{2}/{3}'", status_FunctionName, status_FunctionState, name, type);
+                Log.Info("Vehicle.UpdateStatus()", "Change state from '{0}/{1}' to '{2}/{3}'", status_FunctionName, status_FunctionState, name, type);
                 base.Status_FunctionName = name;
                 base.Status_FunctionState = type;
                 base.Status_FunctionStateLastChangeTime = DateTime.Now;
@@ -1458,9 +1461,26 @@ namespace PsdzClient.Core
                 }
                 IsNoVehicleCommunicationRunning = base.Status_FunctionState != StateType.running;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.UpdateStatus()", exception);
+                Log.WarningException("Vehicle.UpdateStatus()", exception);
+            }
+        }
+
+        [XmlIgnore]
+        public string Baustand
+        {
+            get
+            {
+                return baustand;
+            }
+            set
+            {
+                if (baustand != value)
+                {
+                    baustand = value;
+                    OnPropertyChanged("Baustand");
+                }
             }
         }
 
@@ -1496,7 +1516,7 @@ namespace PsdzClient.Core
                 }
                 if (string.IsNullOrEmpty(base.ILevel))
                 {
-                    //Log.Info("Vehicle.evaILevelExpression()", "ILevel unknown; result will be true; expression was: {0}", iLevelExpressions);
+                    Log.Info("Vehicle.evaILevelExpression()", "ILevel unknown; result will be true; expression was: {0}", iLevelExpressions);
                     return true;
                 }
                 if (iLevelExpressions.Contains("&"))
@@ -1504,10 +1524,10 @@ namespace PsdzClient.Core
                     flag2 = false;
                     flag = true;
                 }
-                //if (CoreFramework.DebugLevel > 0)
-                //{
-                //    Log.Info("Vehicle.evalILevelExpression()", "expression:{0} vehicle iLEVEL:{1}", iLevelExpressions, base.ILevel);
-                //}
+                if (CoreFramework.DebugLevel > 0)
+                {
+                    Log.Info("Vehicle.evalILevelExpression()", "expression:{0} vehicle iLEVEL:{1}", iLevelExpressions, base.ILevel);
+                }
                 string[] separator = new string[2] { "&", "|" };
                 string[] array = iLevelExpressions.Split(separator, StringSplitOptions.RemoveEmptyEntries);
                 foreach (string text in array)
@@ -1518,66 +1538,66 @@ namespace PsdzClient.Core
                     {
                         continue;
                     }
-                    //Log.Info("Vehicle.evalILevelExpression()", "expression {0} {1}", base.ILevel, text);
+                    Log.Info("Vehicle.evalILevelExpression()", "expression {0} {1}", base.ILevel, text);
                     if (string.Compare(base.ILevel, 0, array2[1], 0, 4, StringComparison.OrdinalIgnoreCase) == 0)
                     {
                         switch (array2[0])
                         {
                             case "<":
-                                //if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) < FormatConverter.ExtractNumericalILevel(array2[1]))
-                                //{
-                                //    Log.Info("Vehicle.evalILevelExpression()", "< was true");
-                                //}
+                                if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) < FormatConverter.ExtractNumericalILevel(array2[1]))
+                                {
+                                    Log.Info("Vehicle.evalILevelExpression()", "< was true");
+                                }
                                 flag = ((!flag2) ? (flag & (FormatConverter.ExtractNumericalILevel(base.ILevel) < FormatConverter.ExtractNumericalILevel(array2[1]))) : (flag | (FormatConverter.ExtractNumericalILevel(base.ILevel) < FormatConverter.ExtractNumericalILevel(array2[1]))));
                                 break;
                             case "=":
-                                //if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) == FormatConverter.ExtractNumericalILevel(array2[1]))
-                                //{
-                                //    Log.Info("Vehicle.evalILevelExpression()", "= was true");
-                                //}
+                                if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) == FormatConverter.ExtractNumericalILevel(array2[1]))
+                                {
+                                    Log.Info("Vehicle.evalILevelExpression()", "= was true");
+                                }
                                 flag = ((!flag2) ? (flag & (FormatConverter.ExtractNumericalILevel(base.ILevel) == FormatConverter.ExtractNumericalILevel(array2[1]))) : (flag | (FormatConverter.ExtractNumericalILevel(base.ILevel) == FormatConverter.ExtractNumericalILevel(array2[1]))));
                                 break;
                             case ">=":
-                                //if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) >= FormatConverter.ExtractNumericalILevel(array2[1]))
-                                //{
-                                //    Log.Info("Vehicle.evalILevelExpression()", ">= was true");
-                                //}
+                                if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) >= FormatConverter.ExtractNumericalILevel(array2[1]))
+                                {
+                                    Log.Info("Vehicle.evalILevelExpression()", ">= was true");
+                                }
                                 flag = ((!flag2) ? (flag & (FormatConverter.ExtractNumericalILevel(base.ILevel) >= FormatConverter.ExtractNumericalILevel(array2[1]))) : (flag | (FormatConverter.ExtractNumericalILevel(base.ILevel) >= FormatConverter.ExtractNumericalILevel(array2[1]))));
                                 break;
                             case ">":
-                                //if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) > FormatConverter.ExtractNumericalILevel(array2[1]))
-                                //{
-                                //    Log.Info("Vehicle.evalILevelExpression()", "> was true");
-                                //}
+                                if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) > FormatConverter.ExtractNumericalILevel(array2[1]))
+                                {
+                                    Log.Info("Vehicle.evalILevelExpression()", "> was true");
+                                }
                                 flag = ((!flag2) ? (flag & (FormatConverter.ExtractNumericalILevel(base.ILevel) > FormatConverter.ExtractNumericalILevel(array2[1]))) : (flag | (FormatConverter.ExtractNumericalILevel(base.ILevel) > FormatConverter.ExtractNumericalILevel(array2[1]))));
                                 break;
                             case "<=":
-                                //if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) <= FormatConverter.ExtractNumericalILevel(array2[1]))
-                                //{
-                                //    Log.Info("Vehicle.evalILevelExpression()", "<= was true");
-                                //}
+                                if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) <= FormatConverter.ExtractNumericalILevel(array2[1]))
+                                {
+                                    Log.Info("Vehicle.evalILevelExpression()", "<= was true");
+                                }
                                 flag = ((!flag2) ? (flag & (FormatConverter.ExtractNumericalILevel(base.ILevel) <= FormatConverter.ExtractNumericalILevel(array2[1]))) : (flag | (FormatConverter.ExtractNumericalILevel(base.ILevel) <= FormatConverter.ExtractNumericalILevel(array2[1]))));
                                 break;
                             case "!=":
                             case "<>":
-                                //if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) != FormatConverter.ExtractNumericalILevel(array2[1]))
-                                //{
-                                //    Log.Info("Vehicle.evalILevelExpression()", "!= was true");
-                                //}
+                                if (CoreFramework.DebugLevel > 0 && FormatConverter.ExtractNumericalILevel(base.ILevel) != FormatConverter.ExtractNumericalILevel(array2[1]))
+                                {
+                                    Log.Info("Vehicle.evalILevelExpression()", "!= was true");
+                                }
                                 flag = ((!flag2) ? (flag & (FormatConverter.ExtractNumericalILevel(base.ILevel) != FormatConverter.ExtractNumericalILevel(array2[1]))) : (flag | (FormatConverter.ExtractNumericalILevel(base.ILevel) != FormatConverter.ExtractNumericalILevel(array2[1]))));
                                 break;
                         }
                     }
                     else
                     {
-                        //Log.Warning("Vehicle.evalILevelExpression()", "iLevel main type does not match");
+                        Log.Warning("Vehicle.evalILevelExpression()", "iLevel main type does not match");
                     }
                 }
                 return flag;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.evalILevelExpression()", exception);
+                Log.WarningException("Vehicle.evalILevelExpression()", exception);
                 return true;
             }
         }
@@ -1628,9 +1648,9 @@ namespace PsdzClient.Core
                     return true;
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.isECUAlreadyScanned()", exception);
+                Log.WarningException("Vehicle.isECUAlreadyScanned()", exception);
             }
             return false;
         }
@@ -1693,7 +1713,7 @@ namespace PsdzClient.Core
                                 break;
                             }
                         default:
-                            //Log.Error("VehicleHelper.getResultAs<T>", "Unknown resultName '{0}' found!", resultName);
+                            Log.Error("VehicleHelper.getResultAs<T>", "Unknown resultName '{0}' found!", resultName);
                             break;
                         case "/Result/EWortListe":
                             {
@@ -1717,9 +1737,9 @@ namespace PsdzClient.Core
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.getISTAResultAs(string resultName)", exception);
+                Log.WarningException("Vehicle.getISTAResultAs(string resultName)", exception);
             }
             return default(T);
         }
@@ -1962,7 +1982,7 @@ namespace PsdzClient.Core
 			}
             catch (Exception exception)
             {
-                //Log.ErrorException("Vehicle.CalculateFaultList()", exception);
+                Log.ErrorException("Vehicle.CalculateFaultList()", exception);
                 return observableCollection;
             }
         }
@@ -2024,7 +2044,7 @@ namespace PsdzClient.Core
             }
             catch (Exception exception)
             {
-                //Log.WarningException("Vehicle.CalculateFaultCodeSum()", exception);
+                Log.WarningException("Vehicle.CalculateFaultCodeSum()", exception);
                 return null;
             }
         }
@@ -2033,7 +2053,7 @@ namespace PsdzClient.Core
         {
             if (dtc == null)
             {
-                //Log.Warning("Vehicle.AddCombinedDTC()", "dtc was null");
+                Log.Warning("Vehicle.AddCombinedDTC()", "dtc was null");
             }
             else if (dtc.IsVirtual && dtc.IsCombined && base.CombinedFaults != null)
             {
@@ -2067,7 +2087,7 @@ namespace PsdzClient.Core
                     set.Add(result);
                     continue;
                 }
-                //Log.Error("Vehicle.GetBnTypes()", "Ignore BN \"{0}\", because of missconfiguration.", text);
+                Log.Error("Vehicle.GetBnTypes()", "Ignore BN \"{0}\", because of missconfiguration.", text);
             }
             return set;
         }
@@ -2114,6 +2134,9 @@ namespace PsdzClient.Core
             }
             return num;
         }
+
+        // [UH] local reactor
+        public Reactor Reactor { get; private set; }
 
         // ToDo: Check on update
         public const string BnProgramming = "BN2020,BN2020_MOTORBIKE";
@@ -2192,6 +2215,8 @@ namespace PsdzClient.Core
 
         private string kraftstoffartEinbaulage;
 
-		private static readonly DateTime lciRRS2 = DateTime.Parse("2012-05-31", CultureInfo.InvariantCulture);
+        private string baustand;
+
+        private static readonly DateTime lciRRS2 = DateTime.Parse("2012-05-31", CultureInfo.InvariantCulture);
     }
 }

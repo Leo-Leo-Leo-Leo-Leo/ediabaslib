@@ -8,6 +8,16 @@ namespace EdiabasLib
 {
     public class MemoryStreamReader : Stream
     {
+        private bool _disposed;
+        private FileStream _fs;
+        private MemoryMappedFile _mmFile;
+        private MemoryMappedViewStream _mmStream;
+        private readonly long _fileLength;
+        private static readonly object DirDictLock = new object();
+        private static string _dirDictName = string.Empty;
+        private static Dictionary<string, string> _dirDict;
+        private static FileSystemWatcher _fsw;
+
         static MemoryStreamReader()
         {
             AppDomain.CurrentDomain.ProcessExit += (sender, args) =>
@@ -16,65 +26,16 @@ namespace EdiabasLib
             };
         }
 
-        public MemoryStreamReader(string path)
+        public MemoryStreamReader(string filePath)
         {
-            if (!File.Exists(path))
-            {   // get the case sensitive name from the directory
-                switch (Environment.OSVersion.Platform)
-                {
-                    case PlatformID.Unix:
-                    case PlatformID.MacOSX:
-                        break;
-
-                    default:
-                        throw new FileNotFoundException();
-                }
-                string fileName = Path.GetFileName(path);
-                string dirName = Path.GetDirectoryName(path);
-                if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(dirName))
-                {
-                    throw new FileNotFoundException();
-                }
-                lock (DirDictLock)
-                {
-                    if ((_dirDict == null) || (string.Compare(dirName, _dirDictName, StringComparison.Ordinal) != 0))
-                    {
-                        Dictionary<string, string> dirDict = GetDirDict(dirName);
-                        if (dirDict == null)
-                        {
-                            throw new FileNotFoundException();
-                        }
-                        _dirDictName = dirName;
-                        _dirDict = dirDict;
-                        RemoveDirectoryWatcher();
-                        _fsw = new FileSystemWatcher(dirName);
-                        _fsw.Changed += DirectoryChangedEvent;
-                        _fsw.Created += DirectoryChangedEvent;
-                        _fsw.Deleted += DirectoryChangedEvent;
-                        _fsw.Renamed += DirectoryChangedEvent;
-                        _fsw.IncludeSubdirectories = true;
-                        _fsw.EnableRaisingEvents = true;
-                    }
-                    string realName;
-                    if (!_dirDict.TryGetValue(fileName.ToUpperInvariant(), out realName))
-                    {
-                        throw new FileNotFoundException();
-                    }
-                    path = Path.Combine(dirName, realName);
-                    if (!File.Exists(path))
-                    {
-                        throw new FileNotFoundException();
-                    }
-                }
-            }
-
-            FileInfo fileInfo = new FileInfo(path);
+            string realPath = GetRealFileName(filePath);
+            FileInfo fileInfo = new FileInfo(realPath);
             _fileLength = fileInfo.Length;
 
-            FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.None);
             try
             {
-                _mmFile = MemoryMappedFile.CreateFromFile(fs, null, 0, MemoryMappedFileAccess.Read, null, HandleInheritability.None, false);
+                _fs = new FileStream(realPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.None);
+                _mmFile = MemoryMappedFile.CreateFromFile(_fs, null, 0, MemoryMappedFileAccess.Read, null, HandleInheritability.None, false);
                 _mmStream = _mmFile.CreateViewStream(0, 0, MemoryMappedFileAccess.Read);
             }
             catch (Exception)
@@ -87,6 +48,19 @@ namespace EdiabasLib
         public static MemoryStreamReader OpenRead(string path)
         {
             return new MemoryStreamReader(path);
+        }
+
+        public static bool Exists(string path)
+        {
+            try
+            {
+                path = GetRealFileName(path);
+                return File.Exists(path);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         public override bool CanRead
@@ -162,9 +136,27 @@ namespace EdiabasLib
             _mmStream.Flush();
         }
 
-        public override void Close()
+        // Stream Close() calls Dispose(true)
+        protected override void Dispose(bool disposing)
         {
-            CloseHandles();
+            // Check to see if Dispose has already been called.
+            if (!_disposed)
+            {
+                // Dispose unmanged resources.
+                CloseHandles();
+
+                // If disposing equals true, dispose all managed
+                // and unmanaged resources.
+                if (disposing)
+                {
+                    // Dispose managed resources.
+                }
+
+                // Note disposing has been done.
+                _disposed = true;
+            }
+
+            base.Dispose(disposing);
         }
 
         public override int Read(byte[] buffer, int offset, int count)
@@ -175,16 +167,28 @@ namespace EdiabasLib
             {
                 throw new Exception("Attempt to read before the start of the stream");
             }
-            int useCount = count;
+
+            long useCount = count;
             if (num2 > _fileLength)
             {
-                useCount = (int)(_fileLength - offset - _mmStream.Position);
+                useCount = _fileLength - _mmStream.Position;
                 if (useCount < 0)
                 {
                     useCount = 0;
                 }
+
+                if (useCount > count)
+                {
+                    useCount = count;
+                }
             }
-            return _mmStream.Read(buffer, offset, useCount);
+
+            if (useCount == 0)
+            {
+                return 0;
+            }
+
+            return _mmStream.Read(buffer, offset, (int) useCount);
         }
 
         public override long Seek(long offset, SeekOrigin origin)
@@ -259,14 +263,21 @@ namespace EdiabasLib
                 _mmStream.Dispose();
                 _mmStream = null;
             }
+
             if (_mmFile != null)
             {
                 _mmFile.Dispose();
                 _mmFile = null;
             }
+
+            if (_fs != null)
+            {
+                _fs.Dispose();
+                _fs = null;
+            }
         }
 
-        private Dictionary<string, string> GetDirDict(string dirName)
+        private static Dictionary<string, string> GetDirDict(string dirName)
         {
             try
             {
@@ -291,6 +302,67 @@ namespace EdiabasLib
                 return null;
             }
         }
+
+        private static string GetRealFileName(string filePath)
+        {
+            if (File.Exists(filePath))
+            {
+                return filePath;
+            }
+
+            // get the case-sensitive name from the directory
+            switch (Environment.OSVersion.Platform)
+            {
+                case PlatformID.Unix:
+                case PlatformID.MacOSX:
+                    break;
+
+                default:
+                    throw new FileNotFoundException();
+            }
+
+            string fileName = Path.GetFileName(filePath);
+            string dirName = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(dirName))
+            {
+                throw new FileNotFoundException();
+            }
+            lock (DirDictLock)
+            {
+                if ((_dirDict == null) || (string.Compare(dirName, _dirDictName, StringComparison.Ordinal) != 0))
+                {
+                    Dictionary<string, string> dirDict = GetDirDict(dirName);
+                    if (dirDict == null)
+                    {
+                        throw new FileNotFoundException();
+                    }
+                    _dirDictName = dirName;
+                    _dirDict = dirDict;
+                    RemoveDirectoryWatcher();
+                    _fsw = new FileSystemWatcher(dirName);
+                    _fsw.Changed += DirectoryChangedEvent;
+                    _fsw.Created += DirectoryChangedEvent;
+                    _fsw.Deleted += DirectoryChangedEvent;
+                    _fsw.Renamed += DirectoryChangedEvent;
+                    _fsw.IncludeSubdirectories = true;
+                    _fsw.EnableRaisingEvents = true;
+                }
+
+                if (!_dirDict.TryGetValue(fileName.ToUpperInvariant(), out string realName))
+                {
+                    throw new FileNotFoundException();
+                }
+
+                string realPath = Path.Combine(dirName, realName);
+                if (!File.Exists(realPath))
+                {
+                    throw new FileNotFoundException();
+                }
+
+                return realPath;
+            }
+        }
+
 
         private static void RemoveDirectoryWatcher()
         {
@@ -328,13 +400,5 @@ namespace EdiabasLib
                 _dirDict = null;
             }
         }
-
-        private MemoryMappedFile _mmFile;
-        private MemoryMappedViewStream _mmStream;
-        private readonly long _fileLength;
-        private static readonly object DirDictLock = new object();
-        private static string _dirDictName = string.Empty;
-        private static Dictionary<string, string> _dirDict;
-        private static FileSystemWatcher _fsw;
     }
 }

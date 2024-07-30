@@ -17,16 +17,18 @@ using Google.Apis.AndroidPublisher.v3.Data;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
 using Google.Apis.Upload;
+using Google.Apis.Util;
 using Google.Apis.Util.Store;
 
 namespace ApkUploader
 {
     public partial class FormMain : Form
     {
+        private const string AndroidManifest = "AndroidManifest.xml";
         private const string StatusCompleted = "completed";
         private const string PackageName = @"de.holeschak.bmw_deep_obd";
         private const string ExpansionKeep = @"*";
-        private static readonly string[] TracksEdit = { "alpha", "beta", "production", "internal" };
+        private static readonly string[] TracksEdit = { "alpha", "beta", "production", "internal", "Test" };
         private static readonly string[] SerialsOem = { "DeepOBD", "DeepOBDIbus" };
         private volatile Thread _serviceThread;
         private readonly string _apkPath;
@@ -132,7 +134,12 @@ namespace ApkUploader
                 string[] files = Directory.GetFiles(resourceDir, "Strings.xml", SearchOption.AllDirectories);
                 foreach (string file in files)
                 {
-                    string parentName = Directory.GetParent(file).Name;
+                    string parentName = Directory.GetParent(file)?.Name;
+                    if (string.IsNullOrEmpty(parentName))
+                    {
+                        continue;
+                    }
+
                     MatchCollection matchesFile = regex.Matches(parentName);
                     if ((matchesFile.Count == 1) && (matchesFile[0].Groups.Count == 2))
                     {
@@ -209,9 +216,19 @@ namespace ApkUploader
             versionCode = null;
             try
             {
-                string parentDir = Directory.GetParent(resourceDir).FullName;
-                string propertiesDir = Path.Combine(parentDir, "Properties");
-                string manifestFile = Path.Combine(propertiesDir, "AndroidManifest.xml");
+                string parentDir = Directory.GetParent(resourceDir)?.FullName;
+                if (string.IsNullOrEmpty(parentDir))
+                {
+                    return string.Empty;
+                }
+
+                string manifestFile = Path.Combine(parentDir, AndroidManifest);
+                if (!File.Exists(manifestFile))
+                {
+                    string propertiesDir = Path.Combine(parentDir, "Properties");
+                    manifestFile = Path.Combine(propertiesDir, AndroidManifest);
+                }
+
                 if (!File.Exists(manifestFile))
                 {
                     return string.Empty;
@@ -339,17 +356,26 @@ namespace ApkUploader
             return true;
         }
 
-        private async Task<UserCredential> GetCredatials()
+        // https://developers.google.com/identity/protocols/oauth2?hl=de
+        // https://console.cloud.google.com/apis/dashboard
+        private UserCredential GetCredential()
         {
             UserCredential credential;
             using (var stream = new FileStream(Path.Combine(_apkPath, "client_secrets.json"), FileMode.Open, FileAccess.Read))
             {
-                credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+                credential = GoogleWebAuthorizationBroker.AuthorizeAsync(
                     GoogleClientSecrets.FromStream(stream).Secrets,
                     new[] { AndroidPublisherService.Scope.Androidpublisher },
-                    "ApkUploader", _cts.Token, new FileDataStore("ApkUploader"));
+                    "ApkUploader", _cts.Token, new FileDataStore("ApkUploader")).Result;
             }
 
+            if (credential.Token.IsStale)
+            {
+                if (!credential.RefreshTokenAsync(_cts.Token).Result)
+                {
+                    throw new Exception("Refresh token failed");
+                }
+            }
             return credential;
         }
 
@@ -769,8 +795,7 @@ namespace ApkUploader
                     StringBuilder sb = new StringBuilder();
                     try
                     {
-                        UserCredential credential = await GetCredatials();
-                        using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(credential)))
+                        using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(GetCredential())))
                         {
                             EditsResource edits = service.Edits;
                             EditsResource.InsertRequest editRequest = edits.Insert(null, PackageName);
@@ -844,8 +869,7 @@ namespace ApkUploader
                 StringBuilder sb = new StringBuilder();
                 try
                 {
-                    UserCredential credential = await GetCredatials();
-                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(credential)))
+                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(GetCredential())))
                     {
                         EditsResource edits = service.Edits;
                         EditsResource.InsertRequest editRequest = edits.Insert(null, PackageName);
@@ -874,7 +898,11 @@ namespace ApkUploader
                                             }
                                             if (trackRelease.Status != null)
                                             {
-                                                sb.AppendLine($"Status: {trackRelease.Status}");
+                                                sb.Append($"Status: {trackRelease.Status}");
+
+                                                string userFraction = trackRelease.UserFraction != null ?
+                                                    string.Format(CultureInfo.InvariantCulture, ", User fraction: {0:0}%", trackRelease.UserFraction * 100) : string.Empty;
+                                                sb.AppendLine(userFraction);
                                             }
 
                                             if (trackRelease.ReleaseNotes != null)
@@ -964,8 +992,7 @@ namespace ApkUploader
                 StringBuilder sb = new StringBuilder();
                 try
                 {
-                    UserCredential credential = await GetCredatials();
-                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(credential)))
+                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(GetCredential())))
                     {
                         EditsResource edits = service.Edits;
                         EditsResource.InsertRequest editRequest = edits.Insert(null, PackageName);
@@ -1071,8 +1098,7 @@ namespace ApkUploader
                 StringBuilder sb = new StringBuilder();
                 try
                 {
-                    UserCredential credential = await GetCredatials();
-                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(credential)))
+                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(GetCredential())))
                     {
                         EditsResource edits = service.Edits;
                         EditsResource.InsertRequest editRequest = edits.Insert(null, PackageName);
@@ -1220,14 +1246,19 @@ namespace ApkUploader
                         UpdateStatus(sb.ToString());
                     }
 
-                    UserCredential credential = await GetCredatials();
-                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(credential)))
+                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(GetCredential())))
                     {
                         EditsResource edits = service.Edits;
                         EditsResource.InsertRequest editRequest = edits.Insert(null, PackageName);
                         AppEdit appEdit = await editRequest.ExecuteAsync(_cts.Token);
                         Track trackResponse = await edits.Tracks.Get(PackageName, appEdit.Id, track).ExecuteAsync(_cts.Token);
                         sb.AppendLine($"Track: {track}");
+                        if (trackResponse.Releases == null)
+                        {
+                            sb.AppendLine($"No releases");
+                            UpdateStatus(sb.ToString());
+                            throw new Exception("No releases");
+                        }
                         if (trackResponse.Releases.Count != 1)
                         {
                             sb.AppendLine($"Invalid release count: {trackResponse.Releases.Count}");
@@ -1380,8 +1411,7 @@ namespace ApkUploader
                         UpdateStatus(sb.ToString());
                     }
 
-                    UserCredential credential = await GetCredatials();
-                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(credential)))
+                    using (AndroidPublisherService service = new AndroidPublisherService(GetInitializer(GetCredential())))
                     {
                         EditsResource edits = service.Edits;
                         EditsResource.InsertRequest editRequest = edits.Insert(null, PackageName);

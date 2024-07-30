@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Text;
@@ -13,6 +14,7 @@ using System.IO;
 using Android.Content;
 using Android.Hardware.Usb;
 using AndroidX.AppCompat.App;
+using BmwDeepObd.Dialogs;
 using BmwDeepObd.FilePicker;
 
 // ReSharper disable IdentifierTypo
@@ -467,21 +469,28 @@ namespace BmwDeepObd
 
         private bool InterfacePrepare()
         {
-            if (!_ediabas.EdInterfaceClass.Connected)
+            try
             {
-                if (!_ediabas.EdInterfaceClass.InterfaceConnect())
+                if (!_ediabas.EdInterfaceClass.Connected)
                 {
-                    return false;
+                    if (!_ediabas.EdInterfaceClass.InterfaceConnect())
+                    {
+                        return false;
+                    }
+                    _ediabas.EdInterfaceClass.CommParameter =
+                        new UInt32[] { 0x0000010F, 0x0001C200, 0x000004B0, 0x00000014, 0x0000000A, 0x00000002, 0x00001388 };
+                    _ediabas.EdInterfaceClass.CommAnswerLen =
+                        new Int16[] { 0x0000, 0x0000 };
                 }
-                _ediabas.EdInterfaceClass.CommParameter =
-                    new UInt32[] {0x0000010F, 0x0001C200, 0x000004B0, 0x00000014, 0x0000000A, 0x00000002, 0x00001388};
-                _ediabas.EdInterfaceClass.CommAnswerLen =
-                    new Int16[] {0x0000, 0x0000};
-            }
 
-            _transmitCanceled = false;
-            _ediabas.EdInterfaceClass.TransmitCancel(false);
-            return true;
+                _transmitCanceled = false;
+                _ediabas.EdInterfaceClass.TransmitCancel(false);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         // ReSharper disable once UnusedMethodReturnValue.Local
@@ -735,10 +744,6 @@ namespace BmwDeepObd
                     }
 
                     fwUpdateEnabled = fwUpdateVersion >= 0 && ((_fwVersion != fwUpdateVersion) || ActivityCommon.CollectDebugInfo);
-                    if (_rejectFwUpdate)
-                    {
-                        fwUpdateEnabled = false;
-                    }
 
                     if (!elmMode && _interfaceType == ActivityCommon.InterfaceType.Bluetooth)
                     {
@@ -748,6 +753,12 @@ namespace BmwDeepObd
                             fwChangeEnabled = true;
                         }
                     }
+                }
+
+                if (_rejectFwUpdate)
+                {
+                    fwUpdateEnabled = false;
+                    fwChangeEnabled = false;
                 }
 
                 if (!fwUpdateEnabled)
@@ -1032,7 +1043,6 @@ namespace BmwDeepObd
                     }
 
                     progress.Dismiss();
-                    progress.Dispose();
 
                     UpdateDisplay();
                     if (commFailed)
@@ -1256,7 +1266,6 @@ namespace BmwDeepObd
                     }
 
                     progress.Dismiss();
-                    progress.Dispose();
 
                     if (commFailed)
                     {
@@ -1297,7 +1306,15 @@ namespace BmwDeepObd
             string message = GetString(Resource.String.can_adapter_fw_update_info);
             if (elmFirmware)
             {
-                message = GetString(Resource.String.can_adapter_fw_elm_info) + "\r\n" + message;
+                int fwVersionElm = PicBootloader.GetFirmwareVersion((uint)_adapterType, true);
+                string verInfo = string.Empty;
+
+                if (fwVersionElm > 0)
+                {
+                    verInfo = string.Format(CultureInfo.InvariantCulture, " V{0}.{1}", (fwVersionElm >> 4) & 0xF, fwVersionElm & 0xF);
+                }
+
+                message = string.Format(GetString(Resource.String.can_adapter_fw_elm_info), verInfo) + "\r\n" + message;
             }
 
             switch (_interfaceType)
@@ -1349,6 +1366,7 @@ namespace BmwDeepObd
             {
                 bool updateOk = false;
                 bool connectOk = false;
+                bool closeInterface = false;
                 bool aborted = false;
                 bool elmMode = IsCustomElmAdapter(_interfaceType, _deviceAddress);
                 bool elmFirmware = false;
@@ -1361,20 +1379,68 @@ namespace BmwDeepObd
                     connectOk = InterfacePrepare();
                     Stream inStream = null;
                     Stream outStream = null;
+                    if (!connectOk)
+                    {
+                        switch (_interfaceType)
+                        {
+                            case ActivityCommon.InterfaceType.DeepObdWifi:
+                            {
+                                if (_ediabas.EdInterfaceClass is EdInterfaceObd edInterfaceObd)
+                                {
+                                    string appendTag = ":" + EdCustomWiFiInterface.RawTag;
+                                    if (!edInterfaceObd.ComPort.EndsWith(appendTag))
+                                    {
+                                        edInterfaceObd.ComPort += appendTag;
+                                    }
+
+                                    // close interface to correct ComPort later
+                                    closeInterface = true;
+                                    if (InterfacePrepare())
+                                    {
+                                        Stream networkReadStream = EdCustomWiFiInterface.NetworkReadStream;
+                                        Stream networkWriteStream = EdCustomWiFiInterface.NetworkWriteStream;
+                                        if (networkReadStream != null && networkWriteStream != null)
+                                        {
+                                            if (PicBootloader.IsInBooloaderMode(networkReadStream, networkWriteStream))
+                                            {
+                                                connectOk = true;
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+
                     if (connectOk)
                     {
                         switch (_interfaceType)
                         {
                             case ActivityCommon.InterfaceType.Bluetooth:
                             {
-                                BluetoothSocket bluetoothSocket = EdBluetoothInterface.BluetoothSocket;
-                                if (bluetoothSocket == null)
+                                Stream bluetoothInStream = EdBluetoothInterface.BluetoothInStream;
+                                Stream bluetoothOutStream = EdBluetoothInterface.BluetoothOutStream;
+                                if (bluetoothInStream == null || bluetoothOutStream == null)
                                 {
                                     connectOk = false;
                                     break;
                                 }
-                                inStream = bluetoothSocket.InputStream;
-                                outStream = bluetoothSocket.OutputStream;
+
+                                if (bluetoothInStream is EscapeStreamReader escapeReader && escapeReader.EscapeMode)
+                                {
+                                    connectOk = false;
+                                    break;
+                                }
+
+                                if (bluetoothOutStream is EscapeStreamWriter escapeWriter && escapeWriter.EscapeMode)
+                                {
+                                    connectOk = false;
+                                    break;
+                                }
+
+                                inStream = bluetoothInStream;
+                                outStream = bluetoothOutStream;
                                 break;
                             }
 
@@ -1464,7 +1530,6 @@ namespace BmwDeepObd
                     }
 
                     progress.Dismiss();
-                    progress.Dispose();
 
                     string message;
                     if (updateOk)
@@ -1482,7 +1547,7 @@ namespace BmwDeepObd
 
                     UpdateDisplay();
 
-                    if (updateOk && changeFirmware)
+                    if (closeInterface || (updateOk && changeFirmware))
                     {
                         EdiabasClose();
                     }

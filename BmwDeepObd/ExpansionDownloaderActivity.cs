@@ -41,11 +41,11 @@ namespace BmwDeepObd
         }
 
 #if true
-        private const int ObbFileSize = 410411504;
-        private static readonly byte[] ObbMd5 = { 0xB9, 0xD8, 0x7B, 0x5F, 0x9C, 0x5B, 0x54, 0xAD, 0x46, 0x54, 0x06, 0x70, 0xA5, 0xE9, 0x4D, 0x1C };
+        private const int ObbFileSize = 444810640;
+        private static readonly byte[] ObbMd5 = { 0x42, 0x4D, 0x3B, 0xF2, 0xCE, 0xA2, 0xA4, 0x81, 0xB3, 0x41, 0x5D, 0x62, 0x88, 0xF4, 0xDF, 0x26 };
 #else
-        private const int ObbFileSize = 418973632;
-        private static readonly byte[] ObbMd5 = { 0x90, 0x98, 0xCA, 0xBA, 0xEA, 0x6F, 0xCF, 0xC1, 0xB7, 0x64, 0xB2, 0x28, 0x85, 0xE9, 0x72, 0x18 };
+        private const int ObbFileSize = 424522080;
+        private static readonly byte[] ObbMd5 = { 0xE8, 0x0A, 0xE8, 0x69, 0xB6, 0x8D, 0xDB, 0x1F, 0xC1, 0xA7, 0x91, 0xE2, 0x8F, 0x60, 0x9F, 0xB5 };
 #endif
         private readonly string[] _permissionsExternalStorage =
         {
@@ -65,6 +65,7 @@ namespace BmwDeepObd
         private bool? _expansionFileDelivered;
         private bool _downloadStarted;
         private bool _activityActive;
+        private string _invalidObbFileName;
 
         /// <summary>
         /// The downloader service.
@@ -238,6 +239,7 @@ namespace BmwDeepObd
 
                 switch (newState)
                 {
+                    case DownloaderClientState.FailedFetchingUrl:
                     case DownloaderClientState.FailedUnlicensed:
                         CheckGooglePlay();
                         break;
@@ -284,6 +286,7 @@ namespace BmwDeepObd
             _notificationGranted = false;
             _googlePlayErrorShown = false;
             _expansionFileDelivered = null;
+            _invalidObbFileName = null;
 
             CustomDownloadNotification.RegisterNotificationChannels(this);
         }
@@ -296,6 +299,8 @@ namespace BmwDeepObd
             _storageAccessRequested = false;
             _googlePlayErrorShown = false;
             _expansionFileDelivered = null;
+            _invalidObbFileName = null;
+
             if (IsAssetPresent(this))
             {
                 try
@@ -594,8 +599,34 @@ namespace BmwDeepObd
                                     FileInfo fileInfo = new FileInfo(file);
                                     if (fileInfo.Exists && fileInfo.Length == ObbFileSize)
                                     {
-                                        obbFile = file;
-                                        break;
+                                        try
+                                        {
+                                            using (FileStream stream = File.OpenRead(file))
+                                            {
+                                            }
+
+                                            obbFile = file;
+                                            break;
+                                        }
+                                        catch (Exception)
+                                        {
+                                            try
+                                            {
+                                                File.Delete(obbFile);
+                                            }
+                                            catch (Exception)
+                                            {
+                                                // ignored
+                                            }
+
+                                            if (context is ExpansionDownloaderActivity downloaderActivity)
+                                            {
+                                                if (File.Exists(file))
+                                                {
+                                                    downloaderActivity._invalidObbFileName = file;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1077,6 +1108,29 @@ namespace BmwDeepObd
         {
             if (!_storageAccessGranted)
             {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(_invalidObbFileName))
+            {
+                string message = string.Format(CultureInfo.InvariantCulture, GetString(Resource.String.obb_not_readable), _invalidObbFileName);
+                AlertDialog alertDialog = new AlertDialog.Builder(this)
+                    .SetMessage(message)
+                    .SetTitle(Resource.String.alert_title_error)
+                    .SetNeutralButton(Resource.String.button_ok, (s, e) => { })
+                    .Show();
+                if (alertDialog != null)
+                {
+                    alertDialog.DismissEvent += (sender, args) =>
+                    {
+                        if (!_activityActive)
+                        {
+                            return;
+                        }
+
+                        Finish();
+                    };
+                }
                 return;
             }
 

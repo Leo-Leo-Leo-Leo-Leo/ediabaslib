@@ -1,8 +1,8 @@
-﻿using System;
-using System.Data.SQLite;
-
+﻿
 public static class DatabaseFunctions
 {
+    public const string DatabasePassword = "6505EFBDC3E5F324";
+
     public const string SqlTitleItems =
         "TITLE_DEDE, TITLE_ENGB, TITLE_ENUS, " +
         "TITLE_FR, TITLE_TH, TITLE_SV, " +
@@ -12,13 +12,14 @@ public static class DatabaseFunctions
         "TITLE_PT, TITLE_ZHTW, TITLE_JA, " +
         "TITLE_CSCZ, TITLE_PLPL";
 
-    public static string GetNodeClassId(SQLiteConnection mDbConnection, string nodeClassName)
+    public static string GetNodeClassId(Microsoft.Data.Sqlite.SqliteConnection sqliteConnection, string nodeClassName)
     {
         string result = string.Empty;
         string sql = string.Format(@"SELECT ID FROM XEP_NODECLASSES WHERE NAME = '{0}'", nodeClassName);
-        using (SQLiteCommand command = new SQLiteCommand(sql, mDbConnection))
+        using (Microsoft.Data.Sqlite.SqliteCommand command = sqliteConnection.CreateCommand())
         {
-            using (SQLiteDataReader reader = command.ExecuteReader())
+            command.CommandText = sql;
+            using (Microsoft.Data.Sqlite.SqliteDataReader reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {

@@ -34,12 +34,18 @@ This page allows to change some global app settings.
   * _Screen dimmed_: The CPU keeps running but the display will be dimmed.
   * _Screen bright_: The CPU keeps running and the display will stay bright.
 * _Data logging_ options:
-  * _Store log data settings_: Store log data settings (not trace seetings) from the main menu and restore them at app restart.
+  * _Store log data settings_: Store log data settings (not trace settings) from the main menu and restore them at app restart.
 * _App start_ options:
   * _No connection establishment to vehicle_: No automatic connection establishment to vehicle.
-  * _Auto connection establishment to vehicle_: If possible auto connect to vehicle. This is only possible if no dialog opens at startup.
-  * _Auto connection establishment to vehicle and close App (only if broadcast is active)_: If possible auto connect to vehicle. After the service has been started the App will be closed.  
-  This option is only active if _Send data broadcasts_ has been selected and the service is active.
+  * _Auto connection establishment to vehicle_: If possible auto connect to vehicle with the last selected page.  
+    This is only possible if no dialog opens at startup (All requests have to be acknowledged before).
+  * _Auto connection establishment to vehicle and close App__: If possible auto connect to vehicle with the last selected page.  
+    This is only possible if no dialog opens at startup (All requests have to be acknowledged before).
+    After the service has been started the app will be closed.
+  * _Auto start the service at boot time to restore the last connection state__: When the device is rebooted while communication to the vehicle is active, the app will start as service in the background and use the last main page for communication.  
+    The boot option is very often not working on Android radios.  
+    If an Android app manager is available, it's recommended to configure Deep OBD in the app manager to stay active in standby.  
+    Otherwise choose the second start option and keep Deep OBD always in foreground to make the app remain active after standby.\nWith other tools (e.g. Automation, Macrodroid) the app has to be launched after booting.
 * _App exit_ options:
   * _Double click required for app exit_: A double click on the back button is required to exit the app.
 * _Update check_ options:
@@ -51,7 +57,7 @@ This page allows to change some global app settings.
 * _CPU usage_ options:
   * _Check cpu usage at start_: Check CPU usage at program startup. This requires some time. I high CPU use could cause communication problems.
 * _Check ECU files_ options:
-  * _Check ECU files at startup_: Check if all ECU files are present and have the correct size. This is time consuming. If you are are sure the ECU files will not get damaged you could disable this option.
+  * _Check ECU files at startup_: Check if all ECU files are present and have the correct size. This is time consuming. If you are sure the ECU files will not get damaged you could disable this option.
 * _Battery voltage warning_ options:
   * _Show over voltage warning_: Show adapter overvoltage warning for adapter protection.
 * _VAG mode_ options:
@@ -60,7 +66,7 @@ This page allows to change some global app settings.
   * _Use BMW database_: Use BMW database for job and fault interpretation and translation. When this option is disabled communication startup is faster.
   * _Show only relevant errors_: Show only errors that are marked as relevant in the BMW database.  
   Most info memory entries are hidden and the shadow memory is never read in this mode.  
-  Some entries depend on intergation level and may change after vehicle update.  
+  Some entries depend on integration level and may change after vehicle update.  
 * _ECU detection_ options:
   * _For BMW vehicles with DS2 protocol always scan all ECUs (slow)_: If the vehicle has been retrofitted the car database may be incorrect and not all ECUs may be detected.  
   This option allows to ignore the car database and all ECUs are scanned, which is very time consuming.
@@ -77,8 +83,8 @@ This page allows to change some global app settings.
   * _Bluetooth HCI snoop log file_: Current Bluetooth HCI snoop log file name. You could enable HCI snoop logging with the button _Configure snoop log_.
 * _Settings_ options:
   * _Default settings_: Restore the default settings for the global settings page.
-  * _Export settings_: Export settings to _DeepObbSettings.xml_ in the selected storage media folder. You could select if you also want to export private data.  
+  * _Export settings_: Export settings to _DeepObbSettings.xml_ in the selected storage media folder subdirectory _Exports_. You could select if you also want to export private data.  
   You should not pass on private data files to other people.
-  * _Import settings_: Import settings from _DeepObbSettings.xml_ in the selected storage media folder.
+  * _Import settings_: Import settings from _DeepObbSettings.xml_ in the selected storage media folder subdirectory _Exports_.
 
 ![Global settings](GlobalSettings_AppGlobalSettingsSmall.png)

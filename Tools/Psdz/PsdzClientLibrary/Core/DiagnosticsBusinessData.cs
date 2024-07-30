@@ -1,24 +1,129 @@
 ﻿using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
+using PsdzClient.Core.Container;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Core
 {
-	public class DiagnosticsBusinessData : IDiagnosticsBusinessData
+    public enum LayoutGroup
     {
-        private static readonly DiagnosticsBusinessData instance = new DiagnosticsBusinessData();
-        public static IDiagnosticsBusinessData Instance => instance;
+        X,
+        D,
+        P,
+        PB,
+        PK,
+        PR,
+        PBV,
+        L,
+        R,
+        F,
+        PA,
+        PS,
+        PAP,
+        PAV,
+        PAE,
+        PAN
+    }
+
+    public delegate object DoECUIdentDelegate(IVehicle vecInfo, ECU mECU, IEcuKom ecuKom, ref bool resetMOSTGWdone, IProgressMonitor monitor, int retry, bool forceReRead, bool tryReanimation, bool IdentForceOnUnidentified = false);
+
+    public class DiagnosticsBusinessData : IDiagnosticsBusinessData
+    {
+        internal class EcuKomConfig
+        {
+            private string ecu;
+
+            private string job;
+
+            private string param;
+
+            private ushort set;
+
+            private string result;
+
+            public string Ecu
+            {
+                get
+                {
+                    return ecu;
+                }
+                set
+                {
+                    ecu = value;
+                }
+            }
+
+            public string Job
+            {
+                get
+                {
+                    return job;
+                }
+                set
+                {
+                    job = value;
+                }
+            }
+
+            public string Param
+            {
+                get
+                {
+                    return param;
+                }
+                set
+                {
+                    param = value;
+                }
+            }
+
+            public ushort Set
+            {
+                get
+                {
+                    return set;
+                }
+                set
+                {
+                    set = value;
+                }
+            }
+
+            public string Result
+            {
+                get
+                {
+                    return result;
+                }
+                set
+                {
+                    result = value;
+                }
+            }
+
+            internal EcuKomConfig(string ecu, string job, string param, ushort set, string result)
+            {
+                this.ecu = ecu;
+                this.job = job;
+                this.param = param;
+                this.set = set;
+                this.result = result;
+            }
+        }
 
         private const string ILevelBN2020RegexPattern = "([A-Z0-9]{4}|[A-Z0-9]{3})-[0-9]{2}[-_](0[1-9]|1[0-2])[-_][0-9]{3}";
 
-        //private IFasta2Service fastaService = ServiceLocator.Current.GetService<IFasta2Service>();
+        private IFasta2Service fastaService = ServiceLocator.Current.GetService<IFasta2Service>();
 
-        //private string ServiceCodeName = ServiceCodes.DBD01_ObseleteCode_nu_LF;
+        private string ServiceCodeName = ServiceCodes.DBD01_ObseleteCode_nu_LF;
 
-        //private string ServiceCodeValuePattern = "{0}_{1}";
+        private string ServiceCodeValuePattern = "{0}_{1}";
 
-        //private LayoutGroup layoutGroup = LayoutGroup.D;
+        private LayoutGroup layoutGroup = LayoutGroup.D;
 
         private readonly List<string> fsLesenExpertVariants = new List<string>
         {
@@ -54,6 +159,110 @@ namespace PsdzClient.Core
 
         public DateTime DTime2023_07 => DateTime.ParseExact("01.07.2023", "dd.MM.yyyy", new CultureInfo("de-DE"));
 
+        public void ReadILevelBn2020(IVehicle vecInfo, IEcuKom ecuKom, int retryCount)
+        {
+            // [UH] get reactor from vehicle
+            Reactor instance = (vecInfo as Vehicle)?.Reactor;
+            if (instance == null)
+            {
+                return;
+            }
+            IEcuJob ecuJob = new ECUJob();
+            if (IsSp2021Gateway(vecInfo, ecuKom, retryCount))
+            {
+                ecuJob = ecuKom.ApiJobWithRetries("G_ZGW", "STATUS_I_STUFE_LESEN_MIT_SIGNATUR", string.Empty, string.Empty, retryCount);
+                if (!ecuJob.IsOkay())
+                {
+                    HandleReadILevelForSp2021Fallback(instance, vecInfo, ecuKom, retryCount);
+                }
+                else if (!ProcessILevelJobResults(instance, vecInfo, ecuJob))
+                {
+                    HandleReadILevelForSp2021Fallback(instance, vecInfo, ecuKom, retryCount);
+                }
+            }
+            else
+            {
+                ecuJob = ecuKom.ApiJobWithRetries("g_zgw", "STATUS_VCM_I_STUFE_LESEN", string.Empty, string.Empty, retryCount);
+                if (!ecuJob.IsOkay())
+                {
+                    HandleReadIlevelBackup(instance, vecInfo, ecuKom, retryCount);
+                }
+                else if (!ProcessILevelJobResults(instance, vecInfo, ecuJob))
+                {
+                    HandleReadIlevelBackup(instance, vecInfo, ecuKom, retryCount);
+                }
+            }
+            if (!string.IsNullOrEmpty(vecInfo.ILevel))
+            {
+                if (vecInfo.ILevel.Length < 4 || vecInfo.ILevel.Contains("UNBEK"))
+                {
+                    vecInfo.ILevel = vecInfo.ILevelWerk;
+                }
+            }
+            else
+            {
+                vecInfo.ILevel = vecInfo.ILevelWerk;
+            }
+        }
+
+        public bool ProcessILevelJobResults(Reactor reactor, IVehicle vecInfo, IEcuJob iJob)
+        {
+            string stringResult = iJob.getStringResult(1, "STAT_I_STUFE_WERK");
+            string stringResult2 = iJob.getStringResult(1, "STAT_I_STUFE_HO");
+            string stringResult3 = iJob.getStringResult(1, "STAT_I_STUFE_HO_BACKUP");
+            if (!IsExcludedFromILevelValidation(iJob) && (!ValidateILevelWithRegexPattern(stringResult, "ILevelWerk") || !ValidateILevelWithRegexPattern(stringResult2, "ILevelHO") || !ValidateILevelWithRegexPattern(stringResult3, "ILevelHOBackup")))
+            {
+                return false;
+            }
+            reactor.SetILevelWerk(stringResult, DataSource.Vehicle);
+            reactor.SetILevel(stringResult2, DataSource.Vehicle);
+            vecInfo.ILevelBackup = stringResult3;
+            return true;
+        }
+
+        private void HandleReadIlevelBackup(Reactor reactor, IVehicle vecInfo, IEcuKom ecuKom, int retryCount)
+        {
+            IEcuJob ecuJob = ecuKom.ApiJobWithRetries("g_frm", "STATUS_VCM_I_STUFE_LESEN", string.Empty, string.Empty, retryCount);
+            if (ecuJob.IsOkay())
+            {
+                ProcessILevelJobResults(reactor, vecInfo, ecuJob);
+            }
+        }
+
+        private void HandleReadILevelForSp2021Fallback(Reactor reactor, IVehicle vecInfo, IEcuKom ecuKom, int retryCount)
+        {
+            IEcuJob ecuJob = ecuKom.ApiJobWithRetries("G_KOMBI", "STATUS_I_STUFE_LESEN_OHNE_SIGNATUR", string.Empty, string.Empty, retryCount);
+            if (ecuJob.IsOkay())
+            {
+                ProcessILevelJobResults(reactor, vecInfo, ecuJob);
+            }
+        }
+
+        private bool IsExcludedFromILevelValidation(IEcuJob iJob)
+        {
+            string method = Log.CurrentMethod() + "()";
+            Log.Info(method, "Check if iLevel is excluded from validation");
+            string[] source = new string[1] { "REM_20" };
+            string ecuVariante = iJob.getStringResult(0, "VARIANTE");
+            if (source.Any((string x) => x.Equals(ecuVariante, StringComparison.OrdinalIgnoreCase)))
+            {
+                Log.Info(method, "Vehicle is excluded from I-Level validation");
+                return true;
+            }
+            return false;
+        }
+
+        private bool ValidateILevelWithRegexPattern(string ilevelInput, string iLevelDescription)
+        {
+            Log.Info(Log.CurrentMethod(), "Validation of ILevel " + ilevelInput + " for type " + iLevelDescription + " started");
+            if (!Regex.IsMatch(ilevelInput, "([A-Z0-9]{4}|[A-Z0-9]{3})-[0-9]{2}[-_](0[1-9]|1[0-2])[-_][0-9]{3}"))
+            {
+                Log.Warning(Log.CurrentMethod(), "Validation of ILevel " + ilevelInput + " for type " + iLevelDescription + " failed");
+                return false;
+            }
+            return true;
+        }
+
         public void SetSp2021Enabled(IVehicle vecInfo)
         {
             if (string.IsNullOrEmpty(vecInfo.Produktlinie) && ClientContext.GetBrand((Vehicle) vecInfo) == CharacteristicExpression.EnumBrand.BMWMotorrad)
@@ -61,6 +270,28 @@ namespace PsdzClient.Core
                 vecInfo.Produktlinie = "-";
             }
             vecInfo.Sp2021Enabled = vecInfo.Produktlinie.StartsWith("21");
+        }
+
+        // ToDo: Check on update
+        public bool IsSp2021Gateway(IVehicle vecInfo, IEcuKom ecuKom, int retryCount)
+        {
+            string text = "";
+            IEcuJob ecuJob = ecuKom.ApiJobWithRetries("G_ZGW", "IDENT", string.Empty, string.Empty, retryCount);
+            if (ecuJob.IsOkay())
+            {
+                text = ecuJob.getStringResult(0, "VARIANTE");
+                if (text == null)
+                {
+                    text = "";
+                }
+            }
+            if (!vecInfo.Sp2021Enabled && !text.Equals("BCP_SP21", StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Info(Log.CurrentMethod(), "Vehicle gateway is not bcp_sp21!");
+                return false;
+            }
+            Log.Info(Log.CurrentMethod(), "Vehicle gateway is bcp_sp21!");
+            return true;
         }
 
         // ToDo: Check on update
@@ -103,7 +334,7 @@ namespace PsdzClient.Core
                                 return "E65";
                             }
                         }
-                        AddServiceCode(string.Empty, 1);
+                        AddServiceCode(Log.CurrentMethod(), 1);
                         return "-";
                     }
                     if (vecInfo.Prodart == "M")
@@ -111,7 +342,7 @@ namespace PsdzClient.Core
                         switch (vecInfo.BNType)
                         {
                             default:
-                                AddServiceCode(string.Empty, 2);
+                                AddServiceCode(Log.CurrentMethod(), 2);
                                 return "-";
                             case BNType.BN2000_MOTORBIKE:
                                 return "MRK24";
@@ -121,17 +352,16 @@ namespace PsdzClient.Core
                                 return "MRK24";
                         }
                     }
-                    AddServiceCode(string.Empty, 3);
+                    AddServiceCode(Log.CurrentMethod(), 3);
                     return "";
                 case BNType.IBUS:
                     return "-";
             }
         }
 
-        // ToDo: Check on update
         public string GetMainSeriesSgbdAdditional(IVehicle vecInfo)
         {
-            //Log.Info(Log.CurrentMethod(), "Entering GetMainSeriesSgbdAdditional");
+            Log.Info(Log.CurrentMethod(), "Entering GetMainSeriesSgbdAdditional");
             if (vecInfo.Prodart == "P")
             {
                 if (!string.IsNullOrEmpty(vecInfo.Produktlinie))
@@ -141,22 +371,22 @@ namespace PsdzClient.Core
                     {
                         if (!(text == "PL6"))
                         {
-                            AddServiceCode(string.Empty, 3);
-                            //Log.Info(Log.CurrentMethod(), "Reached default block, produck line: " + vecInfo.Produktlinie);
+                            AddServiceCode(Log.CurrentMethod(), 3);
+                            Log.Info(Log.CurrentMethod(), "Reached default block, produck line: " + vecInfo.Produktlinie);
                         }
                         else if (!vecInfo.C_DATETIME.HasValue)
                         {
-                            AddServiceCode(string.Empty, 2);
-                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
+                            AddServiceCode(Log.CurrentMethod(), 2);
+                            Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
                             if (vecInfo.Ereihe == "F01" || vecInfo.Ereihe == "F02" || vecInfo.Ereihe == "F03" || vecInfo.Ereihe == "F04" || vecInfo.Ereihe == "F06" || vecInfo.Ereihe == "F07" || vecInfo.Ereihe == "F10" || vecInfo.Ereihe == "F11" || vecInfo.Ereihe == "F12" || vecInfo.Ereihe == "F13" || vecInfo.Ereihe == "F18")
                             {
-                                //Log.Info(Log.CurrentMethod(), "Ereihe: " + vecInfo.Ereihe + ", returning F01BN2K");
+                                Log.Info(Log.CurrentMethod(), "Ereihe: " + vecInfo.Ereihe + ", returning F01BN2K");
                                 return "F01BN2K";
                             }
                         }
                         else if (vecInfo.C_DATETIME < DTimeF01Lci)
                         {
-                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is earlier than DTimeF01Lci");
+                            Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is earlier than DTimeF01Lci");
                             return "F01BN2K";
                         }
                     }
@@ -164,13 +394,13 @@ namespace PsdzClient.Core
                     {
                         if (!vecInfo.C_DATETIME.HasValue)
                         {
-                            AddServiceCode(string.Empty, 1);
-                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
+                            AddServiceCode(Log.CurrentMethod(), 1);
+                            Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
                             return "RR1_2020";
                         }
                         if (vecInfo.C_DATETIME >= DTimeRR_S2)
                         {
-                            //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is later than DTimeRR_S2");
+                            Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is later than DTimeRR_S2");
                             return "RR1_2020";
                         }
                     }
@@ -180,63 +410,8 @@ namespace PsdzClient.Core
             {
                 _ = vecInfo.Prodart == "M";
             }
-            //Log.Info(Log.CurrentMethod(), "Returning null for product line: " + vecInfo?.Produktlinie + ", ereihe: " + vecInfo.Ereihe);
+            Log.Info(Log.CurrentMethod(), "Returning null for product line: " + vecInfo?.Produktlinie + ", ereihe: " + vecInfo.Ereihe);
             return null;
-        }
-
-        // ToDo: Check on update
-        public void SpecialTreatmentBasedOnEreihe(string typsnr, IVehicle vecInfo)
-        {
-            if ((string.Compare(vecInfo.Ereihe, "M12", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "M2_", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "UNBEK", StringComparison.OrdinalIgnoreCase) == 0) && string.Compare(typsnr, "CZ31", StringComparison.OrdinalIgnoreCase) == 0)
-            {
-                AddServiceCode(string.Empty, 1);
-                vecInfo.VerkaufsBezeichnung = "ACTIVEE";
-                vecInfo.Motor = "IB1";
-                vecInfo.Leistung = "23";
-                vecInfo.Hubraum = "0";
-                vecInfo.Karosserie = "SAV";
-                vecInfo.Antrieb = "RWD";
-                GearboxUtility.SetGearboxType(vecInfo, "MECH", "SpecialTreatmentBasedOnEreihe");
-                vecInfo.Baureihe = "X'";
-                vecInfo.Lenkung = "LL";
-                vecInfo.Land = "CHN";
-                vecInfo.Ereihe = "M12";
-                vecInfo.BNType = BNType.BEV2010;
-                vecInfo.BNMixed = BNMixed.HETEROGENEOUS;
-                vecInfo.Ueberarbeitung = "0";
-                vecInfo.MOTBezeichnung = "IB1P23M0";
-                vecInfo.Baureihenverbund = "M012";
-                vecInfo.Abgas = "KAT";
-            }
-            if ((string.Compare(vecInfo.Ereihe, "E82", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "UNBEK", StringComparison.OrdinalIgnoreCase) == 0) && (string.Compare(typsnr, "UP31", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "UP33", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "UP3C", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "UP9C", StringComparison.OrdinalIgnoreCase) == 0))
-            {
-                AddServiceCode(string.Empty, 2);
-                vecInfo.VerkaufsBezeichnung = "ActiveE";
-                vecInfo.Motor = "IB1";
-                vecInfo.Leistung = "23";
-                vecInfo.Hubraum = "0";
-                vecInfo.Karosserie = "COU";
-                vecInfo.Antrieb = "RWD";
-                GearboxUtility.SetGearboxType(vecInfo, "MECH", "SpecialTreatmentBasedOnEreihe");
-                vecInfo.Baureihe = "1'";
-                vecInfo.Lenkung = "LL";
-                if (string.Compare(typsnr, "UP31", StringComparison.OrdinalIgnoreCase) != 0 && string.Compare(typsnr, "UP31", StringComparison.OrdinalIgnoreCase) != 0)
-                {
-                    vecInfo.Land = "USA";
-                }
-                else
-                {
-                    vecInfo.Land = "EUR";
-                }
-            }
-            if (string.Compare(vecInfo.Ereihe, "R56", StringComparison.OrdinalIgnoreCase) == 0 && (string.Compare(typsnr, "MF74", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "MF84", StringComparison.OrdinalIgnoreCase) == 0))
-            {
-                AddServiceCode(string.Empty, 3);
-                vecInfo.VerkaufsBezeichnung = "MINI E";
-                vecInfo.Motor = "I15";
-                vecInfo.Leistung = "140";
-                vecInfo.Hubraum = "0";
-            }
         }
 
         // ToDo: Check on update
@@ -320,8 +495,8 @@ namespace PsdzClient.Core
                             {
                                 if (!vecInfo.C_DATETIME.HasValue)
                                 {
-                                    AddServiceCode(string.Empty, 1);
-                                    //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
+                                    AddServiceCode(Log.CurrentMethod(), 1);
+                                    Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
                                     list.Add(16);
                                     list.Add(50);
                                     list.Add(64);
@@ -343,8 +518,8 @@ namespace PsdzClient.Core
                                 {
                                     if (!vecInfo.C_DATETIME.HasValue)
                                     {
-                                        AddServiceCode(string.Empty, 3);
-                                        //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
+                                        AddServiceCode(Log.CurrentMethod(), 3);
+                                        Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
                                         list.Add(16);
                                         list.Add(50);
                                         list.Add(64);
@@ -373,8 +548,8 @@ namespace PsdzClient.Core
                             }
                             else if (!vecInfo.C_DATETIME.HasValue)
                             {
-                                AddServiceCode(string.Empty, 2);
-                                //Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
+                                AddServiceCode(Log.CurrentMethod(), 2);
+                                Log.Info(Log.CurrentMethod(), "Product line: " + vecInfo.Produktlinie + ", C_DATETIME is null");
                                 list.Add(16);
                                 list.Add(50);
                                 list.Add(64);
@@ -433,7 +608,7 @@ namespace PsdzClient.Core
                 }
                 return list;
             }
-            //Log.Info(Log.CurrentMethod(), "Returning null for product line: " + vecInfo?.Produktlinie + ", ereihe: " + vecInfo.Ereihe);
+            Log.Info(Log.CurrentMethod(), "Returning null for product line: " + vecInfo?.Produktlinie + ", ereihe: " + vecInfo.Ereihe);
             return null;
         }
 
@@ -441,7 +616,7 @@ namespace PsdzClient.Core
         public BNType GetBNType(IVehicle vecInfo)
         {
             if (vecInfo == null)
-            {
+            {   // [UH] added
                 return BNType.UNKNOWN;
             }
             if (vecInfo.Prodart == "P")
@@ -484,11 +659,11 @@ namespace PsdzClient.Core
                             return BNType.BN2020;
                     }
                 }
-                //Log.Warning(Log.CurrentMethod(), "Baureihenverbund is null or empty. BNType will be determined by Ereihe!");
+                Log.Warning(Log.CurrentMethod(), "Baureihenverbund is null or empty. BNType will be determined by Ereihe!");
                 switch (vecInfo.Ereihe)
                 {
                     default:
-                        //Log.Warning(Log.CurrentMethod(), "Ereihe is null or empty. No BNType can be determined!");
+                        Log.Warning(Log.CurrentMethod(), "Ereihe is null or empty. No BNType can be determined!");
                         return BNType.UNKNOWN;
                     case "E38":
                     case "E39":
@@ -524,11 +699,316 @@ namespace PsdzClient.Core
                             return BNType.BNK01X_MOTORBIKE;
                     }
                 }
-                //Log.Info(Log.CurrentMethod(), "Baureihenverbund was empty, returning default value.");
+                Log.Info(Log.CurrentMethod(), "Baureihenverbund was empty, returning default value.");
                 return BNType.BN2020_MOTORBIKE;
             }
-            //Log.Info(Log.CurrentMethod(), "Returning BNType.UNKNOWN for Prodart: " + vecInfo?.Prodart);
+            Log.Info(Log.CurrentMethod(), "Returning BNType.UNKNOWN for Prodart: " + vecInfo?.Prodart);
             return BNType.UNKNOWN;
+        }
+
+        public void UpdateCharacteristics(IVehicle vecInfo, string typsnr, IEcuKom ecuKom, bool isVorSerie, IProgressMonitor monitor, int retryCount, Func<BNType, int, IProgressMonitor, IEcuJob> doECUReadFA)
+        {
+            if (vecInfo.BNType != BNType.UNKNOWN && vecInfo.BNType != BNType.IBUS && vecInfo.BNType != 0)
+            {
+                return;
+            }
+            AddServiceCode(Log.CurrentMethod(), 1);
+            IEcuJob ecuJob = ecuKom.DefaultApiJob("FZGIDENT", "GRUNDMERKMALE_LESEN", typsnr, string.Empty);
+            if (ecuJob.IsOkay())
+            {
+                if (!isVorSerie && vecInfo.BNType != BNType.BN2020)
+                {
+                    AddServiceCode(Log.CurrentMethod(), 2);
+                    if (!vecInfo.IsEreiheValid())
+                    {
+                        vecInfo.Ereihe = ecuJob.getStringResult(1, "BR_TXT");
+                    }
+                    vecInfo.Antrieb = ecuJob.getStringResult(1, "ANTR_TXT");
+                    GearboxUtility.SetGearboxType(vecInfo, ecuJob.getStringResult(1, "GETR_TXT"), "UpdateCharacteristics");
+                    vecInfo.Hubraum = ecuJob.getStringResult(1, "HUBR_TXT");
+                    vecInfo.Land = ecuJob.getStringResult(1, "LAND_TXT");
+                    vecInfo.Lenkung = ecuJob.getStringResult(1, "LENK_TXT");
+                    vecInfo.Motor = ecuJob.getStringResult(1, "MOTOR_TXT");
+                    vecInfo.Baureihe = ecuJob.getStringResult(1, "REIHE_TXT");
+                    vecInfo.Typ = ecuJob.getStringResult(1, "TYPSNR_TXT");
+                    vecInfo.VerkaufsBezeichnung = ecuJob.getStringResult(1, "VERK_TXT");
+                    vecInfo.Karosserie = ecuJob.getStringResult(1, "KAROS_TXT");
+                    vecInfo.Abgas = "KAT";
+                    if (!vecInfo.IsEreiheValid())
+                    {
+                        Log.Warning("VehicleIdent.UpdateVehicleCharactersitics()", "failed to identify vehicle via FZGIDENT/grundmerkmale_lesen");
+                        IEcuJob ecuJob2 = ecuKom.DefaultApiJob("FZGIDENT", "STRINGS_LESEN", typsnr, string.Empty);
+                        if (ecuJob2.IsDone())
+                        {
+                            if (!isVorSerie)
+                            {
+                                vecInfo.Typ = ecuJob2.getStringResult(1, "TYP_TXT");
+                                vecInfo.Ereihe = ecuJob2.getStringResult(1, "BR_TXT");
+                                string stringResult = ecuJob2.getStringResult(1, "MO_TXT");
+                                if (!string.IsNullOrEmpty(stringResult) && stringResult.Contains("_"))
+                                {
+                                    string[] array = stringResult.Split('_');
+                                    vecInfo.Motor = array[1];
+                                    vecInfo.VerkaufsBezeichnung = array[0];
+                                }
+                                string stringResult2 = ecuJob2.getStringResult(1, "LA_TXT");
+                                if (!string.IsNullOrEmpty(stringResult2) && stringResult2.Contains("_"))
+                                {
+                                    string[] array2 = stringResult2.Split('_');
+                                    vecInfo.Land = array2[0];
+                                    vecInfo.Lenkung = array2[1];
+                                }
+                                vecInfo.Abgas = "KAT";
+                                if (vecInfo.IsEreiheValid())
+                                {
+                                    IEcuJob ecuJob3 = ecuKom.DefaultApiJob("FZGIDENT", "ERSTE_BR_ERMITTELN", vecInfo.Ereihe, string.Empty);
+                                    if (ecuJob3.IsDone())
+                                    {
+                                        vecInfo.Baureihe = ecuJob3.getStringResult(1, "ORG_BR");
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Log.Info("VehicleIdent.getvehicleCharacteristics()", "manually entered vehicle characteristics necessary.");
+                        }
+                    }
+                }
+                if (!vecInfo.IsEreiheValid() || vecInfo.BNType == BNType.UNKNOWN)
+                {
+                    AddServiceCode(Log.CurrentMethod(), 3);
+                    Log.Warning("VehicleIdent.getVehicleCharacteristics()", "still Ereihe or BNType unknown;  trying to brute force FA and Ereihe");
+                    if (vecInfo.BNType == BNType.UNKNOWN)
+                    {
+                        doECUReadFA(BNType.BN2000, retryCount, monitor);
+                    }
+                    if (vecInfo.BNType == BNType.UNKNOWN)
+                    {
+                        doECUReadFA(BNType.BN2020, retryCount, monitor);
+                    }
+                    if (vecInfo.BNType == BNType.UNKNOWN)
+                    {
+                        doECUReadFA(BNType.BN2000_MOTORBIKE, retryCount, monitor);
+                    }
+                    if (vecInfo.BNType == BNType.UNKNOWN)
+                    {
+                        doECUReadFA(BNType.BN2020_MOTORBIKE, retryCount, monitor);
+                    }
+                    if (vecInfo.BNType == BNType.UNKNOWN)
+                    {
+                        doECUReadFA(BNType.IBUS, retryCount, monitor);
+                    }
+                }
+                vecInfo.Abgas = "KAT";
+                if (string.IsNullOrEmpty(vecInfo.Typ))
+                {
+                    vecInfo.Typ = typsnr;
+                }
+            }
+            else
+            {
+                Log.Warning("VehicleIdent.UpdateVehicleCharactersitics()", "failed when executing FZGIDENT:grundmerkmale_lesen with typsnr: {0} errorcode:{1} - {2}", typsnr, ecuJob.JobErrorCode, ecuJob.JobErrorText);
+            }
+        }
+
+        // ToDo: Check on update
+        public void SpecialTreatmentBasedOnEreihe(string typsnr, IVehicle vecInfo)
+        {
+            if ((string.Compare(vecInfo.Ereihe, "M12", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "M2_", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "UNBEK", StringComparison.OrdinalIgnoreCase) == 0) && string.Compare(typsnr, "CZ31", StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                AddServiceCode(Log.CurrentMethod(), 1);
+                vecInfo.VerkaufsBezeichnung = "ACTIVEE";
+                vecInfo.Motor = "IB1";
+                vecInfo.Leistung = "23";
+                vecInfo.Hubraum = "0";
+                vecInfo.Karosserie = "SAV";
+                vecInfo.Antrieb = "RWD";
+                GearboxUtility.SetGearboxType(vecInfo, "MECH", "SpecialTreatmentBasedOnEreihe");
+                vecInfo.Baureihe = "X'";
+                vecInfo.Lenkung = "LL";
+                vecInfo.Land = "CHN";
+                vecInfo.Ereihe = "M12";
+                vecInfo.BNType = BNType.BEV2010;
+                vecInfo.BNMixed = BNMixed.HETEROGENEOUS;
+                vecInfo.Ueberarbeitung = "0";
+                vecInfo.MOTBezeichnung = "IB1P23M0";
+                vecInfo.Baureihenverbund = "M012";
+                vecInfo.Abgas = "KAT";
+            }
+            if ((string.Compare(vecInfo.Ereihe, "E82", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(vecInfo.Ereihe, "UNBEK", StringComparison.OrdinalIgnoreCase) == 0) && (string.Compare(typsnr, "UP31", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "UP33", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "UP3C", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "UP9C", StringComparison.OrdinalIgnoreCase) == 0))
+            {
+                AddServiceCode(Log.CurrentMethod(), 2);
+                vecInfo.VerkaufsBezeichnung = "ActiveE";
+                vecInfo.Motor = "IB1";
+                vecInfo.Leistung = "23";
+                vecInfo.Hubraum = "0";
+                vecInfo.Karosserie = "COU";
+                vecInfo.Antrieb = "RWD";
+                GearboxUtility.SetGearboxType(vecInfo, "MECH", "SpecialTreatmentBasedOnEreihe");
+                vecInfo.Baureihe = "1'";
+                vecInfo.Lenkung = "LL";
+                if (string.Compare(typsnr, "UP31", StringComparison.OrdinalIgnoreCase) != 0 && string.Compare(typsnr, "UP31", StringComparison.OrdinalIgnoreCase) != 0)
+                {
+                    vecInfo.Land = "USA";
+                }
+                else
+                {
+                    vecInfo.Land = "EUR";
+                }
+            }
+            if (string.Compare(vecInfo.Ereihe, "R56", StringComparison.OrdinalIgnoreCase) == 0 && (string.Compare(typsnr, "MF74", StringComparison.OrdinalIgnoreCase) == 0 || string.Compare(typsnr, "MF84", StringComparison.OrdinalIgnoreCase) == 0))
+            {
+                AddServiceCode(Log.CurrentMethod(), 3);
+                vecInfo.VerkaufsBezeichnung = "MINI E";
+                vecInfo.Motor = "I15";
+                vecInfo.Leistung = "140";
+                vecInfo.Hubraum = "0";
+            }
+        }
+
+        public void BN2000HandleKMMFixes(IVehicle vecInfo, IEcuKom ecuKom, bool resetMOSTDone, IProgressMonitor monitor, int retryCount, DoECUIdentDelegate doECUIdentDelegate)
+        {
+            if ((vecInfo.hasSA("6VC") || vecInfo.hasSA("612") || vecInfo.hasSA("633")) && vecInfo.getECU(54L) == null)
+            {
+                AddServiceCode(Log.CurrentMethod(), 1);
+                ECU eCU = new ECU();
+                eCU.BUS = BusType.MOST;
+                eCU.ID_SG_ADR = 54L;
+                eCU.ECU_GRUPPE = "D_TEL";
+                eCU.ECU_GROBNAME = "TEL";
+                vecInfo.AddEcu(eCU);
+                doECUIdentDelegate(vecInfo, eCU, ecuKom, ref resetMOSTDone, monitor, retryCount, forceReRead: false, tryReanimation: true);
+            }
+            if (vecInfo.hasSA("610") && vecInfo.getECU(61L) == null)
+            {
+                AddServiceCode(Log.CurrentMethod(), 2);
+                ECU eCU2 = new ECU();
+                eCU2.BUS = BusType.MOST;
+                eCU2.ID_SG_ADR = 61L;
+                eCU2.ECU_GRUPPE = "D_HUD";
+                eCU2.ECU_GROBNAME = "HUD";
+                vecInfo.AddEcu(eCU2);
+                doECUIdentDelegate(vecInfo, eCU2, ecuKom, ref resetMOSTDone, monitor, retryCount, forceReRead: false, tryReanimation: true);
+            }
+            if (vecInfo.hasSA("672") && vecInfo.getECU(60L) == null)
+            {
+                AddServiceCode(Log.CurrentMethod(), 3);
+                ECU eCU3 = new ECU();
+                eCU3.BUS = BusType.MOST;
+                eCU3.ID_SG_ADR = 60L;
+                eCU3.ECU_GRUPPE = "D_CDC";
+                eCU3.ECU_GROBNAME = "CDC";
+                vecInfo.AddEcu(eCU3);
+                doECUIdentDelegate(vecInfo, eCU3, ecuKom, ref resetMOSTDone, monitor, retryCount, forceReRead: false, tryReanimation: true);
+            }
+            if (vecInfo.hasSA("696") && vecInfo.getECU(49L) == null)
+            {
+                AddServiceCode(Log.CurrentMethod(), 4);
+                ECU eCU4 = new ECU();
+                eCU4.BUS = BusType.MOST;
+                eCU4.ID_SG_ADR = 49L;
+                eCU4.ECU_GRUPPE = "D_MMC";
+                eCU4.ECU_GROBNAME = "MMC";
+                vecInfo.AddEcu(eCU4);
+                doECUIdentDelegate(vecInfo, eCU4, ecuKom, ref resetMOSTDone, monitor, retryCount, forceReRead: false, tryReanimation: true);
+            }
+            if (vecInfo.hasBusType(BusType.MOST) && vecInfo.getECUbyECU_GRUPPE("D_MOSTGW") != null)
+            {
+                AddServiceCode(Log.CurrentMethod(), 5);
+                ECU eCU5 = new ECU();
+                eCU5.BUS = BusType.VIRTUALBUSCHECK;
+                eCU5.ID_SG_ADR = 255L;
+                eCU5.ECU_GRUPPE = "D_MOST";
+                eCU5.ECU_GROBNAME = "MOST";
+                vecInfo.AddEcu(eCU5);
+                doECUIdentDelegate(vecInfo, eCU5, ecuKom, ref resetMOSTDone, monitor, retryCount, forceReRead: false, tryReanimation: true);
+            }
+        }
+
+        public void HandleECUGroups(IVehicle vecInfo, IEcuKom ecuKom, List<IEcu> ecusToRemoveKMM)
+        {
+            IEcu eCUbyECU_GRUPPE = vecInfo.getECUbyECU_GRUPPE("D_RLS");
+            if (eCUbyECU_GRUPPE == null && "e89x".Equals(vecInfo.MainSeriesSgbd, StringComparison.OrdinalIgnoreCase))
+            {
+                AddServiceCode(Log.CurrentMethod(), 1);
+                if (vecInfo.hasSA("521"))
+                {
+                    AddServiceCode(Log.CurrentMethod(), 2);
+                    eCUbyECU_GRUPPE = new ECU();
+                    eCUbyECU_GRUPPE.ECU_GRUPPE = "D_RLS";
+                    eCUbyECU_GRUPPE.ID_SG_ADR = 86L;
+                    eCUbyECU_GRUPPE.ID_LIN_SLAVE_ADR = 128L;
+                    eCUbyECU_GRUPPE.ECU_GROBNAME = "RLS";
+                    eCUbyECU_GRUPPE.TITLE_ECUTREE = "RLS";
+                    vecInfo.AddEcu(eCUbyECU_GRUPPE);
+                }
+                else
+                {
+                    AddServiceCode(Log.CurrentMethod(), 3);
+                    if ((ecuKom.DefaultApiJob("D_RLS", "IDENT", string.Empty, string.Empty) as ECUJob).IsOkay())
+                    {
+                        AddServiceCode(Log.CurrentMethod(), 4);
+                        eCUbyECU_GRUPPE = new ECU();
+                        eCUbyECU_GRUPPE.ECU_GRUPPE = "D_RLS";
+                        eCUbyECU_GRUPPE.ID_SG_ADR = 86L;
+                        eCUbyECU_GRUPPE.ID_LIN_SLAVE_ADR = 128L;
+                        eCUbyECU_GRUPPE.ECU_GROBNAME = "RLS";
+                        eCUbyECU_GRUPPE.TITLE_ECUTREE = "RLS";
+                        vecInfo.AddEcu(eCUbyECU_GRUPPE);
+                    }
+                }
+            }
+            IEcu eCUbyECU_GRUPPE2 = vecInfo.getECUbyECU_GRUPPE("D_ISPB");
+            if (eCUbyECU_GRUPPE2 != null && !eCUbyECU_GRUPPE2.IDENT_SUCCESSFULLY)
+            {
+                AddServiceCode(Log.CurrentMethod(), 5);
+                IEcu eCUbyECU_GRUPPE3 = vecInfo.getECUbyECU_GRUPPE("D_MMI");
+                if ((eCUbyECU_GRUPPE3.IDENT_SUCCESSFULLY && string.Compare(eCUbyECU_GRUPPE3.VARIANTE, "RAD2", StringComparison.OrdinalIgnoreCase) == 0) || vecInfo.hasSA("6VC") || vecInfo.getECUbyECU_SGBD("CMEDIAR") != null)
+                {
+                    Log.Info("VehicleIdent.doECUIdent()", "found RAD2 with built-in USB/audio (SA 6FL/6ND/6NE)");
+                    ecusToRemoveKMM.Add(eCUbyECU_GRUPPE2);
+                }
+            }
+            if (vecInfo.BNType == BNType.BEV2010)
+            {
+                AddServiceCode(Log.CurrentMethod(), 6);
+                IEcu eCUbyECU_GRUPPE4 = vecInfo.getECUbyECU_GRUPPE("D_FBI");
+                if (eCUbyECU_GRUPPE4 != null && !eCUbyECU_GRUPPE4.IDENT_SUCCESSFULLY && vecInfo.hasSA("8AA"))
+                {
+                    Log.Info("VehicleIdent.doECUIdent()", "found ECALL in china BEV2010; will be removed");
+                    ecusToRemoveKMM.Add(eCUbyECU_GRUPPE4);
+                }
+            }
+            foreach (IEcu item in ecusToRemoveKMM)
+            {
+                Log.Info("VehicleIdent.doECUIdent()", "remove ECU at address: {0} due to KMM error.", item.ID_SG_ADR);
+                vecInfo.RemoveEcu(item);
+            }
+        }
+
+        public void AddServiceCode(string methodName, int identifier)
+        {
+            fastaService.AddServiceCode(ServiceCodeName, string.Format(ServiceCodeValuePattern, methodName, identifier), layoutGroup);
+        }
+
+        public void SetVehicleLifeStartDate(IVehicle vehicle, IEcuKom ecuKom)
+        {
+            if (vehicle.BrandName == BrandName.BMWMOTORRAD)
+            {
+                if (vehicle.BNType != BNType.BN2000_MOTORBIKE && vehicle.BNType != BNType.BNK01X_MOTORBIKE)
+                {
+                    ExecuteVehicleLifeStartDateJobAndProcessResults("G_MRKOMB", "STATUS_LESEN", "ID;0x1701", 3, "STAT_SYSTEMZEIT_WERT", ecuKom, vehicle);
+                }
+                else
+                {
+                    Log.Warning(Log.CurrentMethod(), "Found BN2000 Motorbike. VehicleLifeStartdate cannot be read out of the vehicle");
+                }
+            }
+            else if (!ExecuteVehicleLifeStartDateJobAndProcessResults("G_ZGW", "STATUS_LESEN", "ID;0x1701", 3, "STAT_SYSTEMZEIT_WERT", ecuKom, vehicle))
+            {
+                ExecuteVehicleLifeStartDateJobAndProcessResults("BCP_SP21", "STATUS_LESEN", "ID;0x1769", 3, "STAT_SYSTIME_SECONDS_WERT", ecuKom, vehicle, "STAT_SYSTIME_SECONDS");
+            }
         }
 
         public bool IsEPMEnabled(IVehicle vehicle)
@@ -544,9 +1024,321 @@ namespace PsdzClient.Core
             return false;
         }
 
-        public void AddServiceCode(string methodName, int identifier)
+        public IEcuJob ExecuteFSLesenExpert(IEcuKom ecuKom, string variant, int retries)
         {
-            //fastaService.AddServiceCode(ServiceCodeName, string.Format(ServiceCodeValuePattern, methodName, identifier), layoutGroup);
+            if (fsLesenExpertVariants.Any((string v) => v.Equals(variant, StringComparison.InvariantCultureIgnoreCase)))
+            {
+                return ecuKom.ApiJobWithRetries(variant, "FS_LESEN_EXPERT", ";0x2C;0x20", string.Empty, retries);
+            }
+            return null;
+        }
+
+        public void MaskResultsFromFSLesenExpertForFSLesenDetail(IEcuJob ecuJob)
+        {
+            MaskResultFASTARelevant(ecuJob, 1, 1, new List<string>
+        {
+            "F_ORT_NR", "F_EREIGNIS_DTC", "F_UEBERLAUF", "F_VORHANDEN_NR", "F_READY_NR", "F_WARNUNG_NR", "F_HFK", "F_HLZ", "F_SAE_CODE_STRING", "F_HEX_CODE",
+            "F_FEHLERKLASSE"
+        });
+            MaskResultFASTARelevant(ecuJob, 1, -2, new List<string> { "F_UW_KM", "F_UW_KM_SUPREME", "F_UW_ZEIT", "F_UW_ZEIT_SUPREME", "F_UW_ANZ", "F_UW*_NR", "F_UW*_WERT", "F_UW_BN", "F_UW_TN" });
+        }
+
+        public bool CheckForSpecificModelPopUpForElectricalChecks(string ereihe)
+        {
+            if (!specificModelsNoPopUp.Contains(ereihe))
+            {
+                string item = Regex.Replace(ereihe, "[0-9]", "x");
+                if (!placeholderModelsNopPopUp.Contains(item))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public string GetFourCharEreihe(string ereihe)
+        {
+            if (ereihe != null && ereihe.Length == 3)
+            {
+                return ereihe.Insert(1, "0");
+            }
+            if (ereihe != null && ereihe.Length == 4)
+            {
+                return ereihe;
+            }
+            return string.Empty;
+        }
+
+        public void ShowAdapterHintMotorCycle(IProgressMonitor monitor, IOperationServices services, string eReihe, string basicType)
+        {
+            switch (eReihe)
+            {
+                case "K16":
+                    if (!monitor.RequestConfirmation(ProgressRequestConfirmationType.Information, FormatedData.Localize("#Warning"), FormatedData.Localize("#064")))
+                    {
+                        Log.Info("CommandVINVehicleData.DoExecute()", "No adapter confirmed for motorcycle {0}", eReihe);
+                    }
+                    break;
+                case "259S":
+                case "R22":
+                case "R21":
+                case "R28":
+                case "259C":
+                case "K589":
+                case "K30":
+                case "K41":
+                    if ("0308,0309,0318,0319,0329,0362,0379,0391,0405,0414,0415,0417,0419,0421,0422,0424,0428,0429,0431,0432,0433,0434,0438,0439,0441,0442,0447,0477,0492,0495,0496,0498,0499,0544,0545,0547,0548,0549,0554,0555,0557,0558,0559".Contains(basicType))
+                    {
+                        InteractionMotorcycleMRMA24Model model = new InteractionMotorcycleMRMA24Model();
+                        services.InteractionService.Register(model);
+                    }
+                    break;
+            }
+        }
+
+        private void SetVehicleLifeStartDateWithJobResult(IVehicle vehicle, int? result)
+        {
+            vehicle.VehicleLifeStartDate = DateTime.Now.AddSeconds(-result.Value);
+        }
+
+        private void MaskResultFASTARelevant(IEcuJob ecuJob, ushort startSet, int stopSet, IList<string> fsLesenExpertResultNames)
+        {
+            fsLesenExpertResultNames.ForEach(delegate (string x)
+            {
+                ecuJob.maskResultFASTARelevant(startSet, stopSet, x);
+            });
+        }
+
+        private bool SetVehicleLifeStartDateWithAlternativeResult(IVehicle vehicle, string alternativeResult, ECUJob job)
+        {
+            bool result = false;
+            if (string.IsNullOrEmpty(alternativeResult))
+            {
+                Log.Warning(Log.CurrentMethod(), "VehicleLifeStartdate could not be read out of the vehicle because the alternative Resultname was empty!");
+            }
+            else
+            {
+                int? result2 = job.getintResult(1, alternativeResult);
+                if (result2.HasValue)
+                {
+                    SetVehicleLifeStartDateWithJobResult(vehicle, result2);
+                    result = true;
+                }
+                else
+                {
+                    Log.Warning(Log.CurrentMethod(), "VehicleLifeStartdate could not be read out of the vehicle with the Job {0} , params {1} and resultname {2}", job.JobName, job.JobParam, alternativeResult);
+                }
+            }
+            return result;
+        }
+
+        private bool ExecuteVehicleLifeStartDateJobAndProcessResults(string sgbd, string jobName, string jobParams, int retryCount, string resultname, IEcuKom ecuKom, IVehicle vehicle, string alternativeResult = "")
+        {
+            bool result = false;
+            ECUJob eCUJob = ecuKom.ApiJobWithRetries(sgbd, jobName, jobParams, string.Empty, retryCount) as ECUJob;
+            if (eCUJob.IsOkay())
+            {
+                int? result2 = eCUJob.getintResult(1, resultname);
+                if (result2.HasValue)
+                {
+                    SetVehicleLifeStartDateWithJobResult(vehicle, result2);
+                    result = true;
+                }
+                else
+                {
+                    result = SetVehicleLifeStartDateWithAlternativeResult(vehicle, alternativeResult, eCUJob);
+                }
+            }
+            return result;
+        }
+
+        public IEcuJob ClampShutdownManagement(IVehicle vecInfo, IEcuKom ecuKom, int retryCount = 2, int i_geschw_schwelle = 30)
+        {
+            IEcuJob clampJob = null;
+            if (ecuKom != null && vecInfo != null)
+            {
+                switch (vecInfo.BNType)
+                {
+                    case BNType.BN2020:
+                        {
+                            string variante = null;
+                            DetermineBn2020CentralEcuVariant(vecInfo, ecuKom, retryCount, ref clampJob, ref variante);
+                            switch (variante)
+                            {
+                                default:
+                                    Log.Info(Log.CurrentMethod(), "Unexpected Variant for clamp shutdown management appeared: " + variante);
+                                    ecuKom.ApiJobWithRetries("G_CAS", "STEUERN_ZUSTAND_FAHRZEUG", "PRUEFEN_ANALYSE_DIAGNOSE", string.Empty, retryCount);
+                                    clampJob = ecuKom.ApiJobWithRetries("G_CAS", "STEUERN_ROUTINE", "ARG;STEUERN_KLEMME15_ABSCHALTUNG;STR;" + i_geschw_schwelle, string.Empty, retryCount);
+                                    break;
+                                case "BCP_SP21":
+                                    vecInfo.PADVehicle = true;
+                                    ecuKom.ApiJobWithRetries("G_ZGW", "STEUERN_ZUSTAND_FAHRZEUG", "PRUEFEN_ANALYSE_DIAGNOSE", string.Empty, retryCount);
+                                    clampJob = ecuKom.ApiJobWithRetries("G_ZGW", "STEUERN_ROUTINE", "ARG;STEUERN_KL15_ABSCHALTUNG;STR;" + i_geschw_schwelle, string.Empty, retryCount);
+                                    break;
+                                case "BDC_G11":
+                                case "BDC_G05":
+                                    vecInfo.PADVehicle = true;
+                                    ecuKom.ApiJobWithRetries("G_CAS", "STEUERN_ZUSTAND_FAHRZEUG", "PRUEFEN_ANALYSE_DIAGNOSE", string.Empty, retryCount);
+                                    clampJob = ecuKom.ApiJobWithRetries("G_CAS", "STEUERN_ROUTINE", "ARG;STEUERN_KL15_ABSCHALTUNG;STR;" + i_geschw_schwelle, string.Empty, retryCount);
+                                    break;
+                                case "BDC":
+                                case "FEM_20":
+                                    clampJob = ecuKom.ApiJobWithRetries("G_CAS", "STEUERN_ROUTINE", "ARG;STEUERN_KL15_ABSCHALTUNG;STR;" + i_geschw_schwelle, string.Empty, retryCount);
+                                    break;
+                                case "CAS4_2":
+                                    clampJob = ecuKom.ApiJobWithRetries("G_CAS", "STEUERN_ROUTINE", "ID;0xAC51;STR;" + i_geschw_schwelle, string.Empty, retryCount);
+                                    break;
+                            }
+                            break;
+                        }
+                    case BNType.BN2000:
+                    case BNType.BEV2010:
+                        clampJob = ecuKom.ApiJobWithRetries("D_CAS", "STEUERN_KL15_ABSCHALTUNG", i_geschw_schwelle.ToString(CultureInfo.InvariantCulture), string.Empty, retryCount);
+                        break;
+                }
+            }
+            return clampJob;
+        }
+
+        private void DetermineBn2020CentralEcuVariant(IVehicle vecInfo, IEcuKom ecuKom, int retryCount, ref IEcuJob clampJob, ref string variante)
+        {
+            if (IsSp2021Gateway(vecInfo, ecuKom, retryCount))
+            {
+                IEcu eCUbyECU_GRUPPE = vecInfo.getECUbyECU_GRUPPE("G_ZGW");
+                if (eCUbyECU_GRUPPE != null)
+                {
+                    variante = ((!string.IsNullOrEmpty(eCUbyECU_GRUPPE.VARIANTE)) ? eCUbyECU_GRUPPE.VARIANTE.ToUpper() : null);
+                }
+                if (string.IsNullOrEmpty(variante))
+                {
+                    IEcuJob ecuJob = ecuKom.DefaultApiJob("G_ZGW", "IDENT", string.Empty, string.Empty);
+                    if (ecuJob.IsDone())
+                    {
+                        variante = ecuJob.getStringResult("VARIANTE");
+                    }
+                }
+                return;
+            }
+            IEcu eCUbyECU_GRUPPE2 = vecInfo.getECUbyECU_GRUPPE("G_CAS");
+            if (eCUbyECU_GRUPPE2 != null)
+            {
+                variante = ((!string.IsNullOrEmpty(eCUbyECU_GRUPPE2.VARIANTE)) ? eCUbyECU_GRUPPE2.VARIANTE.ToUpper() : null);
+            }
+            if (string.IsNullOrEmpty(variante))
+            {
+                clampJob = ecuKom.DefaultApiJob("G_CAS", "IDENT", string.Empty, string.Empty);
+                if (clampJob.IsDone())
+                {
+                    variante = clampJob.getStringResult("VARIANTE");
+                }
+            }
+        }
+
+        public string ReadVinForGroupCars(BNType bNType, IEcuKom ecuKom)
+        {
+            Dictionary<string, EcuKomConfig> dictionary = new Dictionary<string, EcuKomConfig>();
+            dictionary.Add("G_ZGW", new EcuKomConfig("G_ZGW", "STATUS_VIN_LESEN", string.Empty, 1, "STAT_VIN"));
+            dictionary.Add("G_CAS", new EcuKomConfig("G_CAS", "STATUS_FAHRGESTELLNUMMER", string.Empty, 1, "STAT_FGNR17_WERT"));
+            dictionary.Add("G_FRM", new EcuKomConfig("G_FRM", "STATUS_VCM_VIN", string.Empty, 1, "STAT_VIN_EINH"));
+            dictionary.Add("D_LM", new EcuKomConfig("D_LM", "READ_FVIN", string.Empty, 1, "FVIN"));
+            dictionary.Add("FRM_87", new EcuKomConfig("FRM_87", "READ_FVIN", string.Empty, 1, "FVIN"));
+            dictionary.Add("D_CAS", new EcuKomConfig("D_CAS", "STATUS_FAHRGESTELLNUMMER", string.Empty, 1, "FGNUMMER"));
+            dictionary.Add("ZCS_ALL", new EcuKomConfig("ZCS_ALL", "FGNR_LESEN", string.Empty, 1, "FG_NR"));
+            dictionary.Add("D_0080", new EcuKomConfig("D_0080", "AIF_FG_NR_LESEN", string.Empty, 1, "AIF_FG_NR"));
+            dictionary.Add("D_0010", new EcuKomConfig("D_0080", "AIF_LESEN", string.Empty, 1, "AIF_FG_NR"));
+            dictionary.Add("EWS3", new EcuKomConfig("EWS3", "FGNR_LESEN", string.Empty, 1, "FG_NR"));
+            dictionary.Add("D_ZGM", new EcuKomConfig("D_ZGM", "C_FG_LESEN", string.Empty, 1, "FG_NR"));
+            List<EcuKomConfig> list = new List<EcuKomConfig>();
+            switch (bNType)
+            {
+                case BNType.BN2020:
+                    list.Add(dictionary["G_ZGW"]);
+                    list.Add(dictionary["G_CAS"]);
+                    list.Add(dictionary["G_FRM"]);
+                    break;
+                case BNType.BEV2010:
+                    list.Add(dictionary["D_CAS"]);
+                    list.Add(dictionary["D_LM"]);
+                    list.Add(dictionary["FRM_87"]);
+                    list.Add(dictionary["D_ZGM"]);
+                    break;
+                case BNType.BN2000:
+                    list.Add(dictionary["D_CAS"]);
+                    list.Add(dictionary["D_LM"]);
+                    list.Add(dictionary["FRM_87"]);
+                    list.Add(dictionary["D_ZGM"]);
+                    break;
+                case BNType.IBUS:
+                    list.Add(dictionary["ZCS_ALL"]);
+                    list.Add(dictionary["D_0080"]);
+                    list.Add(dictionary["D_0010"]);
+                    list.Add(dictionary["EWS3"]);
+                    break;
+                default:
+                    foreach (KeyValuePair<string, EcuKomConfig> item in dictionary)
+                    {
+                        list.Add(item.Value);
+                    }
+                    break;
+            }
+            return ReadVinFromEcus(ecuKom, list);
+        }
+
+        public string ReadVinForMotorcycles(BNType bNType, IEcuKom ecuKom)
+        {
+            Dictionary<string, EcuKomConfig> dictionary = new Dictionary<string, EcuKomConfig>();
+            dictionary.Add("D_MRMOT", new EcuKomConfig("D_MRMOT", "STATUS_FAHRGESTELLNUMMER", string.Empty, 1, "STAT_FGNUMMER"));
+            dictionary.Add("MRBMSMP1", new EcuKomConfig("D_MRMOT", "STATUS_LESEN", "ARG;FAHRGESTELLNUMMER_MR", 1, "STAT_FAHRGESTELLNUMMER_TEXT"));
+            dictionary.Add("G_MRMOT", new EcuKomConfig("G_MRMOT", "STATUS_LESEN", "ARG;FAHRGESTELLNUMMER_MR", 1, "STAT_FAHRGESTELLNUMMER_TEXT"));
+            dictionary.Add("X_K001", new EcuKomConfig("X_K001", "prog_fg_nr_lesen_funktional", "18", 1, "FG_NR_LANG"));
+            dictionary.Add("X_KS01", new EcuKomConfig("X_KS01", "prog_fg_nr_lesen_funktional", "18", 1, "FG_NR_LANG"));
+            List<EcuKomConfig> list = new List<EcuKomConfig>();
+            switch (bNType)
+            {
+                case BNType.BN2020_MOTORBIKE:
+                    list.Add(dictionary["G_MRMOT"]);
+                    list.Add(dictionary["X_K001"]);
+                    list.Add(dictionary["X_KS01"]);
+                    break;
+                case BNType.BN2000_MOTORBIKE:
+                    list.Add(dictionary["D_MRMOT"]);
+                    list.Add(dictionary["MRBMSMP1"]);
+                    break;
+                default:
+                    foreach (KeyValuePair<string, EcuKomConfig> item in dictionary)
+                    {
+                        list.Add(item.Value);
+                    }
+                    break;
+            }
+            return ReadVinFromEcus(ecuKom, list);
+        }
+
+        internal string ReadVinFromEcus(IEcuKom ecuKom, List<EcuKomConfig> ecuKomconfigs)
+        {
+            string text = null;
+            foreach (EcuKomConfig ecuKomconfig in ecuKomconfigs)
+            {
+                try
+                {
+                    Log.Info("VehicleIdent.GetVin17()", "trying to get VIN from {0} with {1}", ecuKomconfig.Ecu, ecuKomconfig.Job);
+                    IEcuJob ecuJob = ecuKom.ApiJob(ecuKomconfig.Ecu, ecuKomconfig.Job, ecuKomconfig.Param, string.Empty);
+                    if (ecuJob.IsOkay())
+                    {
+                        text = ecuJob.getStringResult(ecuKomconfig.Set, ecuKomconfig.Result);
+                        if (!string.IsNullOrEmpty(text) && text != "00000000000000000")
+                        {
+                            Log.Info("VehicleIdent.GetVin17()", "getting VIN was successfully: {0}", text);
+                            return text;
+                        }
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Log.WarningException("VehicleIdent.GetVin17()", exception);
+                }
+            }
+            return null;
         }
     }
 }

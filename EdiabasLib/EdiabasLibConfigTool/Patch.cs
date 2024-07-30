@@ -37,13 +37,13 @@ namespace EdiabasLibConfigTool
         static class NativeMethods
         {
             [DllImport("kernel32.dll")]
-            public static extern IntPtr LoadLibrary(string dllToLoad);
+            public static extern int LoadLibrary(string dllToLoad);
 
             [DllImport("kernel32.dll")]
-            public static extern IntPtr GetProcAddress(IntPtr hModule, string procedureName);
+            public static extern IntPtr GetProcAddress(int hModule, string procedureName);
 
             [DllImport("kernel32.dll")]
-            public static extern bool FreeLibrary(IntPtr hModule);
+            public static extern bool FreeLibrary(int hModule);
 
             [DllImport("kernel32.dll")]
             public static extern bool SetDllDirectory(string lpPathName);
@@ -114,6 +114,45 @@ namespace EdiabasLibConfigTool
             return true;
         }
 
+        public static long ConvertApiVersion(string apiVersion)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(apiVersion))
+                {
+                    return 0;
+                }
+
+                long apiVerNum = 0;
+                string[] versionParts = apiVersion.Split('.');
+                if (versionParts.Length == 3)
+                {
+                    if (!long.TryParse(versionParts[0], out long verH))
+                    {
+                        return 0;
+                    }
+
+                    if (!long.TryParse(versionParts[1], out long verM))
+                    {
+                        return 0;
+                    }
+
+                    if (!long.TryParse(versionParts[2], out long verL))
+                    {
+                        return 0;
+                    }
+
+                    apiVerNum = ((verH & 0x0F) << 8) + ((verM & 0x0F) << 4) + (verL & 0x0F);
+                }
+
+                return apiVerNum;
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+
         public static List<string> GetRuntimeFiles(string dirName)
         {
             List<string> fileList = new List<string>();
@@ -151,24 +190,33 @@ namespace EdiabasLibConfigTool
             {
                 // ignored
             }
-            IntPtr hDll = NativeMethods.LoadLibrary(fileName);
+
+            int hDll = NativeMethods.LoadLibrary(fileName);
             try
             {
-                if (hDll == IntPtr.Zero)
+                if (hDll == 0)
                 {
                     return null;
                 }
+
                 IntPtr pApiCheckVersion = NativeMethods.GetProcAddress(hDll, "__apiCheckVersion");
                 if (pApiCheckVersion == IntPtr.Zero)
                 {
                     return null;
                 }
-                ApiCheckVersion apiCheckVersion = (ApiCheckVersion)Marshal.GetDelegateForFunctionPointer(pApiCheckVersion, typeof(ApiCheckVersion));
+
+                ApiCheckVersion apiCheckVersion = Marshal.GetDelegateForFunctionPointer(pApiCheckVersion, typeof(ApiCheckVersion)) as ApiCheckVersion;
+                if (apiCheckVersion == null)
+                {
+                    return null;
+                }
+
                 sbyte[] versionInfo = new sbyte[0x100];
                 if (apiCheckVersion(0x700, versionInfo) == 0)
                 {
                     return null;
                 }
+
                 string version = Encoding.ASCII.GetString(versionInfo.TakeWhile(value => value != 0).Select(value => (byte)value).ToArray());
                 return version;
             }
@@ -236,7 +284,8 @@ namespace EdiabasLibConfigTool
                         ssidString.StartsWith(Patch.AdapterSsidModBmw, StringComparison.OrdinalIgnoreCase) ||
                         ssidString.StartsWith(Patch.AdapterSsidUniCar, StringComparison.OrdinalIgnoreCase))
                     {
-                        UpdateConfigNode(settingsNode, @"EnetRemoteHost", @"auto:all");
+                        UpdateConfigNode(settingsNode, @"EnetRemoteHost", EdInterfaceEnet.AutoIp + EdInterfaceEnet.AutoIpAll);
+                        UpdateConfigNode(settingsNode, @"EnetVehicleProtocol", EdInterfaceEnet.ProtocolHsfz);
                         UpdateConfigNode(settingsNode, @"Interface", @"ENET");
                     }
                     else
@@ -269,8 +318,13 @@ namespace EdiabasLibConfigTool
                 }
                 else if (enetConnection != null)
                 {
-                    UpdateConfigNode(settingsNode, @"EnetRemoteHost", @"auto:all");
+                    UpdateConfigNode(settingsNode, @"EnetRemoteHost", EdInterfaceEnet.AutoIp + EdInterfaceEnet.AutoIpAll);
+
+                    string vehicleProtocol = enetConnection.ConnectionType == EdInterfaceEnet.EnetConnection.InterfaceType.DirectDoIp ?
+                        EdInterfaceEnet.ProtocolDoIp : EdInterfaceEnet.ProtocolHsfz;
+                    UpdateConfigNode(settingsNode, @"EnetVehicleProtocol", vehicleProtocol);
                     UpdateConfigNode(settingsNode, @"Interface", @"ENET");
+                    UpdateConfigNode(settingsNode, @"ObdKeepConnectionOpen", "0");
                 }
                 else
                 {
@@ -314,6 +368,13 @@ namespace EdiabasLibConfigTool
                 sr.Append("\r\n");
                 sr.Append(string.Format(Resources.Strings.PatchApiVersion, version32));
 
+                long apiVerNum32 = ConvertApiVersion(version32);
+                if (apiVerNum32 <= 0 || apiVerNum32 > EdiabasNet.EdiabasVersion)
+                {
+                    sr.Append("\r\n");
+                    sr.Append(Resources.Strings.PatchApiVersionUnknown);
+                }
+
                 // 64 bit
                 string sourceDll64 = Path.Combine(sourceDir, Api64DllName);
                 if (!File.Exists(sourceDll64))
@@ -340,49 +401,82 @@ namespace EdiabasLibConfigTool
 #endif
                 // 32 bit
                 string dllFile32 = Path.Combine(dirName, Api32DllName);
-                string dllFile32Backup = Path.Combine(dirName, Api32DllBackupName);
-                if (!File.Exists(dllFile32Backup) && IsOriginalDll(dllFile32))
+                bool dll32Exits = File.Exists(dllFile32);
+                if (!dll32Exits)
                 {
                     sr.Append("\r\n");
-                    sr.Append(string.Format(Resources.Strings.PatchCreateBackupFile, Api32DllBackupName));
-                    File.Copy(dllFile32, dllFile32Backup, false);
-                }
-                else
-                {
-                    sr.Append("\r\n");
-                    sr.Append(string.Format(Resources.Strings.PatchBackupFileExisting, Api32DllBackupName));
-                }
-
-                if (!IsOriginalDll(dllFile32Backup))
-                {
-                    sr.Append("\r\n");
-                    sr.Append(string.Format(Resources.Strings.PatchNoValidBackupFile, Api32DllName));
+                    sr.Append(string.Format(Resources.Strings.PatchOriginalApiDllMissing, Api32DllName));
                     return false;
                 }
-                File.Copy(sourceDll32, dllFile32, true);
 
                 // 64 bit
                 string dllFile64 = Path.Combine(dirName, Api64DllName);
-                string dllFile64Backup = Path.Combine(dirName, Api64DllBackupName);
-                if (!File.Exists(dllFile64Backup) && IsOriginalDll(dllFile64))
+                bool dll64Exits = File.Exists(dllFile64);
+                if (!dll64Exits)
                 {
                     sr.Append("\r\n");
-                    sr.Append(string.Format(Resources.Strings.PatchCreateBackupFile, Api64DllBackupName));
-                    File.Copy(dllFile64, dllFile64Backup, false);
-                }
-                else
-                {
-                    sr.Append("\r\n");
-                    sr.Append(string.Format(Resources.Strings.PatchBackupFileExisting, Api64DllBackupName));
+                    sr.Append(string.Format(Resources.Strings.PatchOriginalApiDllMissing, Api64DllName));
+                    // accept missing file
+                    //return false;
                 }
 
-                if (!IsOriginalDll(dllFile64Backup))
+                // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+                if (dll32Exits)
                 {
-                    sr.Append("\r\n");
-                    sr.Append(string.Format(Resources.Strings.PatchNoValidBackupFile, Api64DllName));
-                    return false;
+                    string dllFile32Backup = Path.Combine(dirName, Api32DllBackupName);
+                    if (!File.Exists(dllFile32Backup))
+                    {
+                        if (IsOriginalDll(dllFile32))
+                        {
+                            sr.Append("\r\n");
+                            sr.Append(string.Format(Resources.Strings.PatchCreateBackupFile, Api32DllBackupName));
+                            File.Copy(dllFile32, dllFile32Backup, false);
+                        }
+                    }
+                    else
+                    {
+                        sr.Append("\r\n");
+                        sr.Append(string.Format(Resources.Strings.PatchBackupFileExisting, Api32DllBackupName));
+                    }
+
+                    if (!IsOriginalDll(dllFile32Backup))
+                    {
+                        sr.Append("\r\n");
+                        sr.Append(string.Format(Resources.Strings.PatchNoValidBackupFile, Api32DllName));
+                        return false;
+                    }
+
+                    File.Copy(sourceDll32, dllFile32, true);
                 }
-                File.Copy(sourceDll64, dllFile64, true);
+
+                // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+                if (dll64Exits)
+                {
+                    string dllFile64Backup = Path.Combine(dirName, Api64DllBackupName);
+                    if (!File.Exists(dllFile64Backup))
+                    {
+                        if (IsOriginalDll(dllFile64))
+                        {
+                            sr.Append("\r\n");
+                            sr.Append(string.Format(Resources.Strings.PatchCreateBackupFile, Api64DllBackupName));
+                            File.Copy(dllFile64, dllFile64Backup, false);
+                        }
+                    }
+                    else
+                    {
+                        sr.Append("\r\n");
+                        sr.Append(string.Format(Resources.Strings.PatchBackupFileExisting, Api64DllBackupName));
+                    }
+
+                    if (!IsOriginalDll(dllFile64Backup))
+                    {
+                        sr.Append("\r\n");
+                        sr.Append(string.Format(Resources.Strings.PatchNoValidBackupFile, Api64DllName));
+                        return false;
+                    }
+
+                    File.Copy(sourceDll64, dllFile64, true);
+                }
 
                 string sourceConfig = Path.Combine(sourceDir, ConfigFileName);
                 if (!File.Exists(sourceConfig))
@@ -515,17 +609,30 @@ namespace EdiabasLibConfigTool
                 {
                     return false;
                 }
-                string dllFileBackup = Path.Combine(dirName, Api32DllBackupName);
-                if (!File.Exists(dllFileBackup))
+
+                string dllFile32 = Path.Combine(dirName, Api32DllName);
+                if (File.Exists(dllFile32))
                 {
-                    return false;
+                    if (!IsOriginalDll(dllFile32))
+                    {
+                        return true;
+                    }
+                }
+
+                string dllFile64 = Path.Combine(dirName, Api64DllName);
+                if (File.Exists(dllFile64))
+                {
+                    if (!IsOriginalDll(dllFile64))
+                    {
+                        return true;
+                    }
                 }
             }
             catch (Exception)
             {
                 return false;
             }
-            return true;
+            return false;
         }
 
         public static bool PatchEdiabas(StringBuilder sr, PatchType patchType, int adapterType, string dirName, BluetoothDeviceInfo devInfo, WlanInterface wlanIface, EdInterfaceEnet.EnetConnection enetConnection, string pin)
@@ -535,8 +642,11 @@ namespace EdiabasLibConfigTool
                 sr.AppendFormat(Resources.Strings.PatchDirectory, dirName);
                 if (!PatchFiles(sr, dirName))
                 {
+                    sr.Append("\r\n");
+                    sr.Append(Resources.Strings.PatchConfigUpdateFailed);
                     return false;
                 }
+
                 string configFile = Path.Combine(dirName, ConfigFileName);
                 if (!UpdateConfigFile(configFile, adapterType, devInfo, wlanIface, enetConnection, pin))
                 {
@@ -544,6 +654,7 @@ namespace EdiabasLibConfigTool
                     sr.Append(Resources.Strings.PatchConfigUpdateFailed);
                     return false;
                 }
+
                 sr.Append("\r\n");
                 sr.Append(Resources.Strings.PatchConfigUpdateOk);
                 switch (patchType)

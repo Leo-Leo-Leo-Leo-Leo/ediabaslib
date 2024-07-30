@@ -14,6 +14,7 @@ Table of contents:
 	* [Global settings](GlobalSettings.md)
 * [Log and trace files location](#log-and-trace-files-location)
 * [Background image](#background-image)
+* [Request to delete data send by the app](Deep_OBD_Data_Delete_Request.md)
 
 ## Manufacturers
 Basically the _Deep OBD app_ can operate in two modes, either BMW or VAG. You have to select the car manufacturer first. The VAG group mode (VW, Audi, Seat, Skoda) is still experimental and only supports the protocols KPW2000, KWP1281 and TP2.0. A [Replacement firmware for ELM327](Replacement_firmware_for_ELM327.md) adapter is required for this mode.
@@ -72,7 +73,12 @@ If the port is ommitted in the IP settings, the default port is 23 in hotspot mo
 	* _Recent configurations_: In this submenu the last 10 recently used configurations are accessible.
 	* _Edit_: Edit the current configuration main _(*.cccfg file)_. A suitable XML editor has to be be installed.
 	* _Edit pages list_: Edit the current pages list _(*.cccpages file)_.
-	* _Edit current page_: Edit the currently active page _(*.cccpage file)_.
+	* _Edit current page_: Submenu to edit the currently active page _(*.cccpage file)_.
+		* _Edit page_: Edit the currently active page in the XML editor.
+		* _Font size_: Change the page font size directly without XML editor. This is only possible if the _fontsize_ tag is present in the XML file.
+		* _Gauges landscape_: Change the number of gauges in landscape mode directly without XML editor. This is only possible if the _gauges-landscape_ tag is present in the XML file.
+		* _Gauges portrait_: Change the number of gauges in portrait mode directly without XML editor. This is only possible if the _gauges-portrait_ tag is present in the XML file.
+		* _Result display order_: Change order of the displayed results directly without XML editor. This is only possible if the _display-order_ tag is present for all _display_ nodes the XML file.
 	* _Edit other file_: Allows to select and edit any configuration _(*.cccpage file)_.
 	* _Reset XML editor_: Resets the last selected XML editor. A new editor has be to be selected again when editing files.
 	* _Close_: Close the current configuration.
@@ -83,7 +89,7 @@ If the port is ommitted in the IP settings, the default port is 23 in hotspot mo
 	* _Create trace file_: If the checkbox of this menu is active, a _ifh.trc_ file will be created when the application is connected. The trace file will be created in the _Log_ subdirectory.
 	* _Append trace file_: If this checkbox is enabled the trace file is always appended. Otherwise the trace file will be overridden after selection of a new configuration or restart of the application.
 	* _Log data_: This checkbox enables logging of the display data to a log file. Only those lines are logged, that have a _log_tag_ property in the [configuration file](Page_specification.md). The _logfile_ property in the _page_ node has to be specified as well to activate logging. When using the [configuration generator](#ConfigurationGenerator) _log_tag_ is set by default to the job name and _logfile_ to the ECU name. Data will be logged in the _Log_ subdirectory.
-* _Translations_: (Only for non German languages) This menu opens a submenu that allows configuration of automatic ECU text translation with Yandex.Translate:
+* _Translations_: (Only for non German languages) This menu opens a submenu that allows configuration of automatic ECU text translation with various translations engines. Most engines require an API key, but some have also special access tokens. Free translation if very limited in most cases and you have to pay for larger text amount.
 	* _Translate ECU text_: If this menu item is checked, automatic ECU text translation is active.
 	* _Translation configuration_: For automatic translation with various translation providers. For translation a (free) API Key is required. This menu assists to select and configure a translation provider.
 	* _Clear translation cache_: To enforce a new translation this menu resets the translation cache.

@@ -7,7 +7,6 @@ using System.Text;
 using Android.Util;
 using BmwDeepObd;
 using EdiabasLib;
-using Mono.CSharp;
 
 namespace BmwFileReader
 {
@@ -26,7 +25,7 @@ namespace BmwFileReader
         private RulesInfo _rulesInfo { get; }
         private readonly Dictionary<string, List<string>> _propertiesDict = new Dictionary<string, List<string>>();
         private readonly HashSet<string> _unknownNamesHash = new HashSet<string>();
-        private string _unknownId;
+        private ulong? _unknownId;
         private readonly object _lockObject = new object();
 
         public RuleEvalBmw()
@@ -36,6 +35,19 @@ namespace BmwFileReader
 
         public bool EvaluateRule(string id, RuleType ruleType)
         {
+            if (string.IsNullOrEmpty(id))
+            {
+                return false;
+            }
+
+            if (!ulong.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong idValue))
+            {
+#if DEBUG
+                Log.Info(Tag, string.Format("EvaluateRule Convert id failed: '{0}'", id));
+#endif
+                return true;
+            }
+
             lock (_lockObject)
             {
                 if (_rulesInfo == null)
@@ -52,15 +64,15 @@ namespace BmwFileReader
                     switch (ruleType)
                     {
                         case RuleType.Fault:
-                            valid = _rulesInfo.IsFaultRuleValid(id);
+                            valid = _rulesInfo.IsFaultRuleValid(idValue);
                             break;
 
                         case RuleType.EcuFunc:
-                            valid = _rulesInfo.IsEcuFuncRuleValid(id);
+                            valid = _rulesInfo.IsEcuFuncRuleValid(idValue);
                             break;
 
                         case RuleType.DiagObj:
-                            valid = _rulesInfo.IsDiagObjectRuleValid(id);
+                            valid = _rulesInfo.IsDiagObjectRuleValid(idValue);
                             break;
                     }
 
@@ -128,16 +140,16 @@ namespace BmwFileReader
                     }
 
                     // this should be the dealer languge, replace it with current language
-                    string language = ActivityCommon.GetCurrentLanguage();
+                    string language = ActivityCommon.GetCurrentLanguageStatic();
                     if (language.Length > 2)
                     {
                         language = language.Substring(0, 2);
                     }
                     _propertiesDict.TryAdd("Country".ToUpperInvariant(), new List<string> { language.ToUpperInvariant() });
 
-                    if (detectVehicleBmw.BrandList != null && detectVehicleBmw.BrandList.Count > 0)
+                    if (!string.IsNullOrEmpty(detectVehicleBmw.Brand))
                     {
-                        _propertiesDict.TryAdd("Marke".ToUpperInvariant(), detectVehicleBmw.BrandList);
+                        _propertiesDict.TryAdd("Marke".ToUpperInvariant(), new List<string> { detectVehicleBmw.Brand.Trim() });
                     }
 
                     if (!string.IsNullOrWhiteSpace(detectVehicleBmw.TypeKey))
@@ -330,7 +342,7 @@ namespace BmwFileReader
             return missingRules;
         }
 
-        public void RuleNotFound(string id)
+        public void RuleNotFound(ulong id)
         {
             _unknownId = id;
         }
@@ -370,10 +382,12 @@ namespace BmwFileReader
             {
                 logInfo = true;
             }
+#if false
             if (string.Compare(name, "EcuClique", StringComparison.OrdinalIgnoreCase) == 0)
             {
                 logInfo = true;
             }
+#endif
 #endif
 
             List<string> propertyStrings = GetPropertyStrings(name);

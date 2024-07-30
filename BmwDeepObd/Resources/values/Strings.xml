@@ -9,6 +9,7 @@
   <string name="button_no">No</string>
   <string name="button_ok">Ok</string>
   <string name="button_abort">Abort</string>
+  <string name="button_close">Close</string>
   <string name="button_select">Select</string>
   <string name="button_generate">Generate</string>
   <string name="button_manually">Manually</string>
@@ -52,6 +53,9 @@
   <string name="no_xml_editor_installed">Please install a XML editor first.</string>
   <string name="choose_xml_editor">Choose an XML editor.</string>
   <string name="file_access_denied">Access to file denied.\nPlease check the file location and access rights.</string>
+  <string name="file_editing_failed">Editing file failed.</string>
+  <string name="display_order_edit_hint">Use long click and drag drop to change display order.</string>
+  <string name="display_line_original_position">Original position: {0}</string>
   <string name="error_no_error">No errors present</string>
   <string name="error_reading_errors">Reading error memory: {0}</string>
   <string name="error_reading_relevant_only">(Only relevant data is displayed,\nchangeable in the global settings.)</string>
@@ -64,6 +68,8 @@
   <string name="error_error_code">Error code</string>
   <string name="error_info_code">Info code</string>
   <string name="error_shadow">(Shadow)</string>
+  <string name="error_unknown">Unknown</string>
+  <string name="error_hidden">Hidden</string>
   <string name="error_env_title">Environmental conditions:</string>
   <string name="error_env_frequency">Frequency</string>
   <string name="error_env_log_count">Logistics counter</string>
@@ -75,7 +81,7 @@
 \nFeel free to contribute or to report problems.
 \nA detailed documentation could also be found on this web site.
 \n\nChanges in this version:\n</string>
-  <string name="version_last_changes">- Motorbike detect option added.\n- DeepL translation.\n- Added first simple BMW service functions.\n- Fixed minor problems</string>
+  <string name="version_last_changes">- Start at boot option.\n - ELM327 firmware update.\n- EDIABAS 7.6.0 with DoIP support.\n- BMW database corrected.\n- Yandex Cloud support.\n- Android 14 support.\n- Allow to change lines display order from menu.\n- Configuration generator: Long click to change ECU order.\n- Fixed minor problems</string>
   <string name="app_info_message">Deep OBD for BMW and VAG\nVersion: {0}\nId: {1}</string>
   <string formatted="false" name="vag_mode_info">The VAG mode ist still experimental and only for vehicles until {0}.\nA &lt;a href=\'https://github.com/uholeschak/ediabaslib/blob/master/docs/Replacement_firmware_for_ELM327.md\'&gt;Deep OBD adapter&lt;/a&gt; with at least firmware version 0.11 is required.\nAt the moment only the protocols KWP2000, KWP1281, TP2.0 and UDS are supported.\nConfigurations have to regenerated for the new VAG mode\n.It\'s possible to select the old VAG mode again in the settings dialog.</string>
 
@@ -100,6 +106,7 @@
   <string name="exp_down_obb_missing">The app has not been downloaded from Google Play and the expansion file is missing.\nDownload the OBB file with an APK downloader from Google Play and copy it with the name:\n\'{0}\'\nin one of the directories:\n{1}\nThere is no support, the usage of Google Play is the only recommend way.</string>
   <string name="exp_down_time_remaining">Time remaining: {0}</string>
   <string name="obb_missing_restart">The expansion file has not been found,\nthe app has to be restarted.</string>
+  <string name="obb_not_readable">The expansion file:\n{0}\nis not readable.\nCheck the access permissions or delete the file.</string>
 
   <!-- Downloader library (modfications) -->
   <string name="state_failed_unlicensed">Download failed because the app may not be downloaded from Google Play</string>
@@ -126,9 +133,22 @@
   <string name="notification_custom_max">Custom maximum</string>
 
   <!-- Service -->
-  <string name="service_notification">The communication is active</string>
+  <string name="service_notification_comm_active">The communication is active</string>
+  <string name="service_notification_comm_ok">Connection to the vehicle established</string>
+  <string name="service_notification_comm_error">No connection to the vehicle</string>
+  <string name="service_notification_idle">Inactive</string>
+  <string name="service_notification_wait_media">Waiting for storage media</string>
+  <string name="service_notification_load_settings">Reading settings</string>
+  <string name="service_notification_compile_code">Compiling user code</string>
+  <string name="service_notification_init_reader">Reading database</string>
+  <string name="service_notification_connecting">Establishing connection</string>
+  <string name="service_notification_error">Start failed</string>
+  <string name="service_notification_abort">Aborting</string>
   <string name="service_stop_comm_app">Open App and stop communication</string>
   <string name="service_stop_comm">Stop communication</string>
+  <string name="service_abort_operation">Abort operation</string>
+  <string name="service_status_caption">Please wait, the start service is active.</string>
+  <string name="service_status_info">Service status:</string>
 
   <!-- Compile -->
   <string name="compile_cpu_usage">Checking CPU usage</string>
@@ -143,6 +163,7 @@
   <string name="select_ecu_zip">Select ECU Zip</string>
   <string name="downloading_file">Downloading files</string>
   <string name="download_failed">Download files failed.\nPlease check your network connection.</string>
+  <string name="download_proxy_config">A proxy has been configured in the network settings.\nThis could cause connection problems.\nRemove the proxy if possible.</string>
   <string name="obb_offline_extract">Do you want to extract the ECU files offline?</string>
   <string name="obb_offline_extract_title">Offline extract</string>
   <string name="obb_offline_extract_message">Enter the offline key.\nTo get the key, send an e-mail with the\napp version: {0}\nand ID: {1}\nto: {2} .\nYou could paste the key with the context menu of the input field.</string>
@@ -206,15 +227,19 @@
   <!-- Translate Key -->
   <string name="trans_api_key_title">Translation configuration</string>
   <string name="trans_caption_translator">Translator</string>
-  <string name="trans_translator_yandex">Yandex.Translate</string>
+  <string name="trans_translator_yandex_translate">Yandex.Translate</string>
   <string name="trans_translator_ibm">IBM Watson</string>
   <string name="trans_translator_deepl">DeepL</string>
+  <string name="trans_translator_yandex_cloud">Yandex Cloud</string>
   <string name="trans_key_desc">For automatic translation with {0} a (free) API key and account is required, that allows a limited amount of translations per day.\nWith the buttons below log in to your account and create a key or display your existing ones.\nCopy the key from the web browser and paste it in the field below with the paste button.\nTo copy the key press and hold the first word, extend the selected range and choose copy.</string>
+  <string name="trans_key_yandex_cloud">Yandex Cloud additionally allows to use an OAuth token and a folder ID instead of an API key.</string>
   <string name="trans_key_copy_title">Copy API Key</string>
   <string name="button_api_key_create">Create API Key</string>
   <string name="button_api_key_get">Display API Keys</string>
   <string name="trans_key_paste_title">API Key</string>
   <string name="button_api_key_paste">Paste API Key</string>
+  <string name="folder_id_paste_title">Folder ID</string>
+  <string name="button_folder_id_paste">Paste folder ID</string>
   <string name="api_url_paste_title">API URL</string>
   <string name="button_api_url_paste">Paste API URL</string>
   <string name="trans_key_test_title">Translate</string>
@@ -306,7 +331,12 @@
   <string name="menu_cfg_sel">Select</string>
   <string name="menu_cfg_edit">Edit</string>
   <string name="menu_cfg_pages_edit">Edit pages list</string>
-  <string name="menu_cfg_page_edit">Edit current page</string>
+  <string name="menu_cfg_page_menu">Edit current page</string>
+  <string name="menu_cfg_page_edit">Edit page</string>
+  <string name="menu_cfg_page_edit_fontsize">Font size</string>
+  <string name="menu_cfg_page_edit_gauges_landscape">Gauges landscape</string>
+  <string name="menu_cfg_page_edit_gauges_portrait">Gauges portrait</string>
+  <string name="menu_cfg_page_edit_display_order">Result display order</string>
   <string name="menu_cfg_select_edit">Edit other file</string>
   <string name="menu_cfg_edit_reset">Reset XML editor</string>
   <string name="menu_cfg_close">Close</string>
@@ -367,6 +397,7 @@
   <string name="select_translator_yantex">Yantex.Translate</string>
   <string name="select_translator_ibm">IBM Watson</string>
   <string name="select_translator_deepl">DeepL</string>
+  <string name="select_translator_yandex_cloud">Yandex Cloud</string>
 
   <!-- Bluetooth -->
   <string name="mtc_disconnect_warn">For a stable communication with the adapter it is recommended to pair any additional smartphone with the radio.\nDo you want to continue anyway?</string>
@@ -444,12 +475,14 @@
   <string name="settings_caption_app_start">App start</string>
   <string name="settings_start_offline">No connection establishment to vehicle</string>
   <string name="settings_start_connect">Auto connection establishment to vehicle</string>
-  <string name="settings_start_connect_close">Auto connection establishment to vehicle and close App (only if broadcast is active)</string>
+  <string name="settings_start_connect_close">Auto connection establishment to vehicle and close App</string>
+  <string name="settings_start_boot">Auto start the service at boot time to restore the last connection state</string>
   <string name="settings_caption_update">Update check</string>
   <string name="settings_update_off">Never</string>
   <string name="settings_update_1day">Every day</string>
   <string name="settings_update_1week">Every week</string>
   <string name="settings_caption_app_exit">App exit</string>
+  <string name="settings_sys_config">Configure app start</string>
   <string name="settings_double_click_for_app_exit">Double click required for app exit</string>
   <string name="settings_caption_broadcast">Broadcast</string>
   <string name="settings_send_data_broadcast">Send data broadcast</string>
@@ -477,14 +510,20 @@
   <string name="settings_notification_settings">Notification settings</string>
   <string name="settings_caption_debug">Debugging</string>
   <string name="settings_collect_debug_info">Collect debug information for trace files</string>
+  <string name="settings_uncompressed_trace">Create uncompressed trace files (slow)</string>
   <string name="settings_hci_snoop_log">Bluetooth HCI snoop log file:\n{0}</string>
   <string name="settings_hci_snoop_log_config">Configure snoop log</string>
   <string name="settings_options">Settings</string>
   <string name="settings_default_settings">Default settings</string>
   <string name="settings_export_settings">Export settings</string>
   <string name="settings_import_settings">Import settings</string>
-  <string name="settings_import_no_file">The import file has been found:</string>
+  <string name="settings_import_no_file">The import file has not been found:</string>
   <string name="settings_export_private">Do you also want to export private data?</string>
+  <string name="settings_mtc_boot_hint_title">The boot option is very often not working correctly on Android radios.</string>
+  <string name="settings_mtc_boot_hint_app_manger">It\'s recommended to configure Deep OBD in the app manager to stay active in standby.</string>
+  <string name="settings_mtc_boot_hint_start">It\'s recommended to choose the second start option and keep Deep OBD always in foreground to make the app remain active after standby.\nWith other tools (e.g. Automation, Macrodroid) the app has to be launched after booting.</string>
+  <string name="settings_internal_location_boot_hint">The boot option is only available if the app install location is internal.</string>
+  <string name="settings_start_app_failed">The app could not be started.</string>
 
   <!--  EdiabasToolActivity -->
   <string name="tool_title">Ediabas tool</string>
@@ -577,6 +616,9 @@
   <string name="xml_tool_result_vin">VIN</string>
   <string name="xml_tool_service_open_jobs">Show {0} jobs</string>
   <string name="xml_tool_service_jobs_warning">The service functions are still experimental!\nThe displayed jobs the Ediabas Tool may have only default arguments, that have to be adapted before job execution!\nIt\'s your responsibility to check the jobs before execution!\nThe argument assistant could be helpful in this case.\nBecause of data acquisition complexity it\'s possible, that in future the jobs require Deep OBD adapters for execution.\nDo you want to continue anyway?</string>
+  <string name="xml_tool_drag_list_hint">Long click the ECU to change the order.</string>
+  <string name="xml_tool_job_results">Job results:</string>
+  <string name="xml_tool_num_job_results">Number of job results: {0}</string>
 
   <!-- XML Tool Options Menu -->
   <string name="menu_xml_tool_add_errors_page">Add errors page</string>
@@ -663,6 +705,7 @@
   <string name="xml_tool_ecu_msg_no_selection">You have selected no data to display.\nFor this select the desired jobs and results first from the list.\nDo you want to abort anyway?</string>
   <string name="xml_tool_ecu_msg_no_grid_selection">You have activated the graphical display, but not selected any graphical design.\nNo gauge will be displayed.\nDo you want continue anyway?</string>
   <string name="xml_tool_ecu_msg_func_not_avail">The selected function is not available.</string>
+  <string name="xml_tool_ecu_arg_limit_hint">The maximum number of arguments per request depends on the ECU type.\nIf the data is not displayed on the dashboard you have to reduce the \"Maximum arguments per request\".</string>
 
   <!-- VAG Coding Activity -->
   <string name="vag_coding_title_coding">Coding ECU: {0}</string>
@@ -773,7 +816,7 @@
   <string name="can_adapter_fw_update_present">A firmware update for the adapter is available.\nDo you want to install the update now?</string>
   <string name="can_adapter_fw_update_info">During the update the communication should be never interrupted.\nDo you want to continue?</string>
   <string name="can_adapter_fw_update_info_ftdi">For the update it\'s required that the bootloader is already flashed into the device once.\nIf the application is not starting any more, you have to reset the processor during the connection phase, but the USB communication should not be interrupted.\nDo you want to continue?</string>
-  <string name="can_adapter_fw_elm_info">The ELM327 firmware is provided unchanged and without any support.\nPlease read the original ELM327 1.4b documentation for more details.</string>
+  <string name="can_adapter_fw_elm_info">The ELM327{0} compatible firmware is provided without any support.\nPlease read the original ELM327{0} documentation for more details.</string>
   <string name="can_adapter_fw_update_connect">Connecting to device, a processor reset may be required.</string>
   <string name="can_adapter_fw_update_active">Firmware update in progress.\nDo not interrupt communication.</string>
   <string name="can_adapter_fw_update_conn_failed">Unable to connect to adapter</string>
@@ -794,4 +837,14 @@
   <string name="button_can_adapter_fw_update">Firmware update</string>
   <string name="button_can_adapter_fw_change_elm">Flash ELM327 firmware</string>
   <string name="button_can_adapter_fw_change_custom">Flash replacement firmware</string>
+
+  <!-- CarService -->
+  <string name="car_service_disconnected">The vehicle is disconnected.</string>
+  <string name="car_service_disconnected_hint">Connect to the vehicle in the app first.</string>
+  <string name="car_service_app_displayed">The app has been displayed on the smartphone.</string>
+  <string name="car_service_active_page">Active page</string>
+  <string name="car_service_no_pages">No pages</string>
+  <string name="car_service_no_data">No data</string>
+  <string name="car_service_error_reset_active">The error reset is already active.</string>
+  <string name="car_service_error_reset_started">The error reset has been started.</string>
 </resources>

@@ -1,4 +1,8 @@
-﻿using System;
+﻿using Android.Content;
+using Android.Util;
+using BmwFileReader;
+using EdiabasLib;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -12,10 +16,6 @@ using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
-using Android.Content;
-using Android.Util;
-using BmwFileReader;
-using EdiabasLib;
 // ReSharper disable StringLiteralTypo
 
 // ReSharper disable CanBeReplacedWithTryCastAndCheckForNull
@@ -29,12 +29,13 @@ namespace BmwDeepObd
             Init,
             Error,
             DetectVehicle,
-            ReadErrors
+            ReadErrors,
+            Connected
         }
 
         public class EdiabasErrorReport
         {
-            public EdiabasErrorReport(string ecuName, string sgbd, string sgbdResolved, string vagDataFileName, string vagUdsFileName, bool readIs, bool isValid, Dictionary<string, EdiabasNet.ResultData> errorDict = null, List<Dictionary<string, EdiabasNet.ResultData>> errorDetailSet = null, string execptionText = null)
+            public EdiabasErrorReport(string ecuName, string sgbd, string sgbdResolved, string vagDataFileName, string vagUdsFileName, bool readIs, bool isValid, bool isVisible, Dictionary<string, EdiabasNet.ResultData> errorDict = null, List<Dictionary<string, EdiabasNet.ResultData>> errorDetailSet = null, string exceptionText = null)
             {
                 EcuName = ecuName;
                 Sgbd = sgbd;
@@ -43,10 +44,12 @@ namespace BmwDeepObd
                 VagUdsFileName = vagUdsFileName;
                 ReadIs = readIs;
                 IsValid = isValid;
+                IsVisible = isVisible;
                 ErrorDict = errorDict;
                 ErrorDetailSet = errorDetailSet;
-                ExecptionText = execptionText;
+                ExceptionText = exceptionText;
                 EcuVariant = null;
+                LifeStartDate = null;
             }
 
             public string EcuName { get; }
@@ -63,19 +66,23 @@ namespace BmwDeepObd
 
             public bool IsValid { get; }
 
+            public bool IsVisible { get; }
+
             public Dictionary<string, EdiabasNet.ResultData> ErrorDict { get; }
 
             public List<Dictionary<string, EdiabasNet.ResultData>> ErrorDetailSet { get; }
 
-            public string ExecptionText { get; }
+            public string ExceptionText { get; }
 
             public EcuFunctionStructs.EcuVariant EcuVariant { get; set; }
+
+            public DateTime? LifeStartDate { get; set; }
         }
 
         public class EdiabasErrorShadowReport : EdiabasErrorReport
         {
             public EdiabasErrorShadowReport(string ecuName, string sgbd, string sgbdResolved, Dictionary<string, EdiabasNet.ResultData> errorDict) :
-                base(ecuName, sgbd, sgbdResolved, null, null, false, true, errorDict)
+                base(ecuName, sgbd, sgbdResolved, null, null, false, true, true, errorDict)
             {
             }
         }
@@ -91,7 +98,7 @@ namespace BmwDeepObd
             }
 
             public EdiabasErrorReportReset(string ecuName, string sgbd, string sgbdResolved, string vagDataFileName, string vagUdsFileName, bool resetIs, ErrorRestState resetState) :
-                base(ecuName, sgbd, sgbdResolved, vagDataFileName, vagUdsFileName, resetIs, true)
+                base(ecuName, sgbd, sgbdResolved, vagDataFileName, vagUdsFileName, resetIs, true, true)
             {
                 ResetState = resetState;
             }
@@ -158,12 +165,14 @@ namespace BmwDeepObd
 
         private class EnvCondResultInfo
         {
-            public EnvCondResultInfo(string result, string unit = null, int? resourceId = null, int? minLength = null)
+            public EnvCondResultInfo(string result, string unit = null, int? resourceId = null, int? minLength = null, double? minValue = null, bool? convertDate = false)
             {
                 Result = result;
                 Unit = unit;
                 ResourceId = resourceId;
                 MinLength = minLength;
+                MinValue = minValue;
+                ConvertDate = convertDate;
             }
 
             public string Result { get; }
@@ -173,17 +182,24 @@ namespace BmwDeepObd
             public int? ResourceId { get; }
 
             public int? MinLength { get; }
+
+            public double? MinValue { get; }
+
+            public bool? ConvertDate { get; }
         }
 
         private class EnvCondDetailInfo
         {
-            public EnvCondDetailInfo()
+            public EnvCondDetailInfo(string name, string value)
             {
-                SbDetail = new StringBuilder();
+                Name = name;
+                ValueList = new List<string> { value };
                 Index = null;
             }
 
-            public StringBuilder SbDetail { get; }
+            public string Name { get; }
+
+            public List<string> ValueList { get; }
 
             public int? Index { get; set; }
         }
@@ -194,6 +210,7 @@ namespace BmwDeepObd
         public event PageChangedEventHandler PageChanged;
         public delegate void ThreadTerminatedEventHandler(object sender, EventArgs e);
         public event ThreadTerminatedEventHandler ThreadTerminated;
+        public delegate Tuple<string, string> TranslateDelegate(Tuple<string, string> tupleText, ref List<string> transList);
 
         public Context ActiveContext
         {
@@ -219,10 +236,16 @@ namespace BmwDeepObd
             get => _jobPageInfo;
             set
             {
+                if (value == null)
+                {
+                    return;
+                }
+
                 bool changed = _jobPageInfo != value;
-                _jobPageInfo = value;
                 if (changed)
                 {
+                    CommActive = !value.JobActivate;
+                    _jobPageInfo = value;
                     PageChangedEvent();
                 }
             }
@@ -284,6 +307,11 @@ namespace BmwDeepObd
 
         public EdiabasNet Ediabas { get; private set; }
 
+        public DetectVehicleBmw DetectVehicleBmw
+        {
+            get => _detectVehicleBmw;
+        }
+
 #if DEBUG
         private static readonly string Tag = typeof(EdiabasThread).FullName;
 #endif
@@ -310,8 +338,8 @@ namespace BmwDeepObd
             new EnvCondResultInfo("F_PCODE", null, Resource.String.error_env_pcode),
             new EnvCondResultInfo("F_CODE"),
             new EnvCondResultInfo("F_EREIGNIS_DTC"),
-            new EnvCondResultInfo("F_UW_KM", "km", Resource.String.error_env_km),
-            new EnvCondResultInfo("F_UW_ZEIT", "s", Resource.String.error_env_time),
+            new EnvCondResultInfo("F_UW_KM", "km", Resource.String.error_env_km, null, 1),
+            new EnvCondResultInfo("F_UW_ZEIT", "s", Resource.String.error_env_time, null, 1, true),
         };
 
         public static readonly Tuple<string, string>[] SpecialInfoResetJobs =
@@ -341,6 +369,7 @@ namespace BmwDeepObd
         private bool _ediabasJobAbort;
         private JobReader.PageInfo _lastPageInfo;
         private long _lastUpdateTime;
+        private string _ecuPath;
         private string _vagPath;
         private string _bmwPath;
         private string _logDir;
@@ -385,6 +414,7 @@ namespace BmwDeepObd
                 // and unmanaged resources.
                 if (disposing)
                 {
+                    _detectVehicleBmw = null;
                     // Dispose managed resources.
                     Ediabas.Dispose();
                     Ediabas = null;
@@ -396,12 +426,18 @@ namespace BmwDeepObd
             }
         }
 
-        public bool StartThread(string comPort, object connectParameter, JobReader.PageInfo pageInfo, bool commActive, string vagPath, string bmwPath, string traceDir, bool traceAppend, string logDir, bool appendLog)
+        public bool StartThread(string comPort, object connectParameter, JobReader.PageInfo pageInfo, bool commActive, ActivityCommon.InstanceDataCommon instanceData)
         {
             if (_workerThread != null)
             {
                 return false;
             }
+
+            if (instanceData == null)
+            {
+                return false;
+            }
+
             try
             {
                 _stopThread = false;
@@ -418,26 +454,18 @@ namespace BmwDeepObd
                     }
                 }
                 Ediabas.EdInterfaceClass.ConnectParameter = connectParameter;
-                if (!string.IsNullOrEmpty(traceDir))
-                {
-                    Ediabas.SetConfigProperty("TracePath", traceDir);
-                    Ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
-                    Ediabas.SetConfigProperty("AppendTrace", traceAppend ? "1" : "0");
-                    Ediabas.SetConfigProperty("CompressTrace", "1");
-                }
-                else
-                {
-                    Ediabas.SetConfigProperty("IfhTrace", "0");
-                }
+                ActivityCommon.SetEdiabasConfigProperties(Ediabas, instanceData.TraceDir, instanceData.TraceAppend);
                 CloseDataLog();
+
                 CommActive = commActive;
                 JobPageInfo = pageInfo;
                 _lastPageInfo = null;
                 _lastUpdateTime = Stopwatch.GetTimestamp();
-                _vagPath = vagPath;
-                _bmwPath = bmwPath;
-                _logDir = logDir;
-                _appendLog = appendLog;
+                _ecuPath = instanceData.EcuPath;
+                _vagPath = instanceData.VagPath;
+                _bmwPath = instanceData.BmwPath;
+                _logDir = instanceData.DataLogDir;
+                _appendLog = instanceData.DataLogAppend;
                 _detectVehicleBmw = null;
                 InitProperties(null);
                 _ruleEvalBmw.SetEvalProperties(null, null);
@@ -513,7 +541,9 @@ namespace BmwDeepObd
                     {
                         fileMode = FileMode.Create;
                     }
-                    _swDataLog = new StreamWriter(new FileStream(fileName, fileMode, FileAccess.Write, FileShare.ReadWrite), Encoding.UTF8);
+
+                    bool createBom = fileMode == FileMode.Create;
+                    _swDataLog = new StreamWriter(new FileStream(fileName, fileMode, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(createBom));
                     if (fileMode == FileMode.Create)
                     {
                         // add header
@@ -556,7 +586,7 @@ namespace BmwDeepObd
             }
         }
 
-        private string FormatResult(JobReader.PageInfo pageInfo, JobReader.DisplayInfo displayInfo, MultiMap<string, EdiabasNet.ResultData> resultDict)
+        public string FormatResult(JobReader.PageInfo pageInfo, JobReader.DisplayInfo displayInfo, MultiMap<string, EdiabasNet.ResultData> resultDict)
         {
             string result = ActivityCommon.FormatResult(Ediabas, pageInfo, displayInfo, resultDict, out Android.Graphics.Color? _, out double? _);
             if (ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw)
@@ -581,6 +611,390 @@ namespace BmwDeepObd
             }
             return result;
         }
+
+        public string GenerateErrorMessage(Context context, ActivityCommon activityCommon, JobReader.PageInfo pageInfo, EdiabasErrorReport errorReport, int errorIndex, MethodInfo formatErrorResult,
+            ref List<string> translationList, TranslateDelegate translateFunc, ref List<ActivityCommon.VagDtcEntry> dtcList)
+        {
+            StringBuilder srMessage = new StringBuilder();
+            string language = activityCommon.GetCurrentLanguage();
+            bool shadow = errorReport is EdiabasErrorShadowReport;
+            string ecuTitle = ActivityMain.GetPageString(pageInfo, errorReport.EcuName);
+            EcuFunctionStructs.EcuVariant ecuVariant = errorReport.EcuVariant;
+            if (ecuVariant != null)
+            {
+                string title = ecuVariant.Title?.GetTitle(language);
+                if (!string.IsNullOrEmpty(title))
+                {
+                    if (!string.IsNullOrEmpty(ecuTitle))
+                    {
+                        ecuTitle += " (" + title + ")";
+                    }
+                    else
+                    {
+                        ecuTitle = title;
+                    }
+                }
+            }
+
+            srMessage.Append(ecuTitle);
+            srMessage.Append(": ");
+
+            if (errorReport.ErrorDict == null)
+            {
+                srMessage.Append(context.GetString(Resource.String.error_no_response));
+            }
+            else
+            {
+                if (ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw)
+                {
+                    Int64 errorCode = 0;
+                    if (errorReport.ErrorDict.TryGetValue("FNR_WERT", out EdiabasNet.ResultData resultData))
+                    {
+                        if (resultData.OpData is Int64)
+                        {
+                            errorCode = (Int64)resultData.OpData;
+                        }
+                    }
+
+                    byte[] ecuResponse1 = null;
+                    List<byte[]> ecuResponseList = new List<byte[]>();
+                    foreach (string key in errorReport.ErrorDict.Keys)
+                    {
+                        if (key.StartsWith("ECU_RESPONSE", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (errorReport.ErrorDict.TryGetValue(key, out resultData))
+                            {
+                                if (resultData.OpData.GetType() == typeof(byte[]))
+                                {
+                                    if (string.Compare(key, "ECU_RESPONSE1", StringComparison.OrdinalIgnoreCase) == 0)
+                                    {
+                                        ecuResponse1 = (byte[])resultData.OpData;
+                                    }
+                                    else
+                                    {
+                                        ecuResponseList.Add((byte[])resultData.OpData);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    List<long> errorTypeList = new List<long>();
+                    for (int i = 0; i < 1000; i++)
+                    {
+                        if (!errorReport.ErrorDict.TryGetValue(string.Format(CultureInfo.InvariantCulture, "FART{0}_WERT", i + 1), out resultData))
+                        {
+                            break;
+                        }
+                        if (!(resultData.OpData is Int64))
+                        {
+                            break;
+                        }
+                        Int64 errorType = (Int64)resultData.OpData;
+                        errorTypeList.Add(errorType);
+                    }
+                    bool kwp1281 = false;
+                    bool uds = false;
+                    bool saeMode = false;
+                    bool saeDetail = false;
+                    if (errorReport.ErrorDict.TryGetValue("OBJECT", out resultData))
+                    {
+                        // ReSharper disable once UsePatternMatching
+                        string objectName = resultData.OpData as string;
+                        if (objectName != null)
+                        {
+                            if (XmlToolActivity.Is1281EcuName(objectName))
+                            {
+                                kwp1281 = true;
+                            }
+                            else if (XmlToolActivity.IsUdsEcuName(objectName))
+                            {
+                                uds = true;
+                            }
+                        }
+                    }
+                    if (errorReport.ErrorDict.TryGetValue("SAE", out resultData))
+                    {
+                        if (resultData.OpData is Int64)
+                        {
+                            if ((Int64)resultData.OpData != 0)
+                            {
+                                saeMode = true;
+                                saeDetail = true;
+                                errorCode <<= 8;
+                            }
+                        }
+                    }
+
+                    ActivityCommon.VagDtcEntry dtcEntry = null;
+                    if (kwp1281)
+                    {
+                        dtcList = null;
+                        byte dtcDetail = 0;
+                        if (errorTypeList.Count >= 2)
+                        {
+                            dtcDetail = (byte)((errorTypeList[0] & 0x7F) | (errorTypeList[1] << 7));
+                        }
+
+                        dtcEntry = new ActivityCommon.VagDtcEntry((uint)errorCode, dtcDetail, UdsFileReader.DataReader.ErrorType.Iso9141);
+                    }
+                    else if (uds)
+                    {
+                        dtcList = null;
+                        byte dtcDetail = 0;
+                        if (errorTypeList.Count >= 8)
+                        {
+                            for (int idx = 0; idx < 8; idx++)
+                            {
+                                if (errorTypeList[idx] == 1)
+                                {
+                                    dtcDetail |= (byte)(1 << idx);
+                                }
+                            }
+                        }
+
+                        dtcEntry = new ActivityCommon.VagDtcEntry((uint)errorCode, dtcDetail, UdsFileReader.DataReader.ErrorType.Uds);
+                        saeMode = true;
+                        errorCode <<= 8;
+                    }
+                    else
+                    {
+                        if (ecuResponse1 != null)
+                        {
+                            errorIndex = 0;
+                            dtcList = ActivityCommon.ParseEcuDtcResponse(ecuResponse1, saeMode);
+                        }
+
+                        if (dtcList != null && errorIndex < dtcList.Count)
+                        {
+                            dtcEntry = dtcList[errorIndex];
+                        }
+                    }
+
+                    List<string> textList = null;
+                    if (ActivityCommon.VagUdsActive && dtcEntry != null)
+                    {
+                        if (dtcEntry.ErrorType != UdsFileReader.DataReader.ErrorType.Uds)
+                        {
+                            string dataFileName = null;
+                            if (!string.IsNullOrEmpty(errorReport.VagDataFileName))
+                            {
+                                dataFileName = Path.Combine(_vagPath, errorReport.VagDataFileName);
+                            }
+                            UdsFileReader.UdsReader udsReader = ActivityCommon.GetUdsReader(dataFileName);
+                            if (udsReader != null)
+                            {
+                                textList = udsReader.DataReader.ErrorCodeToString(
+                                    dtcEntry.DtcCode, dtcEntry.DtcDetail, dtcEntry.ErrorType, udsReader);
+                                if (saeDetail && ecuResponseList.Count > 0)
+                                {
+                                    byte[] detailData = ActivityCommon.ParseSaeDetailDtcResponse(ecuResponseList[0]);
+                                    if (detailData != null)
+                                    {
+                                        List<string> saeDetailList = udsReader.DataReader.SaeErrorDetailHeadToString(detailData, udsReader);
+                                        if (saeDetailList != null)
+                                        {
+                                            textList.AddRange(saeDetailList);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (!string.IsNullOrEmpty(errorReport.VagUdsFileName))
+                            {
+                                string udsFileName = null;
+                                if (!string.IsNullOrEmpty(errorReport.VagUdsFileName))
+                                {
+                                    udsFileName = Path.Combine(_vagPath, errorReport.VagUdsFileName);
+                                }
+                                UdsFileReader.UdsReader udsReader = ActivityCommon.GetUdsReader(udsFileName);
+                                if (udsReader != null)
+                                {
+                                    textList = udsReader.ErrorCodeToString(udsFileName, dtcEntry.DtcCode, dtcEntry.DtcDetail);
+                                    if (ecuResponseList.Count > 0)
+                                    {
+                                        byte[] response = ActivityCommon.ExtractUdsEcuResponses(ecuResponseList[0]);
+                                        if (response != null)
+                                        {
+                                            List<string> errorDetailList = udsReader.ErrorDetailBlockToString(udsFileName, response);
+                                            if (errorDetailList != null)
+                                            {
+                                                textList.AddRange(errorDetailList);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        srMessage.Append("\r\n");
+                        srMessage.Append(context.GetString(Resource.String.error_error_code));
+                        srMessage.Append(": ");
+                        srMessage.Append(string.Format("0x{0:X04} 0x{1:X02} {2}", dtcEntry.DtcCode, dtcEntry.DtcDetail, dtcEntry.ErrorType.ToString()));
+                    }
+                    if (textList == null)
+                    {
+                        textList = activityCommon.ConvertVagDtcCode(_ecuPath, errorCode, errorTypeList, kwp1281, saeMode);
+                        srMessage.Append("\r\n");
+                        srMessage.Append(context.GetString(Resource.String.error_error_code));
+                        srMessage.Append(": ");
+                        srMessage.Append(string.Format("0x{0:X}", errorCode));
+                        foreach (long errorType in errorTypeList)
+                        {
+                            srMessage.Append(string.Format(";{0}", errorType));
+                        }
+
+                        if (saeMode)
+                        {
+                            srMessage.Append("\r\n");
+                            srMessage.Append(string.Format("{0}-{1:X02}", ActivityCommon.SaeCode16ToString(errorCode >> 8), errorCode & 0xFF));
+                        }
+                    }
+                    if (textList != null)
+                    {
+                        // ReSharper disable once LoopCanBeConvertedToQuery
+                        foreach (string text in textList)
+                        {
+                            srMessage.Append("\r\n");
+                            srMessage.Append(text);
+                        }
+                    }
+                }
+                else
+                {
+                    // BMW
+                    string text1 = string.Empty;
+                    string text2 = string.Empty;
+                    Int64 errorCode = ActivityMain.GetResultInt64(errorReport.ErrorDict, "F_ORT_NR", out bool errorCodeFound);
+                    if (!errorCodeFound)
+                    {
+                        errorCode = 0x0000;
+                    }
+
+                    bool showUnknown = !(ActivityCommon.EcuFunctionsActive && ActivityCommon.ShowOnlyRelevantErrors);
+                    List<EcuFunctionStructs.EcuEnvCondLabel> envCondLabelList = null;
+                    if (ecuVariant != null)
+                    {
+#if false   // test code for result states
+                        List<EcuFunctionStructs.EcuEnvCondLabel> envCondLabelResultList = ActivityCommon.EcuFunctionReader.GetEnvCondLabelListWithResultStates(ecuVariant);
+                        if (envCondLabelResultList != null && envCondLabelResultList.Count > 0)
+                        {
+                            string detailTestText = EdiabasThread.ConvertEnvCondErrorDetail(this, errorReport, envCondLabelResultList);
+                            if (!string.IsNullOrEmpty(detailTestText))
+                            {
+                                srMessage.Append("\r\n");
+                                srMessage.Append(detailTestText);
+                            }
+                        }
+#endif
+                        if (errorCode != 0x0000)
+                        {
+                            envCondLabelList = ActivityCommon.EcuFunctionReader.GetEnvCondLabelList(errorCode, errorReport.ReadIs, ecuVariant);
+                            List<string> faultResultList = EdiabasThread.ConvertFaultCodeError(errorCode, errorReport.ReadIs, errorReport, ecuVariant);
+
+                            if (faultResultList != null && faultResultList.Count == 2)
+                            {
+                                text1 = faultResultList[0];
+                                text2 = faultResultList[1];
+                            }
+                        }
+
+                        bool isSuppressed = !(errorReport.IsValid && errorReport.IsVisible);
+                        if (!showUnknown && isSuppressed)
+                        {
+                            errorCode = 0x0000;
+                        }
+                    }
+
+                    if (showUnknown && errorCode != 0x0000 && string.IsNullOrEmpty(text1))
+                    {
+                        text1 = ActivityMain.FormatResultString(errorReport.ErrorDict, "F_ORT_TEXT", "{0}");
+                        text2 = ActivityMain.FormatResultString(errorReport.ErrorDict, "F_VORHANDEN_TEXT", "{0}");
+                        if (translateFunc != null)
+                        {
+                            Tuple<string, string> tupleTrans = translateFunc.Invoke(new Tuple<string, string>(text1, text2), ref translationList);
+                            text1 = tupleTrans.Item1;
+                            text2 = tupleTrans.Item2;
+                        }
+                    }
+
+                    string textErrorCode = ActivityMain.FormatResultInt64(errorReport.ErrorDict, "F_ORT_NR", "{0:X04}");
+                    if (errorCode == 0x0000 || (string.IsNullOrEmpty(text1) && string.IsNullOrEmpty(textErrorCode)))
+                    {
+                        srMessage.Clear();
+                    }
+                    else
+                    {
+                        srMessage.Append("\r\n");
+                        if (!string.IsNullOrEmpty(textErrorCode))
+                        {
+                            if (errorReport.ReadIs)
+                            {
+                                srMessage.Append(context.GetString(Resource.String.error_info_code));
+                            }
+                            else
+                            {
+                                srMessage.Append(context.GetString(Resource.String.error_error_code));
+                                if (shadow)
+                                {
+                                    srMessage.Append(" ");
+                                    srMessage.Append(context.GetString(Resource.String.error_shadow));
+                                }
+                            }
+                            srMessage.Append(": ");
+                            srMessage.Append(textErrorCode);
+
+                            if (!errorReport.IsValid)
+                            {
+                                srMessage.Append(" (");
+                                srMessage.Append(context.GetString(Resource.String.error_unknown));
+                                srMessage.Append(")");
+                            }
+                            else if (!errorReport.IsVisible)
+                            {
+                                srMessage.Append(" (");
+                                srMessage.Append(context.GetString(Resource.String.error_hidden));
+                                srMessage.Append(")");
+                            }
+
+                            srMessage.Append("\r\n");
+                        }
+
+                        srMessage.Append(text1);
+                        if (!string.IsNullOrEmpty(text2))
+                        {
+                            srMessage.Append(", ");
+                            srMessage.Append(text2);
+                        }
+
+                        string detailText = ConvertEnvCondErrorDetail(context, errorReport, envCondLabelList);
+                        if (!string.IsNullOrEmpty(detailText))
+                        {
+                            srMessage.Append("\r\n");
+                            srMessage.Append(detailText);
+                        }
+                    }
+                }
+            }
+
+            string message = srMessage.ToString();
+            if (formatErrorResult != null)
+            {
+                try
+                {
+                    object[] args = { pageInfo, errorReport, message };
+                    message = formatErrorResult.Invoke(pageInfo.ClassObject, args) as string;
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+            }
+
+            return message;
+        }
+
 
         private void ProcessResults(JobReader.PageInfo pageInfo, MultiMap<string, EdiabasNet.ResultData> resultDict)
         {
@@ -796,12 +1210,7 @@ namespace BmwDeepObd
                     try
                     {
                         ActivityCommon.ResolveSgbdFile(Ediabas, errorResetSgbdFunc);
-
-                        Ediabas.ArgString = "ALL";
-                        Ediabas.ArgBinaryStd = null;
-                        Ediabas.ResultsRequests = string.Empty;
-                        Ediabas.NoInitForVJobs = true;
-                        Ediabas.ExecuteJob("_JOBS");    // force to load file
+                        ForceLoadSgbd();
 
                         EdiabasErrorReportReset.ErrorRestState resetState = ResetErrorFunctional(false);
                         bool resetIs = false;
@@ -856,21 +1265,24 @@ namespace BmwDeepObd
                                 DataUpdatedEvent();
                             };
 
-                            if (!detectVehicleBmw.LoadDataFromFile(vehicleDataFile, xmlTimeStamp))
+                            lock (detectVehicleBmw.GlobalLockObject)
                             {
-                                bool detectMotorbike = ActivityCommon.JobReader.IsMotorbike;
-                                if (!string.IsNullOrEmpty(pageInfo.ErrorsInfo.SgbdFunctional))
+                                if (!detectVehicleBmw.LoadDataFromFile(vehicleDataFile, xmlTimeStamp))
                                 {
-                                    detectVehicleBmw.DetectVehicleBmwFast(detectMotorbike);
-                                }
-                                else
-                                {
-                                    detectVehicleBmw.DetectVehicleDs2();
-                                }
+                                    bool detectMotorbike = ActivityCommon.JobReader.IsMotorbike;
+                                    if (!string.IsNullOrEmpty(pageInfo.ErrorsInfo.SgbdFunctional))
+                                    {
+                                        detectVehicleBmw.DetectVehicleBmwFast(detectMotorbike);
+                                    }
+                                    else
+                                    {
+                                        detectVehicleBmw.DetectVehicleDs2();
+                                    }
 
-                                if (detectVehicleBmw.Valid)
-                                {
-                                    detectVehicleBmw.SaveDataToFile(vehicleDataFile, xmlTimeStamp);
+                                    if (detectVehicleBmw.Valid)
+                                    {
+                                        detectVehicleBmw.SaveDataToFile(vehicleDataFile, xmlTimeStamp);
+                                    }
                                 }
                             }
 
@@ -903,7 +1315,7 @@ namespace BmwDeepObd
                         {
                             exText = EdiabasNet.GetExceptionText(ex, false, false);
                         }
-                        errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, string.Empty, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, false, true, null, null, exText));
+                        errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, string.Empty, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, false, true, true, null, null, exText));
                         lock (DataLock)
                         {
                             UpdateProgressState = UpdateState.Error;
@@ -921,6 +1333,7 @@ namespace BmwDeepObd
                         }
 
                         EcuFunctionStructs.EcuVariant ecuVariant = null;
+                        DateTime? lifeStartDate = null;
                         if (ActivityCommon.SelectedManufacturer == ActivityCommon.ManufacturerType.Bmw)
                         {
                             if (ActivityCommon.EcuFunctionsActive && ActivityCommon.EcuFunctionReader != null)
@@ -928,15 +1341,15 @@ namespace BmwDeepObd
                                 ecuVariant = ActivityCommon.EcuFunctionReader.GetEcuVariantCached(sgbdResolved);
                             }
 
-                            _ruleEvalBmw.SetEvalProperties(_detectVehicleBmw, ecuVariant);
+                            if (_detectVehicleBmw != null)
+                            {
+                                lifeStartDate = _detectVehicleBmw.LifeStartDate;
+                                _detectVehicleBmw.Ediabas = Ediabas;
+                                _ruleEvalBmw.SetEvalProperties(_detectVehicleBmw, ecuVariant);
+                            }
                         }
 
-                        Ediabas.ArgString = "ALL";
-                        Ediabas.ArgBinaryStd = null;
-                        Ediabas.ResultsRequests = string.Empty;
-                        Ediabas.NoInitForVJobs = true;
-                        Ediabas.ExecuteJob("_JOBS");    // force to load file
-
+                        ForceLoadSgbd();
                         if (errorResetList != null && errorResetList.Any(ecu => string.CompareOrdinal(ecu, ecuInfo.Name) == 0))
                         {   // error reset requested
                             EdiabasErrorReportReset.ErrorRestState resetState = ResetError(false);
@@ -1028,11 +1441,11 @@ namespace BmwDeepObd
                             }
                         }
 
-                        if (ReadErrors(ecuInfo, sgbdResolved, false, ecuVariant, errorReportList))
+                        if (ReadErrors(ecuInfo, sgbdResolved, false, ecuVariant, lifeStartDate, errorReportList))
                         {
-                            if (ActivityCommon.SelectedManufacturer == ActivityCommon.ManufacturerType.Bmw && ActivityCommon.EcuFunctionsActive)
+                            if (ActivityCommon.SelectedManufacturer == ActivityCommon.ManufacturerType.Bmw)
                             {
-                                ReadErrors(ecuInfo, sgbdResolved, true, ecuVariant, errorReportList);
+                                ReadErrors(ecuInfo, sgbdResolved, true, ecuVariant, lifeStartDate, errorReportList);
                             }
                         }
 
@@ -1089,7 +1502,7 @@ namespace BmwDeepObd
                         {
                             exText = EdiabasNet.GetExceptionText(ex, false, false);
                         }
-                        errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, string.Empty, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, false, true, null, null, exText));
+                        errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, string.Empty, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, false, true, true, null, null, exText));
                         lock (DataLock)
                         {
                             UpdateProgressState = UpdateState.Error;
@@ -1333,7 +1746,7 @@ namespace BmwDeepObd
                 EdiabasErrorReportList = null;
                 EdiabasErrorMessage = string.Empty;
                 ResultPageInfo = pageInfo;
-                UpdateProgressState = UpdateState.Error;
+                UpdateProgressState = UpdateState.Connected;
                 UpdateProgress = 0;
             }
             return true;
@@ -1473,7 +1886,7 @@ namespace BmwDeepObd
             }
         }
 
-        public bool ReadErrors(JobReader.EcuInfo ecuInfo, string sgbdResolved, bool readIs, EcuFunctionStructs.EcuVariant ecuVariant, List <EdiabasErrorReport> errorReportList)
+        public bool ReadErrors(JobReader.EcuInfo ecuInfo, string sgbdResolved, bool readIs, EcuFunctionStructs.EcuVariant ecuVariant, DateTime? lifeStartDate, List <EdiabasErrorReport> errorReportList)
         {
             string errorJob;
             string errorDetailJob = string.Empty;
@@ -1579,7 +1992,7 @@ namespace BmwDeepObd
 
             if (jobOk)
             {
-                bool relevantOnly = ActivityCommon.EcuFunctionsActive && ActivityCommon.ShowOnlyRelevantErrors;
+                bool showOnlyRelevant = ActivityCommon.EcuFunctionsActive && ActivityCommon.ShowOnlyRelevantErrors;
                 Dictionary<string, EdiabasNet.ResultData> resultDict0 = null;
                 int dictIndex = 0;
                 foreach (Dictionary<string, EdiabasNet.ResultData> resultDictLocal in resultSets)
@@ -1602,7 +2015,7 @@ namespace BmwDeepObd
                                 MergeResultDictionarys(ref resultDictTemp, resultDictLocal);
                                 MergeResultDictionarys(ref resultDictTemp, resultDict0);
                                 resultDictTemp.Add("SAE", new EdiabasNet.ResultData(EdiabasNet.ResultType.TypeI, "SAE", (Int64)(saeMode ? 1 : 0)));
-                                errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, false, true, resultDictTemp));
+                                errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, false, true, true, resultDictTemp));
                             }
                         }
                         dictIndex++;
@@ -1614,12 +2027,18 @@ namespace BmwDeepObd
                         if (resultData.OpData is Int64 errorCode)
                         {
                             bool isValid = true;
+                            bool isVisible = true;
                             if (ecuVariant != null)
                             {
-                                isValid = ActivityCommon.EcuFunctionReader.IsValidFaultCode(errorCode, readIs, ecuVariant, _ruleEvalBmw, relevantOnly);
+                                isValid = ActivityCommon.EcuFunctionReader.IsValidFaultCode(errorCode, readIs, ecuVariant, _ruleEvalBmw, out isVisible);
                             }
 
-                            bool readDetail = !relevantOnly || isValid;
+                            bool readDetail = !showOnlyRelevant;
+                            if (isValid && isVisible)
+                            {
+                                readDetail = true;
+                            }
+
                             bool details = false;
                             if (readDetail && Ediabas.IsJobExisting(errorDetailJob))
                             {
@@ -1643,16 +2062,18 @@ namespace BmwDeepObd
                             if (details)
                             {
                                 List<Dictionary<string, EdiabasNet.ResultData>> resultSetsDetail = new List<Dictionary<string, EdiabasNet.ResultData>>(Ediabas.ResultSets);
-                                errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, readIs, isValid, resultDictLocal, resultSetsDetail)
+                                errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, readIs, isValid, isVisible, resultDictLocal, resultSetsDetail)
                                 {
-                                    EcuVariant = ecuVariant
+                                    EcuVariant = ecuVariant,
+                                    LifeStartDate = lifeStartDate
                                 });
                             }
                             else
                             {
-                                errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, readIs, isValid, resultDictLocal)
+                                errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, readIs, isValid, isVisible, resultDictLocal)
                                 {
-                                    EcuVariant = ecuVariant
+                                    EcuVariant = ecuVariant,
+                                    LifeStartDate = lifeStartDate
                                 });
                             }
                         }
@@ -1664,9 +2085,10 @@ namespace BmwDeepObd
             {
                 if (!(readIs && jobRejected))
                 {
-                    errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, readIs, true)
+                    errorReportList.Add(new EdiabasErrorReport(ecuInfo.Name, ecuInfo.Sgbd, sgbdResolved, ecuInfo.VagDataFileName, ecuInfo.VagUdsFileName, readIs, true, true)
                     {
-                        EcuVariant = ecuVariant
+                        EcuVariant = ecuVariant,
+                        LifeStartDate = lifeStartDate
                     });
                 }
             }
@@ -2138,7 +2560,7 @@ namespace BmwDeepObd
                                             // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
                                             if (ecuResultStateValue != null)
                                             {
-                                                resultString = ecuResultStateValue.Title?.GetTitle(ActivityCommon.GetCurrentLanguage());
+                                                resultString = ecuResultStateValue.Title?.GetTitle(ActivityCommon.GetCurrentLanguageStatic());
                                             }
                                         }
 
@@ -2255,23 +2677,22 @@ namespace BmwDeepObd
         public static string ConvertEcuEnvCondResultValue(EcuFunctionStructs.EcuEnvCondLabel envCondLabel, EdiabasNet.ResultData resultData, out double? resultValue)
         {
             resultValue = null;
-            string resultString = null;
-
-            if (envCondLabel == null)
+            if (resultData == null)
             {
-                return string.Empty;
+                return null;
             }
 
-            if (envCondLabel.EcuResultStateValueList != null && envCondLabel.EcuResultStateValueList.Count > 0)
+            string resultString = null;
+            if (envCondLabel != null && envCondLabel.EcuResultStateValueList != null && envCondLabel.EcuResultStateValueList.Count > 0)
             {
                 EcuFunctionStructs.EcuResultStateValue ecuResultStateValue = MatchEcuResultStateValue(envCondLabel.EcuResultStateValueList, resultData);
                 // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
                 if (ecuResultStateValue != null)
                 {
-                    resultString = ecuResultStateValue.Title?.GetTitle(ActivityCommon.GetCurrentLanguage());
+                    resultString = ecuResultStateValue.Title?.GetTitle(ActivityCommon.GetCurrentLanguageStatic());
                 }
             }
-            
+
             if (resultString == null)
             {
                 resultString = ConvertEcuResultValueEnv(resultData, out resultValue);
@@ -2454,7 +2875,7 @@ namespace BmwDeepObd
         public static List<string> ConvertFaultCodeError(Int64 errorCode, bool info, EdiabasErrorReport errorReport, EcuFunctionStructs.EcuVariant ecuVariant)
         {
             List<string> resultList = new List<string>();
-            string language = ActivityCommon.GetCurrentLanguage();
+            string language = ActivityCommon.GetCurrentLanguageStatic();
             EcuFunctionStructs.EcuFaultCodeLabel ecuFaultCodeLabel = ActivityCommon.EcuFunctionReader.GetFaultCodeLabel(errorCode, info, ecuVariant);
             if (ecuFaultCodeLabel != null)
             {
@@ -2524,7 +2945,7 @@ namespace BmwDeepObd
             OrderedDictionary detailDict = new OrderedDictionary();
             if (errorReport.ErrorDetailSet == null)
             {
-                ConvertEnvCondErrorDetailSingle(context, detailDict, errorReport.ErrorDict, envCondLabelList);
+                ConvertEnvCondErrorDetailSingle(context, errorReport, ref detailDict, errorReport.ErrorDict, envCondLabelList);
             }
             else
             {
@@ -2544,7 +2965,7 @@ namespace BmwDeepObd
                         continue;
                     }
 
-                    ConvertEnvCondErrorDetailSingle(context, detailDict, errorDetail, envCondLabelList);
+                    ConvertEnvCondErrorDetailSingle(context, errorReport, ref detailDict, errorDetail, envCondLabelList);
                     dictIndex++;
                 }
             }
@@ -2556,7 +2977,7 @@ namespace BmwDeepObd
                 Dictionary<string, int> envCountTestDict = new Dictionary<string, int>();
                 foreach (EcuFunctionStructs.EcuEnvCondLabel envCondLabel in envCondLabelList)
                 {
-                    string language = ActivityCommon.GetCurrentLanguage();
+                    string language = ActivityCommon.GetCurrentLanguageStatic();
                     if (envCondLabel.EcuResultStateValueList != null && envCondLabel.EcuResultStateValueList.Count > 0)
                     {
                         string envName = envCondLabel.Title?.GetTitle(language);
@@ -2570,7 +2991,7 @@ namespace BmwDeepObd
                                 string envVal = ConvertEcuEnvCondResultValue(envCondLabel, testDataVal, out double? _) ?? string.Empty;
                                 if (!string.IsNullOrWhiteSpace(envVal))
                                 {
-                                    AddEnvCondErrorDetail(detailDict, envCountTestDict, envName, "@T" + iTextIndex.ToString(CultureInfo.InvariantCulture), envVal);
+                                    AddEnvCondErrorDetail(ref detailDict, envCountTestDict, envName, "@T" + iTextIndex.ToString(CultureInfo.InvariantCulture), envVal);
                                 }
                             }
                             catch (Exception)
@@ -2595,14 +3016,30 @@ namespace BmwDeepObd
 
             foreach (DictionaryEntry detailEntry in detailDict)
             {
-                if (detailEntry.Value is EnvCondDetailInfo envCondDetailInfo && envCondDetailInfo.SbDetail.Length > 0)
+                if (detailEntry.Value is EnvCondDetailInfo envCondDetailInfo && envCondDetailInfo.ValueList.Count > 0)
                 {
                     sbResult.Append("\r\n- ");
                     if (envCondDetailInfo.Index.HasValue && envCondDetailInfo.Index.Value > 0)
                     {
                         sbResult.Append(string.Format(CultureInfo.InvariantCulture, "({0}.) ", envCondDetailInfo.Index + 1));
                     }
-                    sbResult.Append(envCondDetailInfo.SbDetail.ToString());
+
+                    StringBuilder sbDetail = new StringBuilder();
+                    sbDetail.Append(envCondDetailInfo.Name);
+                    sbDetail.Append(": ");
+                    int index = 0;
+                    foreach (string value in envCondDetailInfo.ValueList)
+                    {
+                        if (index > 0)
+                        {
+                            sbDetail.Append(" | ");
+                        }
+
+                        sbDetail.Append(value);
+                        index++;
+                    }
+
+                    sbResult.Append(sbDetail.ToString());
                 }
             }
 
@@ -2610,14 +3047,14 @@ namespace BmwDeepObd
         }
 
         // from: RheingoldDiagnostics.dll BMW.Rheingold.Diagnostics.VehicleIdent.doECUReadFS, doECUReadFSDetails
-        public static bool ConvertEnvCondErrorDetailSingle(Context context, OrderedDictionary detailDict, Dictionary<string, EdiabasNet.ResultData> errorDetail, List<EcuFunctionStructs.EcuEnvCondLabel> envCondLabelList)
+        public static bool ConvertEnvCondErrorDetailSingle(Context context, EdiabasErrorReport errorReport, ref OrderedDictionary detailDict, Dictionary<string, EdiabasNet.ResultData> errorDetail, List<EcuFunctionStructs.EcuEnvCondLabel> envCondLabelList)
         {
             if (errorDetail == null)
             {
                 return false;
             }
 
-            string language = ActivityCommon.GetCurrentLanguage();
+            string language = ActivityCommon.GetCurrentLanguageStatic();
             Int64 envCount = ActivityMain.GetResultInt64(errorDetail, "F_UW_ANZ", out bool countFound);
             if (!countFound || envCount < 1)
             {
@@ -2625,125 +3062,10 @@ namespace BmwDeepObd
             }
 
             Dictionary<string, int> envCountDict = new Dictionary<string, int>();
-            if (envCondLabelList == null)
+            ConvertEnvCondErrorStd(ref envCountDict, ref detailDict, context, errorReport, errorDetail, envCondLabelList);
+
+            if (envCondLabelList != null)
             {
-                string frequencyText = ActivityMain.FormatResultInt64(errorDetail, "F_HFK", "{0}");
-                if (frequencyText.Length > 0)
-                {
-                    AddEnvCondErrorDetail(detailDict, envCountDict, context.GetString(Resource.String.error_env_frequency), "F_HFK", frequencyText);
-                }
-
-                string logCountText = ActivityMain.FormatResultInt64(errorDetail, "F_LZ", "{0}");
-                if (logCountText.Length > 0)
-                {
-                    AddEnvCondErrorDetail(detailDict, envCountDict, context.GetString(Resource.String.error_env_log_count), "F_LZ", logCountText);
-                }
-
-                string pcodeText = ActivityMain.FormatResultString(errorDetail, "F_PCODE_STRING", "{0}");
-                if (pcodeText.Length >= 4)
-                {
-                    AddEnvCondErrorDetail(detailDict, envCountDict, context.GetString(Resource.String.error_env_pcode), "F_PCODE_STRING", pcodeText);
-                }
-
-                string kmText = ActivityMain.FormatResultInt64(errorDetail, "F_UW_KM", "{0}");
-                if (string.IsNullOrEmpty(kmText))
-                {
-                    kmText = GetEnvCondKmLast(errorDetail);
-                }
-                if (kmText.Length > 0)
-                {
-                    AddEnvCondErrorDetail(detailDict, envCountDict, context.GetString(Resource.String.error_env_km), "F_UW_KM", kmText + " km");
-                }
-
-                string timeText = ActivityMain.FormatResultInt64(errorDetail, "F_UW_ZEIT", "{0}");
-                if (timeText.Length > 0)
-                {
-                    AddEnvCondErrorDetail(detailDict, envCountDict, context.GetString(Resource.String.error_env_time), "F_UW_ZEIT", timeText + " s");
-                }
-            }
-            else
-            {
-                int envCondIndex = 0;
-                foreach (EnvCondResultInfo envCondResult in ErrorEnvCondResultList)
-                {
-                    string envCondName = envCondResult.Result;
-                    string envValText = null;
-                    bool valueFound = errorDetail.TryGetValue(envCondName.ToUpperInvariant(), out EdiabasNet.ResultData resultDataVal);
-                    if (!valueFound && string.Compare(envCondName, "F_UW_KM", StringComparison.OrdinalIgnoreCase) == 0)
-                    {
-                        string kmText = GetEnvCondKmLast(errorDetail);
-                        if (!string.IsNullOrEmpty(kmText))
-                        {
-                            envValText = kmText;
-                        }
-                    }
-
-                    if (valueFound || !string.IsNullOrEmpty(envValText))
-                    {
-                        string envName = null;
-                        EcuFunctionStructs.EcuEnvCondLabel envCondLabel = ActivityCommon.EcuFunctionReader.GetEnvCondLabelMatchList(envCondLabelList, envCondName).LastOrDefault();
-                        if (envCondLabel != null)
-                        {
-                            envName = envCondLabel.Title?.GetTitle(language);
-                        }
-
-                        if (string.IsNullOrWhiteSpace(envName))
-                        {
-                            if (envCondResult.ResourceId.HasValue)
-                            {
-                                envName = context.GetString(envCondResult.ResourceId.Value);
-                            }
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(envName))
-                        {
-                            envName = envName.Trim();
-                            string envVal = string.Empty;
-                            if (!string.IsNullOrEmpty(envValText))
-                            {
-                                envVal = envValText;
-                            }
-                            else
-                            {
-                                if (envCondLabel != null)
-                                {
-                                    envVal = ConvertEcuEnvCondResultValue(envCondLabel, resultDataVal, out double? _) ?? string.Empty;
-                                }
-                            }
-
-                            if (envCondResult.MinLength.HasValue)
-                            {
-                                if (envVal.Length < envCondResult.MinLength.Value)
-                                {
-                                    envVal = string.Empty;
-                                }
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(envVal))
-                            {
-                                envVal = envVal.Trim();
-                                string envUnit = envCondResult.Unit;
-                                if (!string.IsNullOrWhiteSpace(envCondLabel?.Unit))
-                                {
-                                    envUnit = envCondLabel.Unit;
-                                }
-
-                                StringBuilder sbValue = new StringBuilder();
-                                sbValue.Append(envVal);
-                                if (!string.IsNullOrWhiteSpace(envUnit))
-                                {
-                                    sbValue.Append(" ");
-                                    sbValue.Append(envUnit.Trim());
-                                }
-
-                                AddEnvCondErrorDetail(detailDict, envCountDict, envName, "#" + (envCondIndex + 1).ToString(CultureInfo.InvariantCulture), sbValue.ToString());
-                            }
-                        }
-                    }
-
-                    envCondIndex++;
-                }
-
                 for (int index = 0; index < envCount; index++)
                 {
                     string envNumName = string.Format(CultureInfo.InvariantCulture, "F_UW{0}_NR", index + 1);
@@ -2784,7 +3106,7 @@ namespace BmwDeepObd
                                         sbValue.Append(envUnit.Trim());
                                     }
 
-                                    AddEnvCondErrorDetail(detailDict, envCountDict, envName, "@" + envNum.ToString(CultureInfo.InvariantCulture), sbValue.ToString());
+                                    AddEnvCondErrorDetail(ref detailDict, ref envCountDict, envName, "@" + envNum.ToString(CultureInfo.InvariantCulture), sbValue.ToString());
                                 }
                             }
                         }
@@ -2810,6 +3132,124 @@ namespace BmwDeepObd
             return true;
         }
 
+        public static bool ConvertEnvCondErrorStd(ref Dictionary<string, int> envCountDict, ref OrderedDictionary detailDict, Context context, EdiabasErrorReport errorReport, Dictionary<string, EdiabasNet.ResultData> errorDetail, List<EcuFunctionStructs.EcuEnvCondLabel> envCondLabelList)
+        {
+            DateTime? lifeStartDate = errorReport.LifeStartDate;
+            string language = ActivityCommon.GetCurrentLanguageStatic();
+            int envCondIndex = 0;
+            foreach (EnvCondResultInfo envCondResult in ErrorEnvCondResultList)
+            {
+                string envCondName = envCondResult.Result;
+                string envValText = null;
+                bool valueFound = errorDetail.TryGetValue(envCondName.ToUpperInvariant(), out EdiabasNet.ResultData resultDataVal);
+                if (!valueFound && string.Compare(envCondName, "F_UW_KM", StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    string kmText = GetEnvCondKmLast(errorDetail);
+                    if (!string.IsNullOrEmpty(kmText))
+                    {
+                        envValText = kmText;
+                    }
+                }
+
+                if (valueFound || !string.IsNullOrEmpty(envValText))
+                {
+                    string envName = null;
+                    EcuFunctionStructs.EcuEnvCondLabel envCondLabel = null;
+                    if (envCondLabelList != null)
+                    {
+                        envCondLabel = ActivityCommon.EcuFunctionReader.GetEnvCondLabelMatchList(envCondLabelList, envCondName).LastOrDefault();
+                    }
+
+                    if (envCondLabel != null)
+                    {
+                        envName = envCondLabel.Title?.GetTitle(language);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(envName))
+                    {
+                        if (envCondResult.ResourceId.HasValue)
+                        {
+                            envName = context.GetString(envCondResult.ResourceId.Value);
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(envName))
+                    {
+                        envName = envName.Trim();
+
+                        string envVal;
+                        if (!string.IsNullOrEmpty(envValText))
+                        {
+                            envVal = envValText;
+                        }
+                        else
+                        {
+                            envVal = ConvertEcuEnvCondResultValue(envCondLabel, resultDataVal, out double? _) ?? string.Empty;
+                        }
+
+                        double? resultValue = null;
+                        if (resultDataVal != null)
+                        {
+                            if (resultDataVal.OpData is Int64)
+                            {
+                                resultValue = (Int64)resultDataVal.OpData;
+                            }
+                            else if (resultDataVal.OpData is Double)
+                            {
+                                resultValue = (Double)resultDataVal.OpData;
+                            }
+                        }
+
+                        if (envCondResult.MinLength.HasValue)
+                        {
+                            if (envVal.Length < envCondResult.MinLength.Value)
+                            {
+                                envVal = string.Empty;
+                            }
+                        }
+
+                        if (envCondResult.MinValue.HasValue)
+                        {
+                            if (resultValue.HasValue && resultValue < envCondResult.MinValue.Value)
+                            {
+                                envVal = string.Empty;
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(envVal))
+                        {
+                            envVal = envVal.Trim();
+                            string envUnit = envCondResult.Unit;
+                            if (!string.IsNullOrWhiteSpace(envCondLabel?.Unit))
+                            {
+                                envUnit = envCondLabel.Unit;
+                            }
+
+                            if (envCondResult.ConvertDate.HasValue && envCondResult.ConvertDate.Value)
+                            {
+                                envVal = FormatTimeStampEntry(resultValue.Value, lifeStartDate);
+                                envUnit = string.Empty;
+                            }
+
+                            StringBuilder sbValue = new StringBuilder();
+                            sbValue.Append(envVal);
+                            if (!string.IsNullOrWhiteSpace(envUnit))
+                            {
+                                sbValue.Append(" ");
+                                sbValue.Append(envUnit.Trim());
+                            }
+
+                            AddEnvCondErrorDetail(ref detailDict, ref envCountDict, envName, "#" + (envCondIndex + 1).ToString(CultureInfo.InvariantCulture), sbValue.ToString());
+                        }
+                    }
+                }
+
+                envCondIndex++;
+            }
+
+            return true;
+        }
+
         public static string GetEnvCondKmLast(Dictionary<string, EdiabasNet.ResultData> errorDetail)
         {
             string kmLastText = ActivityMain.FormatResultString(errorDetail, "F_KM_LAST", "{0}");
@@ -2825,7 +3265,33 @@ namespace BmwDeepObd
             return string.Empty;
         }
 
-        public static void AddEnvCondErrorDetail(OrderedDictionary detailDict, Dictionary<string, int> envCountDict, string name, string key, string value)
+        // from: BMW.Rheingold.CoreFramework.DatabaseProvider.FaultCode.GetTimeStampDisplayItem
+        public static string FormatTimeStampEntry(double timeStamp, DateTime? lifeStartDate)
+        {
+            try
+            {
+                if (lifeStartDate.HasValue && lifeStartDate.Value != default(DateTime))
+                {
+                    DateTime timeStampDate = lifeStartDate.Value.AddSeconds(timeStamp);
+                    return timeStampDate.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                }
+
+                if (timeStamp < TimeSpan.MinValue.TotalSeconds || timeStamp > TimeSpan.MaxValue.TotalSeconds)
+                {
+                    return string.Empty;
+                }
+
+                TimeSpan ts = TimeSpan.FromSeconds(timeStamp);
+                return string.Format(CultureInfo.InvariantCulture, "{0}:{1:D2}:{2:D2}:{3:D2}s", ts.Days, ts.Hours, ts.Minutes, ts.Seconds);
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+
+        }
+
+        public static void AddEnvCondErrorDetail(ref OrderedDictionary detailDict, ref Dictionary<string, int> envCountDict, string name, string key, string value)
         {
             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(value))
             {
@@ -2847,17 +3313,16 @@ namespace BmwDeepObd
             EnvCondDetailInfo envCondDetailInfo = detailDict[detailKey] as EnvCondDetailInfo;
             if (envCondDetailInfo == null)
             {
-                envCondDetailInfo = new EnvCondDetailInfo();
+                envCondDetailInfo = new EnvCondDetailInfo(name, value);
                 detailDict.Add(detailKey, envCondDetailInfo);
-                envCondDetailInfo.SbDetail.Append(name);
-                envCondDetailInfo.SbDetail.Append(": ");
             }
             else
             {
-                envCondDetailInfo.SbDetail.Append(" | ");
+                if (!envCondDetailInfo.ValueList.Contains(value))
+                {
+                    envCondDetailInfo.ValueList.Add(value);
+                }
             }
-
-            envCondDetailInfo.SbDetail.Append(value);
         }
 
         // from: RheingoldSessionController.dll BMW.Rheingold.RheingoldSessionController.EcuFunctions.EcuFunctionReadStatus.FindMatchingValue
@@ -2913,6 +3378,15 @@ namespace BmwDeepObd
             }
 
             return false;
+        }
+
+        private void ForceLoadSgbd()
+        {
+            Ediabas.ArgString = string.Empty;
+            Ediabas.ArgBinaryStd = null;
+            Ediabas.ResultsRequests = string.Empty;
+            Ediabas.NoInitForVJobs = false;
+            Ediabas.ExecuteJob("_JOBS");    // force to load file
         }
 
         private void InitProperties(JobReader.PageInfo pageInfo, bool deviceChange = false)

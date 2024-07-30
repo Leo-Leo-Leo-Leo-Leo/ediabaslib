@@ -205,48 +205,70 @@ namespace EdiabasLibConfigTool
 
             try
             {
-                using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Softing\EDIS-VW2"))
-                {
-                    string path = key?.GetValue("EDIABASPath", null) as string;
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        string dirVag = Path.Combine(path, @"bin");
-                        if (Patch.IsValid(dirVag))
-                        {
-                            _ediabasDirVag = dirVag;
-                        }
-                    }
-                }
-                if (string.IsNullOrEmpty(_ediabasDirVag))
-                {
-                    using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"Software\SIDIS\ENV"))
-                    {
-                        string dirVag = key?.GetValue("FLASHINIPATH", null) as string;
-                        if (Patch.IsValid(dirVag))
-                        {
-                            _ediabasDirVag = dirVag;
-                        }
-                    }
-                }
-                if (string.IsNullOrEmpty(_ediabasDirVag))
-                {
-                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Softing\VASEGD2"))
-                    {
-                        string dirVag = key?.GetValue("strEdiabasApi32Path", null) as string;
-                        if (Patch.IsValid(dirVag))
-                        {
-                            _ediabasDirVag = dirVag;
-                        }
-                    }
-                }
+                _ediabasDirIstad = Properties.Settings.Default.IstadDir;
             }
             catch (Exception)
             {
                 // ignored
             }
+
             try
             {
-                _ediabasDirIstad = Properties.Settings.Default.IstadDir;
+                using (RegistryKey localMachine32 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32))
+                {
+                    using (RegistryKey key = localMachine32.OpenSubKey(@"SOFTWARE\Softing\EDIS-VW2"))
+                    {
+                        string path = key?.GetValue("EDIABASPath", null) as string;
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            string dirVag = Path.Combine(path, @"bin");
+                            if (Patch.IsValid(dirVag))
+                            {
+                                _ediabasDirVag = dirVag;
+                            }
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(_ediabasDirVag))
+                    {
+                        using (RegistryKey key = localMachine32.OpenSubKey(@"Software\SIDIS\ENV"))
+                        {
+                            string dirVag = key?.GetValue("FLASHINIPATH", null) as string;
+                            if (Patch.IsValid(dirVag))
+                            {
+                                _ediabasDirVag = dirVag;
+                            }
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(_ediabasDirVag))
+                    {
+                        using (RegistryKey currentUser32 = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry32))
+                        {
+                            using (RegistryKey key = currentUser32.OpenSubKey(@"Software\Softing\VASEGD2"))
+                            {
+                                string dirVag = key?.GetValue("strEdiabasApi32Path", null) as string;
+                                if (Patch.IsValid(dirVag))
+                                {
+                                    _ediabasDirVag = dirVag;
+                                }
+                            }
+                        }
+                    }
+
+                    using (RegistryKey key = localMachine32.OpenSubKey(@"SOFTWARE\BMWGroup\ISPI\ISTA"))
+                    {
+                        string path = key?.GetValue("InstallLocation", null) as string;
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            string dirIstad = Path.Combine(path, @"Ediabas", @"BIN");
+                            if (Patch.IsValid(dirIstad))
+                            {
+                                _ediabasDirIstad = dirIstad;
+                            }
+                        }
+                    }
+                }
             }
             catch (Exception)
             {
@@ -590,21 +612,69 @@ namespace EdiabasLibConfigTool
                 }
             }
             // select last selected item
-            if (_selectedItem != null)
+            if (_selectedItem != null && _selectedItem.Tag != null && _selectedItem.SubItems.Count >= 2)
             {
+                ListViewItem listViewItemSelect = null;
                 foreach (ListViewItem listViewItem in listViewDevices.Items)
                 {
+                    if (listViewItem.Tag == null)
+                    {
+                        continue;
+                    }
+
+                    if (listViewItem.SubItems.Count < 2)
+                    {
+                        continue;
+                    }
+
                     if (listViewItem.Tag.GetType() != _selectedItem.Tag.GetType())
                     {
                         continue;
                     }
+
                     if (string.Compare(listViewItem.SubItems[0].Text, _selectedItem.SubItems[0].Text, StringComparison.Ordinal) == 0)
                     {
-                        listViewItem.Selected = true;
+                        listViewItemSelect = listViewItem;
                         break;
                     }
                 }
+
+                if (listViewItemSelect == null)
+                {
+                    if (_selectedItem.Tag.GetType() == typeof(AccessPoint))
+                    {
+                        foreach (ListViewItem listViewItem in listViewDevices.Items)
+                        {
+                            if (listViewItem.Tag == null)
+                            {
+                                continue;
+                            }
+
+                            if (listViewItem.SubItems.Count < 2)
+                            {
+                                continue;
+                            }
+
+                            if (listViewItem.Tag.GetType() != typeof(WlanInterface))
+                            {
+                                continue;
+                            }
+
+                            if (string.Compare(listViewItem.SubItems[1].Text, _selectedItem.SubItems[1].Text, StringComparison.Ordinal) == 0)
+                            {
+                                listViewItemSelect = listViewItem;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (listViewItemSelect != null)
+                {
+                    listViewItemSelect.Selected = true;
+                }
             }
+
             listViewDevices.EndUpdate();
             _ignoreSelection = false;
             UpdateButtonStatus();
@@ -621,7 +691,7 @@ namespace EdiabasLibConfigTool
             List<EdInterfaceEnet.EnetConnection> detectedVehicles;
             using (EdInterfaceEnet edInterface = new EdInterfaceEnet(false))
             {
-                detectedVehicles = edInterface.DetectedVehicles("auto:all");
+                detectedVehicles = edInterface.DetectedVehicles(EdInterfaceEnet.AutoIp + EdInterfaceEnet.AutoIpAll);
             }
 
             return detectedVehicles;
@@ -717,6 +787,8 @@ namespace EdiabasLibConfigTool
 
             bool istadValid = Patch.IsValid(_ediabasDirIstad);
             groupBoxIstad.Enabled = true;
+            textBoxIstaLocation.Enabled = true;
+            textBoxIstaLocation.Text = _ediabasDirIstad ?? string.Empty;
             buttonDirIstad.Enabled = allowRestore;
             buttonPatchIstad.Enabled = istadValid && allowPatch;
             buttonRestoreIstad.Enabled = istadValid && allowRestore && Patch.IsPatched(_ediabasDirIstad);
@@ -747,6 +819,7 @@ namespace EdiabasLibConfigTool
         private void ClearInitMessage()
         {
             _initMessage = string.Empty;
+            UpdateStatusText(string.Empty);
         }
 
         public void ShowSearchEndMessage()

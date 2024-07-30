@@ -24,19 +24,19 @@ namespace BmwDeepObd
         private static readonly FirmwareInfo[] FirmwareInfos =
         {
             new FirmwareInfo("Type2.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18),
-            new FirmwareInfo("Type2.ELM327V15.X.production.hex", 0x030C, Device.Families.PIC18, true),
+            new FirmwareInfo("Type2.ELM327V23.X.production.hex", 0x030C, Device.Families.PIC18, true),
             new FirmwareInfo("Type3.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18),
-            new FirmwareInfo("Type3.ELM327V15.X.production.hex", 0x030C, Device.Families.PIC18, true),
+            new FirmwareInfo("Type3.ELM327V23.X.production.hex", 0x030C, Device.Families.PIC18, true),
             new FirmwareInfo("Type4.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18),
-            new FirmwareInfo("Type4.ELM327V15.X.production.hex", 0x030C, Device.Families.PIC18, true),
+            new FirmwareInfo("Type4.ELM327V23.X.production.hex", 0x030C, Device.Families.PIC18, true),
             new FirmwareInfo("Type5.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18),
-            new FirmwareInfo("Type5.ELM327V15.X.production.hex", 0x030C, Device.Families.PIC18, true),
+            new FirmwareInfo("Type5.ELM327V23.X.production.hex", 0x030C, Device.Families.PIC18, true),
             new FirmwareInfo("Type6.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18),
-            new FirmwareInfo("Type6.ELM327V15.X.production.hex", 0x030C, Device.Families.PIC18, true),
+            new FirmwareInfo("Type6.ELM327V23.X.production.hex", 0x030C, Device.Families.PIC18, true),
             new FirmwareInfo("Type7.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18),
-            new FirmwareInfo("Type7.ELM327V15.X.production.hex", 0x030C, Device.Families.PIC18, true),
+            new FirmwareInfo("Type7.ELM327V23.X.production.hex", 0x030C, Device.Families.PIC18, true),
             new FirmwareInfo("Type8.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18),
-            new FirmwareInfo("Type8.ELM327V15.X.production.hex", 0x030C, Device.Families.PIC18, true),
+            new FirmwareInfo("Type8.ELM327V23.X.production.hex", 0x030C, Device.Families.PIC18, true),
             new FirmwareInfo("Type16.CanAdapterElm.X.production.hex", 0x030C, Device.Families.PIC18)
         };
 
@@ -1911,7 +1911,7 @@ namespace BmwDeepObd
                     bootCmdElm = enc.GetBytes("AT@3BL2345678901\r");
                     _outStream.Write(bootCmdElm, 0, bootCmdElm.Length);
 
-                    while (_inStream.IsDataAvailable())
+                    while (_inStream.HasData())
                     {
                         if (_inStream.ReadByteAsync() < 0)
                         {
@@ -1936,7 +1936,7 @@ namespace BmwDeepObd
                     long startTime = Stopwatch.GetTimestamp();
                     for (; ; )
                     {
-                        if (!_inStream.IsDataAvailable())
+                        if (!_inStream.HasData())
                         {
                             if (Stopwatch.GetTimestamp() - startTime > timeout * TickResolMs)
                             {
@@ -1964,7 +1964,7 @@ namespace BmwDeepObd
                     startTime = Stopwatch.GetTimestamp();
                     for (; ; )
                     {
-                        if (!_inStream.IsDataAvailable())
+                        if (!_inStream.HasData())
                         {
                             if (Stopwatch.GetTimestamp() - startTime > timeout * TickResolMs)
                             {
@@ -1977,7 +1977,7 @@ namespace BmwDeepObd
                         int value = _inStream.ReadByteAsync();
                         if (value == DLE)
                         {
-                            while (!_inStream.IsDataAvailable())
+                            while (!_inStream.HasData())
                             {
                                 if (Stopwatch.GetTimestamp() - startTime > timeout * TickResolMs)
                                 {
@@ -2048,7 +2048,7 @@ namespace BmwDeepObd
                 long startTime = Stopwatch.GetTimestamp();
                 for (;;)
                 {
-                    if (!_inStream.IsDataAvailable())
+                    if (!_inStream.HasData())
                     {
                         if (Stopwatch.GetTimestamp() - startTime > timeout*TickResolMs)
                         {
@@ -2076,7 +2076,7 @@ namespace BmwDeepObd
                 startTime = Stopwatch.GetTimestamp();
                 for (;;)
                 {
-                    if (!_inStream.IsDataAvailable())
+                    if (!_inStream.HasData())
                     {
                         if (Stopwatch.GetTimestamp() - startTime > timeout*TickResolMs)
                         {
@@ -2091,7 +2091,7 @@ namespace BmwDeepObd
 
                     if (value == DLE)
                     {
-                        while (!_inStream.IsDataAvailable())
+                        while (!_inStream.HasData())
                         {
                             if (Stopwatch.GetTimestamp() - startTime > timeout*TickResolMs)
                             {
@@ -2133,7 +2133,7 @@ namespace BmwDeepObd
 
                     // wait for the responding STX echoed back
                     long startTime = Stopwatch.GetTimestamp();
-                    while (!_inStream.IsDataAvailable())
+                    while (!_inStream.HasData())
                     {
                         if (Stopwatch.GetTimestamp() - startTime > SyncWaitTime * 100 * TickResolMs)
                         {
@@ -2166,7 +2166,7 @@ namespace BmwDeepObd
 
                     // wait for the responding STX echoed back
                     long startTime = Stopwatch.GetTimestamp();
-                    while (!_inStream.IsDataAvailable())
+                    while (!_inStream.HasData())
                     {
                         if (Stopwatch.GetTimestamp() - startTime > SyncWaitTime * 100 * TickResolMs)
                         {
@@ -2208,7 +2208,7 @@ namespace BmwDeepObd
 
                 try
                 {
-                    while (_inStream.IsDataAvailable())
+                    while (_inStream.HasData())
                     {
                         if (_inStream.ReadByteAsync() < 0)
                         {
@@ -2223,7 +2223,7 @@ namespace BmwDeepObd
                     long startTime = Stopwatch.GetTimestamp();
                     for (; ; )
                     {
-                        while (!_inStream.IsDataAvailable())
+                        while (!_inStream.HasData())
                         {
                             if (timeout <= 0)
                             {
@@ -2297,7 +2297,7 @@ namespace BmwDeepObd
                         return result;
                     }
 
-                    if (!_inStream.IsDataAvailable())
+                    if (!_inStream.HasData())
                     {
                         return ErrorCode.NoAcknowledgement;
                     }
@@ -3057,6 +3057,25 @@ namespace BmwDeepObd
                 hexFile.Dispose();
             }
             return true;
+        }
+
+        public static bool IsInBooloaderMode(Stream inStream, Stream outStream)
+        {
+            try
+            {
+                Comm comm = new Comm(inStream, outStream);
+                Comm.BootInfo bootInfo = comm.ReadBootloaderInfo(20);
+                if (bootInfo.MajorVersion == 0 && bootInfo.MinorVersion == 0)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
     }
 }

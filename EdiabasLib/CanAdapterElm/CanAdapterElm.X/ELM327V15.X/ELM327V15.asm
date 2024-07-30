@@ -40,7 +40,8 @@
 		    #define TABLE_OFFSET BASE_ADDR
 		    #define EEPROM_PAGE 0x0
 		    #define WDT_RESET   0x0
-		    #define DEFAULT_BAUD 0x68		;38400
+							;38400
+		    #define DEFAULT_BAUD 0x68
 		#else
 		    #define SW_VERSION 0x02
 		    #define CODE_OFFSET 0x0800
@@ -650,10 +651,10 @@ p__4CC:	decfsz	0x43						; entry from: 4CEh,4DCh
 		decfsz	0x42
 		bra		p__4DA
 p__4D4:	movlw	0x81						; entry from: 0A14h
-		movwf	0xD1,BANKED
 #if WDT_RESET
 		goto	p_reset
 #else
+		movwf	0xD1,BANKED
 		reset
 #endif
 p__4DA:	btfsc	EECON1,1					; entry from: 4D2h
@@ -965,6 +966,7 @@ p__724:	movf	0x8B,W,BANKED			; entry from: 3C0h,826h,848h,1030h,1206h,1450h,17F0
 		movf	0x8A,W,BANKED
 		bra		p__7F2
 
+; print message, table offset has to be loaded
 p__730:	movwf	TBLPTRL					; entry from: 846h,0D04h,0F4Eh,0F94h,0F9Eh,0FA4h,11FEh,1218h,180Ch,181Ah,182Ch,1888h,1918h,1FB2h,24ECh,2936h,2BCAh,2D2Ah,30ECh,369Ch
 
 p__732:	tblrd*+							; entry from: 73Eh,74Ah
@@ -3036,6 +3038,7 @@ p_1754:	movwf	SPBRG1					; entry from: 174Eh
 p_1802:	bcf		0xD2,6,BANKED			; entry from: 17FAh
 		call	p__8C0
 		bnz		boot_reason
+; print ELM version, load message offset
 		movlw	0x82
 		call	p__730
 		call	p__724
@@ -3051,6 +3054,7 @@ boot_reason:
 		btfss   _POR_				; check for power on reset
 		bra     p_1830
 #endif
+; print ELM version, load message offset
 p_182A:	movlw	0x82						; entry from: 10Ah,1808h
 
 p_182C:	call	p__730					; entry from: 6C2h,82Ah,0C3Eh,0EA0h,0EAEh,1800h,1840h,1D38h

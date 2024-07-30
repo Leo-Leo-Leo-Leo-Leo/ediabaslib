@@ -7,7 +7,6 @@ using System.Text;
 using System.Threading;
 using Android.Content;
 using Android.Content.PM;
-using Android.Content.Res;
 using Android.Hardware.Usb;
 using Android.OS;
 using Android.Util;
@@ -15,9 +14,11 @@ using Android.Views;
 using Android.Views.InputMethods;
 using Android.Widget;
 using AndroidX.AppCompat.App;
+using BmwDeepObd.Dialogs;
 using BmwDeepObd.FilePicker;
 using BmwFileReader;
 using EdiabasLib;
+using Skydoves.BalloonLib;
 
 // ReSharper disable CanBeReplacedWithTryCastAndCheckForNull
 // ReSharper disable LoopCanBeConvertedToQuery
@@ -114,9 +115,15 @@ namespace BmwDeepObd
 
             public string InitialResults { get; set; }
 
-            public object Clone()
+            public JobInfo Clone()
             {
-                return MemberwiseClone();
+                JobInfo other = (JobInfo)MemberwiseClone();
+                return other;
+            }
+
+            object ICloneable.Clone()
+            {
+                return Clone();
             }
         }
 
@@ -128,11 +135,13 @@ namespace BmwDeepObd
                 DeviceName = string.Empty;
                 DeviceAddress = string.Empty;
                 TraceActive = true;
+                SelectedJobName = string.Empty;
             }
 
             public bool ForceAppend { get; set; }
             public bool AutoStart { get; set; }
             public int AutoStartItemId { get; set; }
+            public string SelectedJobName { get; set; }
             public string SgbdFileName { get; set; }
             public string DeviceName { get; set; }
             public string DeviceAddress { get; set; }
@@ -158,7 +167,7 @@ namespace BmwDeepObd
         public const string ExtraEnetIp = "enet_ip";
         public const string ExtraElmWifiIp = "elmwifi_ip";
         public const string ExtraDeepObdWifiIp = "deepobdwifi_ip";
-        public static readonly CultureInfo Culture = CultureInfo.CreateSpecificCulture("en");
+        public static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
 
         private const string TranslationFileName = "TranslationEdiabas.xml";
 
@@ -195,6 +204,8 @@ namespace BmwDeepObd
         private string _sgbdFileNameInitial = string.Empty;
         private List<string[]> _jobListInitial;
         private bool _activityActive;
+        private string _argAssistArgs;
+        private bool _argAssistExecute;
         private bool _translateEnabled;
         private bool _translateActive;
         private bool _jobListTranslated;
@@ -260,7 +271,10 @@ namespace BmwDeepObd
                 bool update = _lastSelectedJob != null && selectedJob == _lastSelectedJob;
 
                 NewJobSelected(update);
-                DisplayJobComments();
+                if (!update)
+                {
+                    DisplayJobComments();
+                }
             };
 
             _editTextArgs = FindViewById<EditText>(Resource.Id.editTextArgs);
@@ -341,6 +355,7 @@ namespace BmwDeepObd
             _activityCommon.SelectedDeepObdWifiIp = Intent.GetStringExtra(ExtraDeepObdWifiIp);
             _activityCommon.SetPreferredNetworkInterface();
 
+            ResetArgAssistResult();
             EdiabasClose(_instanceData.ForceAppend);
             ReadTranslation();
             UpdateDisplay();
@@ -349,7 +364,9 @@ namespace BmwDeepObd
             {
                 _instanceData.SgbdFileName = _sgbdFileNameInitial;
             }
-            ReadSgbd();
+
+            string selectJobName = _activityRecreated ? _instanceData.SelectedJobName : null;
+            ReadSgbd(selectJobName);
         }
 
         protected override void OnSaveInstanceState(Bundle outState)
@@ -515,15 +532,14 @@ namespace BmwDeepObd
                     ArgAssistBaseActivity.IntentSgFuncInfo = null;
                     if (data?.Extras != null && resultCode == Android.App.Result.Ok)
                     {
-                        _checkBoxBinArgs.Checked = false;
-                        _editTextArgs.Text = data.Extras.GetString(ArgAssistBaseActivity.ExtraArguments, "");
-                        NewJobSelected(true);
-
-                        bool execute = data.Extras.GetBoolean(ArgAssistBaseActivity.ExtraExecute, false);
-                        if (!_instanceData.Offline && !string.IsNullOrEmpty(_editTextArgs.Text) && execute)
+                        _argAssistArgs = data.Extras.GetString(ArgAssistBaseActivity.ExtraArguments, "");
+                        _argAssistExecute = data.Extras.GetBoolean(ArgAssistBaseActivity.ExtraExecute, false);
+                        if (IsJobRunning())
                         {
-                            ExecuteSelectedJob(false);
+                            break;
                         }
+
+                        SetArgAssistResult();
                     }
 
                     UpdateOptionsMenu();
@@ -599,7 +615,7 @@ namespace BmwDeepObd
             }
 
             bool commActive = IsJobRunning();
-            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable();
+            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable(true);
             bool fixedSgbd = !string.IsNullOrEmpty(_sgbdFileNameInitial);
 
             IMenuItem offlineMenu = menu.FindItem(Resource.Id.menu_tool_offline);
@@ -690,14 +706,14 @@ namespace BmwDeepObd
             if (translationSubmenu != null)
             {
                 translationSubmenu.SetEnabled(true);
-                translationSubmenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationSubmenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
 
             IMenuItem translationEnableMenu = menu.FindItem(Resource.Id.menu_translation_enable);
             if (translationEnableMenu != null)
             {
                 translationEnableMenu.SetEnabled(!commActive || ActivityCommon.IsTranslationAvailable());
-                translationEnableMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationEnableMenu.SetVisible(_activityCommon.IsTranslationRequired());
                 translationEnableMenu.SetChecked(ActivityCommon.EnableTranslation);
             }
 
@@ -705,14 +721,14 @@ namespace BmwDeepObd
             if (translationYandexKeyMenu != null)
             {
                 translationYandexKeyMenu.SetEnabled(!commActive);
-                translationYandexKeyMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationYandexKeyMenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
 
             IMenuItem translationClearCacheMenu = menu.FindItem(Resource.Id.menu_translation_clear_cache);
             if (translationClearCacheMenu != null)
             {
                 translationClearCacheMenu.SetEnabled(!_activityCommon.IsTranslationCacheEmpty());
-                translationClearCacheMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationClearCacheMenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
         }
 
@@ -892,14 +908,7 @@ namespace BmwDeepObd
                             return;
                         }
 
-                        try
-                        {
-                            StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"https://github.com/uholeschak/ediabaslib/blob/master/docs/EdiabasTool.md")));
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
+                        _activityCommon.OpenWebUrl("https://github.com/uholeschak/ediabaslib/blob/master/docs/EdiabasTool.md");
                     });
                     return true;
             }
@@ -991,6 +1000,7 @@ namespace BmwDeepObd
             _instanceData.ForceAppend = forceAppend;
             ClearLists();
             CloseDataLog();
+            UpdateLogInfo();
             UpdateDisplay();
             UpdateOptionsMenu();
             return true;
@@ -1084,6 +1094,7 @@ namespace BmwDeepObd
                 {
                     return false;
                 }
+                _instanceData.SgbdFileName = string.Empty;
                 return _activityCommon.SendTraceFile(_appDataDir, _instanceData.TraceDir, GetType(), handler);
             }
             return false;
@@ -1139,7 +1150,7 @@ namespace BmwDeepObd
 
             try
             {
-                if (ActivityCommon.IsTranslationAvailable() && ActivityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_configDir))
+                if (ActivityCommon.IsTranslationAvailable() && _activityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_configDir))
                 {
                     return _activityCommon.ReadTranslationCache(Path.Combine(_configDir, TranslationFileName));
                 }
@@ -1161,7 +1172,7 @@ namespace BmwDeepObd
 
             try
             {
-                if (ActivityCommon.IsTranslationAvailable() && ActivityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_configDir))
+                if (ActivityCommon.IsTranslationAvailable() && _activityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_configDir))
                 {
                     return _activityCommon.StoreTranslationCache(Path.Combine(_configDir, TranslationFileName));
                 }
@@ -1176,7 +1187,7 @@ namespace BmwDeepObd
 
         private void UpdateDisplay()
         {
-            if (ActivityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation && !ActivityCommon.IsTranslationAvailable())
+            if (_activityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation && !ActivityCommon.IsTranslationAvailable())
             {
                 EditYandexKey();
                 return;
@@ -1337,7 +1348,13 @@ namespace BmwDeepObd
                 {
                     return;
                 }
+
                 SparseBooleanArray sparseArray = listView.CheckedItemPositions;
+                if (sparseArray == null)
+                {
+                    return;
+                }
+
                 for (int i = 0; i < sparseArray.Size(); i++)
                 {
                     bool value = sparseArray.ValueAt(i);
@@ -1366,7 +1383,14 @@ namespace BmwDeepObd
             builder.SetNegativeButton(Resource.String.button_abort, (sender, args) =>
             {
             });
-            builder.Show();
+
+            AlertDialog alertDialog = builder.Create();
+            alertDialog.Show();
+
+            if (ActivityCommon.IsDocumentTreeSupported())
+            {
+                ActivityCommon.ShowAlertDialogBallon(this, alertDialog, Resource.String.menu_hint_copy_folder);
+            }
         }
 
         private void AdapterConfig()
@@ -1457,6 +1481,7 @@ namespace BmwDeepObd
                     }
                 }
 
+                ResetArgAssistResult();
                 ArgAssistBaseActivity.IntentSgFuncInfo = _sgFuncInfoList;
                 string arguments = _editTextArgs.Enabled ? _editTextArgs.Text : string.Empty;
                 serverIntent.PutExtra(ArgAssistBaseActivity.ExtraServiceId, serviceId);
@@ -1500,6 +1525,7 @@ namespace BmwDeepObd
             }
 
             JobInfo jobInfo = GetSelectedJob();
+            _instanceData.SelectedJobName = jobInfo?.Name ?? string.Empty;
             int serviceId = GetArgAssistJobService(jobInfo);
 
             _resultSelectListAdapter.Items.Clear();
@@ -1758,8 +1784,7 @@ namespace BmwDeepObd
                 List<string> commentList = jobInfo.CommentsTrans ?? jobInfo.Comments;
                 foreach (string comment in commentList)
                 {
-                    stringBuilderComments.Append("\r\n");
-                    stringBuilderComments.Append(comment);
+                    AppendSbText(stringBuilderComments, comment);
                 }
                 _infoListAdapter.Items.Add(new TableResultItem(stringBuilderComments.ToString(), null));
             }
@@ -1791,8 +1816,7 @@ namespace BmwDeepObd
                     stringBuilderComments.Append(info.Name + " (" + info.Type + "):");
                     foreach (string comment in info.CommentList)
                     {
-                        stringBuilderComments.Append("\r\n");
-                        stringBuilderComments.Append(comment);
+                        AppendSbText(stringBuilderComments, comment);
                     }
                     _infoListAdapter.Items.Add(new TableResultItem(stringBuilderComments.ToString(), null));
                 }
@@ -1819,8 +1843,7 @@ namespace BmwDeepObd
                     stringBuilderComments.Append(info.Name + " (" + info.Type + "):");
                     foreach (string comment in info.CommentList)
                     {
-                        stringBuilderComments.Append("\r\n");
-                        stringBuilderComments.Append(comment);
+                        AppendSbText(stringBuilderComments, comment);
                     }
                     _infoListAdapter.Items.Add(new TableResultItem(stringBuilderComments.ToString(), null));
                 }
@@ -1831,7 +1854,7 @@ namespace BmwDeepObd
         // ReSharper disable once UnusedMethodReturnValue.Local
         private bool TranslateEcuText(EventHandler<EventArgs> handler = null)
         {
-            if (_translateEnabled && !_translateActive && ActivityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation)
+            if (_translateEnabled && !_translateActive && _activityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation)
             {
                 if (!_jobListTranslated)
                 {
@@ -2144,11 +2167,6 @@ namespace BmwDeepObd
 
         private void UpdateLogInfo()
         {
-            if (_ediabas == null)
-            {
-                return;
-            }
-
             string logDir = string.Empty;
             try
             {
@@ -2165,21 +2183,14 @@ namespace BmwDeepObd
             _instanceData.DataLogDir = logDir;
 
             _instanceData.TraceDir = null;
-            if (_instanceData.TraceActive && !string.IsNullOrEmpty(_instanceData.SgbdFileName))
+            if (_instanceData.TraceActive)
             {
                 _instanceData.TraceDir = logDir;
             }
 
-            if (!string.IsNullOrEmpty(_instanceData.TraceDir))
+            if (_ediabas != null)
             {
-                _ediabas.SetConfigProperty("TracePath", _instanceData.TraceDir);
-                _ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
-                _ediabas.SetConfigProperty("AppendTrace", _instanceData.TraceAppend || _instanceData.ForceAppend ? "1" : "0");
-                _ediabas.SetConfigProperty("CompressTrace", "1");
-            }
-            else
-            {
-                _ediabas.SetConfigProperty("IfhTrace", "0");
+                ActivityCommon.SetEdiabasConfigProperties(_ediabas, _instanceData.TraceDir, _instanceData.TraceAppend || _instanceData.ForceAppend);
             }
         }
 
@@ -2200,7 +2211,7 @@ namespace BmwDeepObd
             _ediabas.EdInterfaceClass.TransmitCancel(false);
         }
 
-        private void ReadSgbd()
+        private void ReadSgbd(string selectJobName = null)
         {
             if (string.IsNullOrEmpty(_instanceData.SgbdFileName))
             {
@@ -2442,7 +2453,6 @@ namespace BmwDeepObd
                         return;
                     }
                     progress.Dismiss();
-                    progress.Dispose();
 
                     if (IsJobRunning())
                     {
@@ -2452,6 +2462,18 @@ namespace BmwDeepObd
                     _jobListTranslated = false;
                     _translateEnabled = true;
                     UpdateJobList();
+
+                    if (!string.IsNullOrEmpty(selectJobName))
+                    {
+                        for (int jobIndex = 0; jobIndex < _jobListAdapter.Items.Count; jobIndex++)
+                        {
+                            if (string.Compare(selectJobName, _jobListAdapter.Items[jobIndex].Name, StringComparison.OrdinalIgnoreCase) == 0)
+                            {
+                                _spinnerJobs.SetSelection(jobIndex);
+                                break;
+                            }
+                        }
+                    }
 
                     UpdateOptionsMenu();
                     UpdateDisplay();
@@ -2464,6 +2486,11 @@ namespace BmwDeepObd
                             _infoListAdapter.Items.Add(new TableResultItem(message, null));
                         }
                         _infoListAdapter.NotifyDataSetChanged();
+                    }
+
+                    if (!string.IsNullOrEmpty(selectJobName))
+                    {
+                        SetArgAssistResult();
                     }
                 });
             });
@@ -2516,13 +2543,11 @@ namespace BmwDeepObd
                             initialJobsIndexHash.Add(initialIndex);
                             if (jobValid)
                             {
-                                if (job.Clone() is JobInfo jobClone)
-                                {
-                                    jobClone.InitialIndex = initialIndex;
-                                    jobClone.InitialArgs = jobItems.Length > 1 ? jobItems[1] : string.Empty;
-                                    jobClone.InitialResults = jobItems.Length > 2 ? jobItems[2] : string.Empty;
-                                    _jobListAdapter.Items.Add(jobClone);
-                                }
+                                JobInfo jobClone = job.Clone();
+                                jobClone.InitialIndex = initialIndex;
+                                jobClone.InitialArgs = jobItems.Length > 1 ? jobItems[1] : string.Empty;
+                                jobClone.InitialResults = jobItems.Length > 2 ? jobItems[2] : string.Empty;
+                                _jobListAdapter.Items.Add(jobClone);
                             }
                         }
 
@@ -2624,6 +2649,33 @@ namespace BmwDeepObd
             }
         }
 
+        private void ResetArgAssistResult()
+        {
+            _argAssistArgs = null;
+            _argAssistExecute = false;
+        }
+
+        private bool SetArgAssistResult()
+        {
+            if (string.IsNullOrEmpty(_argAssistArgs))
+            {
+                return false;
+            }
+
+            _checkBoxBinArgs.Checked = false;
+            _editTextArgs.Text = _argAssistArgs;
+            NewJobSelected(true);
+
+            if (!_instanceData.Offline && !string.IsNullOrEmpty(_editTextArgs.Text) && _argAssistExecute)
+            {
+                ExecuteSelectedJob(false);
+            }
+
+            ResetArgAssistResult();
+
+            return true;
+        }
+
         private void ExecuteSelectedJob(bool continuous)
         {
             _infoListAdapter.Items.Clear();
@@ -2695,7 +2747,7 @@ namespace BmwDeepObd
                             bool jobOk = false;
                             if (resultSets != null && resultSets.Count > 1)
                             {
-                                if (EdiabasThread.IsJobStatusOk(resultSets[resultSets.Count - 1]))
+                                if (EdiabasThread.IsJobStatusOk(resultSets[^1]))
                                 {
                                     jobOk = true;
                                 }
@@ -2943,6 +2995,19 @@ namespace BmwDeepObd
             return false;
         }
 
+        public static void AppendSbText(StringBuilder sb, string text)
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append("\r\n");
+                }
+
+                sb.Append(text);
+            }
+        }
+
         private void BroadcastReceived(Context context, Intent intent)
         {
             if (intent == null)
@@ -2998,10 +3063,7 @@ namespace BmwDeepObd
             {
                 _context = context;
                 _items = new List<JobInfo>();
-
-                TypedArray typedArray = context.Theme.ObtainStyledAttributes(
-                    new[] { Android.Resource.Attribute.ColorBackground });
-                _backgroundColor = typedArray.GetColor(0, 0xFFFFFF);
+                _backgroundColor = ActivityCommon.GetStyleColor(context, Android.Resource.Attribute.ColorBackground);
             }
 
             public override long GetItemId(int position)
@@ -3035,7 +3097,7 @@ namespace BmwDeepObd
                     StringBuilder stringBuilderComments = new StringBuilder();
                     foreach (string comment in commentList)
                     {
-                        stringBuilderComments.Append(comment + " ");
+                        AppendSbText(stringBuilderComments, comment);
                     }
                     textDesc.Text = stringBuilderComments.ToString();
                 }
@@ -3069,9 +3131,7 @@ namespace BmwDeepObd
                 _context = context;
                 _items = new List<ExtraInfo>();
                 _itemsVisible = new List<ExtraInfo>();
-                TypedArray typedArray = context.Theme.ObtainStyledAttributes(
-                    new[] { Android.Resource.Attribute.ColorBackground });
-                _backgroundColor = typedArray.GetColor(0, 0xFFFFFF);
+                _backgroundColor = ActivityCommon.GetStyleColor(context, Android.Resource.Attribute.ColorBackground);
             }
 
             public override long GetItemId(int position)
@@ -3131,7 +3191,7 @@ namespace BmwDeepObd
                     StringBuilder stringBuilderComments = new StringBuilder();
                     foreach (string comment in commentList)
                     {
-                        stringBuilderComments.Append(comment + " ");
+                        AppendSbText(stringBuilderComments, comment);
                     }
                     textResultDesc.Text = stringBuilderComments.ToString();
                 }

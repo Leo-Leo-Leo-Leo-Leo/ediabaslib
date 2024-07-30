@@ -550,6 +550,16 @@ namespace PsdzClientLibrary.Resources {
         }
         
         /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die The FA has changed since the last backup.
+        ///Do you want to restore the settings of the last backup? ähnelt.
+        /// </summary>
+        internal static string TalBackupFaChanged {
+            get {
+                return ResourceManager.GetString("TalBackupFaChanged", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Sucht eine lokalisierte Zeichenfolge, die Generating backup TAL ... ähnelt.
         /// </summary>
         internal static string TalBackupGenerating {
@@ -577,6 +587,15 @@ namespace PsdzClientLibrary.Resources {
         }
         
         /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die Do you want to execute the main TAL again (slow)? ähnelt.
+        /// </summary>
+        internal static string TalExecuteAgain {
+            get {
+                return ResourceManager.GetString("TalExecuteAgain", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Sucht eine lokalisierte Zeichenfolge, die TAL execution finished with errors. ähnelt.
         /// </summary>
         internal static string TalExecuteError {
@@ -593,6 +612,24 @@ namespace PsdzClientLibrary.Resources {
         internal static string TalExecuteErrorContinue {
             get {
                 return ResourceManager.GetString("TalExecuteErrorContinue", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die The last time the TAL execution has been skipped. ähnelt.
+        /// </summary>
+        internal static string TalExecuteLastSkipped {
+            get {
+                return ResourceManager.GetString("TalExecuteLastSkipped", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die The last time the TAL has been executed successfully. ähnelt.
+        /// </summary>
+        internal static string TalExecuteLastSuccess {
+            get {
+                return ResourceManager.GetString("TalExecuteLastSuccess", resourceCulture);
             }
         }
         
@@ -627,7 +664,7 @@ namespace PsdzClientLibrary.Resources {
         
         /// <summary>
         ///   Sucht eine lokalisierte Zeichenfolge, die TAL execution failed.
-        ///You could try to execute the TAL again to fix the errors. ähnelt.
+        ///Do you want to retry TAL execution with the same settings later? ähnelt.
         /// </summary>
         internal static string TalExecutionFailMessage {
             get {
@@ -647,6 +684,16 @@ namespace PsdzClientLibrary.Resources {
         }
         
         /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die The TAL execution has been finished successfully.
+        ///Do you want to keep the backup data? ähnelt.
+        /// </summary>
+        internal static string TalExecutionOkMessage {
+            get {
+                return ResourceManager.GetString("TalExecutionOkMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Sucht eine lokalisierte Zeichenfolge, die The TAL contains flash operations but flashing is disabled for safety reasons.
         ///Possibly the software is not consistent in all ECUs. ähnelt.
         /// </summary>
@@ -657,20 +704,20 @@ namespace PsdzClientLibrary.Resources {
         }
         
         /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die Generating TAL ... ähnelt.
+        /// </summary>
+        internal static string TalGenerating {
+            get {
+                return ResourceManager.GetString("TalGenerating", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Sucht eine lokalisierte Zeichenfolge, die TAL generation failed. ähnelt.
         /// </summary>
         internal static string TalGenerationFailed {
             get {
                 return ResourceManager.GetString("TalGenerationFailed", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Sucht eine lokalisierte Zeichenfolge, die Generating TAL ... ähnelt.
-        /// </summary>
-        internal static string TalGenrating {
-            get {
-                return ResourceManager.GetString("TalGenrating", resourceCulture);
             }
         }
         
@@ -698,6 +745,17 @@ namespace PsdzClientLibrary.Resources {
         internal static string TalMissing {
             get {
                 return ResourceManager.GetString("TalMissing", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die A backup of the last TAL is present.
+        ///Do you want to execute the last TAL again?
+        ///The last settings have to stay unmodified in this case. ähnelt.
+        /// </summary>
+        internal static string TalOperationContinue {
+            get {
+                return ResourceManager.GetString("TalOperationContinue", resourceCulture);
             }
         }
         
@@ -815,6 +873,15 @@ namespace PsdzClientLibrary.Resources {
         internal static string VehicleDetecting {
             get {
                 return ResourceManager.GetString("VehicleDetecting", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Zeichenfolge, die Detecting vehicle: {0}% ähnelt.
+        /// </summary>
+        internal static string VehicleDetectingProgress {
+            get {
+                return ResourceManager.GetString("VehicleDetectingProgress", resourceCulture);
             }
         }
         

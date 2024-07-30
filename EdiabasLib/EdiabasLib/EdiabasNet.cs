@@ -9,6 +9,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Xml;
 // ReSharper disable IntroduceOptionalParameters.Local
 // ReSharper disable NotResolvedInText
@@ -29,6 +30,9 @@ namespace EdiabasLib
 
     public partial class EdiabasNet : IDisposable
     {
+#if Android && DEBUG
+        private static readonly string Tag = typeof(EdiabasNet).FullName;
+#endif
         private delegate void OperationDelegate(EdiabasNet ediabas, OpCode oc, Operand arg0, Operand arg1);
         private delegate void VJobDelegate(EdiabasNet ediabas, List<Dictionary<string, ResultData>> resultSets);
         public delegate bool AbortJobDelegate();
@@ -587,7 +591,7 @@ namespace EdiabasLib
             public Object OpData3;
         }
 
-        public const int EdiabasVersion = 0x730;
+        public const int EdiabasVersion = 0x760;
         public const int TraceAppendDiffHours = 1;
 
         public enum ErrorCodes : uint
@@ -2092,6 +2096,18 @@ namespace EdiabasLib
             public bool Overflow;
         }
 
+        private class VariantInfo
+        {
+            public VariantInfo(string variantName, string familyName)
+            {
+                VariantName = variantName;
+                FamilyName = familyName;
+            }
+
+            public string VariantName { get; private set; }
+            public string FamilyName { get; private set; }
+        }
+
         private class ArgInfo
         {
             public ArgInfo()
@@ -2208,10 +2224,10 @@ namespace EdiabasLib
         }
 
         private static readonly Encoding Encoding = Encoding.GetEncoding(1252);
-        private static readonly CultureInfo Culture = CultureInfo.CreateSpecificCulture("en");
+        private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
         private static readonly byte[] ByteArray0 = new byte[0];
         private static Dictionary<ErrorCodes, UInt32> _trapBitDict;
-#if !Android && !WindowsCE
+#if !Android
         private static List<Assembly> _resourceAssemblies = new List<Assembly>();
 #endif
         private static bool _firstLog = true;
@@ -2246,11 +2262,14 @@ namespace EdiabasLib
         private List<Dictionary<string, ResultData>> _resultSets;
         private List<Dictionary<string, ResultData>> _resultSetsTemp;
         private readonly Dictionary<string, string> _configDict = new Dictionary<string, string>();
-        private readonly Dictionary<string, string> _groupMappingDict = new Dictionary<string, string>();
+        private readonly Dictionary<string, VariantInfo> _groupMappingDict = new Dictionary<string, VariantInfo>();
+        private string _logInfo;
         private long _infoProgressRange;
         private long _infoProgressPos;
         private string _infoProgressText = string.Empty;
         private string _resultJobStatus = string.Empty;
+        private string _groupName = string.Empty;
+        private string _familyName = string.Empty;
         private string _sgbdFileName = string.Empty;
         private string _sgbdFileResolveLast = string.Empty;
         private string _ecuPath = string.Empty;
@@ -2266,7 +2285,8 @@ namespace EdiabasLib
 #if COMPRESS_TRACE
         private ICSharpCode.SharpZipLib.Zip.ZipOutputStream _zipStream;
 #endif
-        private readonly object _logLock = new object();
+        private readonly object _logMutexLock = new object();
+        private Mutex _logMutex = new Mutex(false);
         private int _logLevelCached = -1;
         private readonly bool _lockTrace;
         private EdValueType _arrayMaxBufSize = 1024;
@@ -2295,6 +2315,27 @@ namespace EdiabasLib
         private EdValueType _floatPrecision = 4;
         private bool _jobEnd;
         private bool _requestInit = true;
+
+        public static string EdiabasVersionString
+        {
+            get
+            {
+                return string.Format(CultureInfo.InvariantCulture, "{0}.{1}.{2}", (EdiabasVersion >> 8) & 0xF, (EdiabasVersion >> 4) & 0xF, EdiabasVersion & 0xF);
+            }
+        }
+
+        public static bool IsMinVersion760
+        {
+            get
+            {
+                return EdiabasVersion >= 0x760;
+            }
+        }
+
+        public bool IsDisposed
+        {
+            get { return _disposed; }
+        }
 
         public bool JobRunning
         {
@@ -2525,6 +2566,24 @@ namespace EdiabasLib
             }
         }
 
+        public string LogInfo
+        {
+            get
+            {
+                lock (_apiLock)
+                {
+                    return _logInfo;
+                }
+            }
+            set
+            {
+                lock (_apiLock)
+                {
+                    _logInfo = value;
+                }
+            }
+        }
+
         public int InfoProgressPercent
         {
             get
@@ -2641,6 +2700,28 @@ namespace EdiabasLib
             }
         }
 
+        public string GroupName
+        {
+            get
+            {
+                lock (_apiLock)
+                {
+                    return _groupName;
+                }
+            }
+        }
+
+        public string FamilyName
+        {
+            get
+            {
+                lock (_apiLock)
+                {
+                    return _familyName;
+                }
+            }
+        }
+
         public string SgbdFileName
         {
             get
@@ -2742,7 +2823,7 @@ namespace EdiabasLib
             }
         }
 
-#if !Android && !WindowsCE
+#if !Android
         static EdiabasNet()
         {
             LoadAllResourceAssemblies();
@@ -2841,6 +2922,12 @@ namespace EdiabasLib
                     {ErrorCodes.EDIABAS_IFH_0015, 25},
                     {ErrorCodes.EDIABAS_IFH_0016, 26}
                 };
+
+                if (IsMinVersion760)
+                {
+                    _trapBitDict.Add(ErrorCodes.EDIABAS_BIP_0011, 8);
+                    _trapBitDict.Add(ErrorCodes.EDIABAS_IFH_0069, 28);
+                }
             }
 
             _byteRegisters = new byte[32];
@@ -2858,7 +2945,7 @@ namespace EdiabasLib
 
             _jobRunning = false;
             _lockTrace = false;
-            SetConfigProperty("EdiabasVersion", "7.3.0");
+            SetConfigProperty("EdiabasVersion", EdiabasVersionString);
             SetConfigProperty("Simulation", "0");
             SetConfigProperty("BipDebugLevel", "0");
             SetConfigProperty("ApiTrace", "0");
@@ -2870,6 +2957,7 @@ namespace EdiabasLib
             SetConfigProperty("CompressTrace", "0");
 #endif
             SetConfigProperty("LockTrace", "0");
+            SetConfigProperty("CompatMode", "1");
 
             SetConfigProperty("UbattHandling", "0");
             SetConfigProperty("IgnitionHandling", "0");
@@ -2903,10 +2991,13 @@ namespace EdiabasLib
 
             if (File.Exists(configFile))
             {
-                XmlDocument xdocConfig = new XmlDocument();
                 try
                 {
-                    xdocConfig.Load(configFile);
+                    XmlDocument xdocConfig = new XmlDocument();
+                    using (FileStream fs = new FileStream(configFile, FileMode.Open))
+                    {
+                        xdocConfig.Load(fs);
+                    }
                     SetConfigProperty("EdiabasIniPath", Path.GetDirectoryName(configFile));
                     ReadAllSettingsProperties(xdocConfig);
                 }
@@ -2980,12 +3071,24 @@ namespace EdiabasLib
                     }
                     CloseTableFs();
                     CloseAllUserFiles();
+
                     if (_edInterfaceClass != null)
                     {
                         _edInterfaceClass.Dispose();
                         _edInterfaceClass = null;
                     }
+
                     CloseLog(); // must be closed after interface class
+
+                    lock (_logMutexLock)
+                    {
+                        if (_logMutex != null)
+                        {
+                            _logMutex.Dispose();
+                            _logMutex = null;
+                        }
+                    }
+
                     lock (SharedDataLock)
                     {
                         _instanceCount--;
@@ -3080,6 +3183,14 @@ namespace EdiabasLib
 
         public string GetConfigProperty(string name)
         {
+            if (_disposed)
+            {
+#if Android && DEBUG
+                Android.Util.Log.Debug(Tag, "GetConfigProperty: Ediabas disposed");
+#endif
+                return null;
+            }
+
             string key = name.ToUpper(Culture);
             string value;
             lock (_apiLock)
@@ -3094,6 +3205,14 @@ namespace EdiabasLib
 
         public void SetConfigProperty(string name, string value)
         {
+            if (_disposed)
+            {
+#if Android && DEBUG
+                Android.Util.Log.Debug(Tag, "SetConfigProperty: Ediabas disposed");
+#endif
+                return;
+            }
+
             string key = name.ToUpper(Culture);
             if (_lockTrace)
             {
@@ -3127,10 +3246,12 @@ namespace EdiabasLib
                 }
             }
 
+            string oldValue = null;
             lock (_apiLock)
             {
                 if (_configDict.ContainsKey(key))
                 {
+                    oldValue = _configDict[key];
                     if (!string.IsNullOrEmpty(value))
                     {
                         _configDict[key] = value;
@@ -3168,15 +3289,29 @@ namespace EdiabasLib
                     _closeSgbdFs = true;
                 }
             }
-            if (string.Compare(key, "TracePath", StringComparison.OrdinalIgnoreCase) == 0)
+
+            bool closeLog = false;
+            bool valueChanged = string.Compare(oldValue ?? string.Empty, value ?? string.Empty, StringComparison.Ordinal) != 0;
+
+            if (valueChanged)
             {
-                CloseLog();
+                if (string.Compare(key, "TracePath", StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    closeLog = true;
+                }
+
+                if (string.Compare(key, "IfhTrace", StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    closeLog = true;
+                }
+
+                if (string.Compare(key, "IfhTraceName", StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    closeLog = true;
+                }
             }
-            if (string.Compare(key, "IfhTrace", StringComparison.OrdinalIgnoreCase) == 0)
-            {
-                CloseLog();
-            }
-            if (string.Compare(key, "IfhTraceName", StringComparison.OrdinalIgnoreCase) == 0)
+
+            if (closeLog)
             {
                 CloseLog();
             }
@@ -3206,18 +3341,27 @@ namespace EdiabasLib
         {
             get
             {
-#if WindowsCE
-                return Path.GetDirectoryName(Assembly.GetExecutingAssembly().GetName().CodeBase);
+#if NET
+                string location = Assembly.GetExecutingAssembly().Location;
+                if (string.IsNullOrEmpty(location) || !File.Exists(location))
+                {
+                    return null;
+                }
+                return Path.GetDirectoryName(location);
 #else
                 string codeBase = Assembly.GetExecutingAssembly().CodeBase;
                 UriBuilder uri = new UriBuilder(codeBase);
                 string path = Uri.UnescapeDataString(uri.Path);
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    return null;
+                }
                 return Path.GetDirectoryName(path);
 #endif
             }
         }
 
-#if !Android && !WindowsCE
+#if !Android
         public static bool LoadAllResourceAssemblies()
         {
             if (_resourceAssemblies.Count > 0)
@@ -3290,7 +3434,11 @@ namespace EdiabasLib
             Exception exIter = ex;
             while (exIter.InnerException != null)
             {
-                sb.Append("\r\n");
+                if (sb.Length > 0)
+                {
+                    sb.Append("\r\n");
+                }
+
                 if (includeTypes)
                 {
                     sb.Append(exIter.InnerException.GetType().Name);
@@ -4006,6 +4154,11 @@ namespace EdiabasLib
             }
 
             resultDictSystem.Add("VARIANTE", new ResultData(ResultType.TypeS, "VARIANTE", Path.GetFileNameWithoutExtension(SgbdFileName ?? string.Empty).ToUpper(Culture)));
+            if (IsMinVersion760)
+            {
+                resultDictSystem.Add("GRUPPE", new ResultData(ResultType.TypeS, "GRUPPE", GroupName.ToLower(Culture)));
+                resultDictSystem.Add("FAMILIE", new ResultData(ResultType.TypeS, "FAMILIE", FamilyName.ToLower(Culture)));
+            }
             resultDictSystem.Add("OBJECT", new ResultData(ResultType.TypeS, "OBJECT", objectName));
             resultDictSystem.Add("JOBNAME", new ResultData(ResultType.TypeS, "JOBNAME", jobInfo.JobName));
             resultDictSystem.Add("SAETZE", new ResultData(ResultType.TypeW, "SAETZE", (Int64)setCount));
@@ -4638,38 +4791,77 @@ namespace EdiabasLib
                 return;
             }
 
-            UInt32 fileType = GetFileType(Path.Combine(EcuPath, fileName ?? String.Empty));
-            if (fileType == 0)
-            {       // group file
-                string key = baseFileName;
-                string variantName;
-                bool mappingFound;
-                lock (_apiLock)
-                {
-                    mappingFound = _groupMappingDict.TryGetValue(key, out variantName);
-                }
-                if (!mappingFound)
-                {
-                    SgbdFileName = baseFileName + ".grp";
-                    variantName = ExecuteIdentJob().ToLower(Culture);
-                    if (variantName.Length == 0)
-                    {
-                        LogFormat(EdLogLevel.Error, "ResolveSgbdFile: No variant found");
-                        throw new ArgumentOutOfRangeException("variantName", "ResolveSgbdFile: No variant found");
-                    }
+            try
+            {
+                UInt32 fileType = GetFileType(Path.Combine(EcuPath, fileName ?? String.Empty));
+                if (fileType == 0)
+                {       // group file
+                    string key = baseFileName;
+                    string variantName = string.Empty;
+                    string familyName = string.Empty;
                     lock (_apiLock)
                     {
-                        _groupMappingDict.Add(key, variantName);
+                        if (_groupMappingDict.TryGetValue(key, out VariantInfo variantInfo))
+                        {
+                            variantName = variantInfo.VariantName;
+                            familyName = variantInfo.FamilyName;
+                        }
                     }
+
+                    if (string.IsNullOrEmpty(variantName))
+                    {
+                        SgbdFileName = baseFileName + ".grp";
+                        variantName = ExecuteIdentJob(out string family).ToLower(Culture);
+                        if (!string.IsNullOrEmpty(family))
+                        {
+                            familyName = family.ToLower(Culture);
+                        }
+
+                        if (string.IsNullOrEmpty(variantName))
+                        {
+                            LogFormat(EdLogLevel.Error, "ResolveSgbdFile: No variant found");
+                            throw new ArgumentOutOfRangeException("variantName", "ResolveSgbdFile: No variant found");
+                        }
+                        lock (_apiLock)
+                        {
+                            _groupMappingDict.Add(key, new VariantInfo(variantName, fileName));
+                        }
+                    }
+
+                    lock (_apiLock)
+                    {
+                        _groupName = baseFileName;
+                        _familyName = familyName;
+                    }
+
+                    SgbdFileName = variantName + ".prg";
                 }
-                SgbdFileName = variantName + ".prg";
+                else
+                {
+                    lock (_apiLock)
+                    {
+                        _groupName = string.Empty;
+                        _familyName = string.Empty;
+                    }
+                    SgbdFileName = baseFileName + ".prg";
+                }
+
+                LogFormat(EdLogLevel.Info, "ResolveSgbdFile resolved: {0}", SgbdFileName);
+                _sgbdFileResolveLast = baseFileName;
             }
-            else
+            catch (Exception ex)
             {
-                SgbdFileName = baseFileName + ".prg";
+                LogString(EdLogLevel.Info, "ResolveSgbdFile Exception: " + GetExceptionText(ex));
+                lock (_apiLock)
+                {
+                    _groupName = string.Empty;
+                    _familyName = string.Empty;
+                    _sgbdFileName = string.Empty;
+                }
+                _sgbdFileResolveLast = string.Empty;
+
+                throw;
             }
-            LogFormat(EdLogLevel.Info, "ResolveSgbdFile resolved: {0}", SgbdFileName);
-            _sgbdFileResolveLast = baseFileName;
         }
 
         public UInt32 GetFileType(string fileName)
@@ -4682,36 +4874,34 @@ namespace EdiabasLib
             string prgFileName = Path.Combine(dirName, baseFileName + ".prg");
             string grpFileName = Path.Combine(dirName, baseFileName + ".grp");
             string localFileName = string.Empty;
-            if (File.Exists(prgFileName))
+
+            if (MemoryStreamReader.Exists(prgFileName))
             {
                 localFileName = prgFileName;
             }
-            else if (File.Exists(grpFileName))
+            else if (MemoryStreamReader.Exists(grpFileName))
             {
                 localFileName = grpFileName;
             }
+
             if (string.IsNullOrEmpty(localFileName))
-            {   // now try for case sensitive file systems
-                try
-                {
-                    using (MemoryStreamReader.OpenRead(prgFileName))
-                    {
-                    }
-                    localFileName = prgFileName;
-                }
-                catch (Exception)
-                {
-                    localFileName = grpFileName;
-                }
+            {
+                LogFormat(EdLogLevel.Error, "GetFileType file not found: '{0}'", fileName);
+                throw new ArgumentOutOfRangeException(fileName, "GetFileType: File not found");
             }
 
             try
             {
-                using (Stream tempFs = MemoryStreamReader.OpenRead(localFileName))
+                using (MemoryStreamReader tempFs = MemoryStreamReader.OpenRead(localFileName))
                 {
                     byte[] buffer = new byte[4];
                     tempFs.Position = 0x10;
-                    tempFs.Read(buffer, 0, buffer.Length);
+                    int readBytes = tempFs.Read(buffer, 0, buffer.Length);
+                    if (readBytes != buffer.Length)
+                    {
+                        LogFormat(EdLogLevel.Error, "GetFileType Invalid read size={0}, stream len={1}", readBytes, tempFs.Length);
+                        throw new ArgumentOutOfRangeException(fileName, "GetFileType: Invalid read size");
+                    }
 
                     if (!BitConverter.IsLittleEndian)
                     {
@@ -4720,9 +4910,10 @@ namespace EdiabasLib
                     fileType = BitConverter.ToUInt32(buffer, 0);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                LogString(EdLogLevel.Error, "GetFileType file not found: " + fileName);
+                LogFormat(EdLogLevel.Error, "GetFileType Exception: {0}", GetExceptionText(ex));
+                LogFormat(EdLogLevel.Error, "GetFileType file not found: '{0}'->'{1}'", fileName, localFileName);
                 throw new ArgumentOutOfRangeException(fileName, "GetFileType: Unable to read file");
             }
             return fileType;
@@ -4803,8 +4994,9 @@ namespace EdiabasLib
             }
         }
 
-        private string ExecuteIdentJob()
+        private string ExecuteIdentJob(out string familyName)
         {
+            familyName = string.Empty;
             bool jobRunningOld = JobRunning;
             bool jobStdOld = _jobStd;
             try
@@ -4825,6 +5017,15 @@ namespace EdiabasLib
                 if (_resultSets.Count > 1)
                 {
                     ResultData result;
+                    if (_resultSets[1].TryGetValue("FAMILIE", out result))
+                    {
+                        if (result.OpData is string)
+                        {
+                            familyName = (string)result.OpData;
+                            LogString(EdLogLevel.Info, "executeIdentJob family: " + familyName);
+                        }
+                    }
+
                     if (_resultSets[1].TryGetValue("VARIANTE", out result))
                     {
                         if (result.OpData is string)
@@ -5572,41 +5773,115 @@ namespace EdiabasLib
             return columnList;
         }
 
+        private bool AcquireLogMutex(int timeout = 10000)
+        {
+            try
+            {
+                lock (_logMutexLock)
+                {
+                    if (_disposed || _logMutex == null)
+                    {
+#if Android && DEBUG
+                        Android.Util.Log.Debug(Tag, "AcquireLogMutex: Mutex deleted");
+#endif
+                        return false;
+                    }
+                }
+
+                // no lock while waiting for mutex
+                if (!_logMutex.WaitOne(timeout))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private void ReleaseLogMutex()
+        {
+            try
+            {
+                lock (_logMutexLock)
+                {
+                    if (_disposed || _logMutex == null)
+                    {
+#if Android && DEBUG
+                        Android.Util.Log.Debug(Tag, "ReleaseLogMutex: Mutex deleted");
+#endif
+                        return;
+                    }
+
+                    _logMutex.ReleaseMutex();
+                }
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+        }
+
         public void LogFormat(EdLogLevel logLevel, string format, params object[] args)
         {
+            if (_disposed)
+            {
+#if Android && DEBUG
+                Android.Util.Log.Debug(Tag, "LogFormat: Ediabas disposed");
+#endif
+                return;
+            }
+
             UpdateLogLevel();
             if ((int)logLevel > _logLevelCached)
             {
                 return;
             }
 
-            for (int i = 0; i < args.Length; i++)
+            List<object> argList = new List<object>();
+            foreach (object arg in args)
             {
-                if (args[i] == null)
+                if (arg is string argString)
                 {
+                    string argItem = "'" + argString + "'";
+                    argList.Add(argItem);
                     continue;
                 }
-                if (args[i] is string)
-                {
-                    args[i] = "'" + (string)args[i] + "'";
-                }
-                if (args[i] is byte[])
-                {
-                    byte[] argArray = (byte[])args[i];
-                    StringBuilder stringBuilder = new StringBuilder(argArray.Length);
-                    foreach (byte arg in argArray)
-                    {
-                        stringBuilder.Append(string.Format(Culture, "{0:X02} ", arg));
-                    }
 
-                    args[i] = "[" + stringBuilder + "]";
+                if (arg is byte[] argArray)
+                {
+                    StringBuilder stringBuilder = new StringBuilder(argArray.Length);
+                    stringBuilder.Append("[");
+                    foreach (byte argByte in argArray)
+                    {
+                        stringBuilder.Append(string.Format(Culture, "{0:X02} ", argByte));
+                    }
+                    stringBuilder.Append("]");
+
+                    string argItem = stringBuilder.ToString();
+                    argList.Add(argItem);
+                    continue;
                 }
+
+                argList.Add(arg);
             }
-            LogString(logLevel, string.Format(Culture, format, args));
+
+            LogString(logLevel, string.Format(Culture, format, argList.ToArray()));
         }
 
         public void LogString(EdLogLevel logLevel, string info)
         {
+            if (_disposed)
+            {
+#if Android && DEBUG
+                Android.Util.Log.Debug(Tag, "LogString: Ediabas disposed");
+#endif
+                return;
+            }
+
             UpdateLogLevel();
             if ((int)logLevel > _logLevelCached)
             {
@@ -5615,7 +5890,12 @@ namespace EdiabasLib
 
             try
             {
-                lock (_logLock)
+                if (!AcquireLogMutex())
+                {
+                    return;
+                }
+
+                try
                 {
                     bool newFile = false;
                     if (_swLog == null)
@@ -5645,6 +5925,8 @@ namespace EdiabasLib
                             {
                                 buffering = StringToValue(traceBuffering);
                             }
+
+                            bool allowAppend = !_firstLog || appendTrace != 0;
 #if COMPRESS_TRACE
                             int compressTrace = 0;
                             string propCompress = GetConfigProperty("CompressTrace");
@@ -5652,13 +5934,17 @@ namespace EdiabasLib
                             {
                                 compressTrace = (int)StringToValue(propCompress);
                             }
+
                             if (compressTrace != 0)
                             {
+                                bool createBom = false;
                                 if (_zipStream == null)
                                 {
                                     string zipFileName = Path.Combine(tracePath, traceFileName + ".zip");
                                     string zipFileNameOld = Path.Combine(tracePath, traceFileName + ".old.zip");
-                                    bool appendZip = (!_firstLog || appendTrace != 0) && File.Exists(zipFileName);
+                                    bool appendZip = allowAppend && File.Exists(zipFileName);
+                                    createBom = true;
+
                                     if (appendZip && appendTrace == 0)
                                     {
                                         FileInfo fileInfo = new FileInfo(zipFileName);
@@ -5667,14 +5953,17 @@ namespace EdiabasLib
                                             appendZip = false;
                                         }
                                     }
+
                                     if (appendZip)
                                     {
                                         if (File.Exists(zipFileNameOld))
                                         {
                                             File.Delete(zipFileNameOld);
                                         }
+
                                         File.Move(zipFileName, zipFileNameOld);
                                     }
+
                                     FileStream fsOut = File.Create(zipFileName);
                                     _zipStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(fsOut);
                                     _zipStream.SetLevel(8);
@@ -5683,63 +5972,106 @@ namespace EdiabasLib
                                     _zipStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.Off;
                                     _zipStream.PutNextEntry(newEntry);
 
-                                    // copy old zip content to new one
                                     if (appendZip)
                                     {
-                                        FileStream fs = File.OpenRead(zipFileNameOld);
-                                        ICSharpCode.SharpZipLib.Zip.ZipFile zf = new ICSharpCode.SharpZipLib.Zip.ZipFile(fs);
-                                        foreach (ICSharpCode.SharpZipLib.Zip.ZipEntry zipEntry in zf)
+                                        // copy old zip content to new one
+                                        try
                                         {
-                                            if (zipEntry.IsFile && string.Compare(zipEntry.Name, traceFileName, StringComparison.OrdinalIgnoreCase) == 0)
+                                            FileStream fs = File.OpenRead(zipFileNameOld);
+                                            ICSharpCode.SharpZipLib.Zip.ZipFile zf = null;
+                                            try
                                             {
-                                                ICSharpCode.SharpZipLib.Core.StreamUtils.Copy(zf.GetInputStream(zipEntry), _zipStream, new byte[4096]);
-                                                break;
+                                                zf = new ICSharpCode.SharpZipLib.Zip.ZipFile(fs);
+                                                foreach (ICSharpCode.SharpZipLib.Zip.ZipEntry zipEntry in zf)
+                                                {
+                                                    if (zipEntry.IsFile && string.Compare(zipEntry.Name, traceFileName, StringComparison.OrdinalIgnoreCase) == 0)
+                                                    {
+                                                        using (Stream inputStream = zf.GetInputStream(zipEntry))
+                                                        {
+                                                            ICSharpCode.SharpZipLib.Core.StreamUtils.Copy(inputStream, _zipStream, new byte[4096]);
+                                                        }
+
+                                                        createBom = false;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            finally
+                                            {
+                                                if (zf != null)
+                                                {
+                                                    zf.IsStreamOwner = true; // Makes close also shut the underlying stream
+                                                    zf.Close(); // Ensure we release resources
+                                                }
+
+                                                File.Delete(zipFileNameOld);
                                             }
                                         }
-                                        zf.IsStreamOwner = true; // Makes close also shut the underlying stream
-                                        zf.Close(); // Ensure we release resources
-                                        File.Delete(zipFileNameOld);
+#pragma warning disable CS0168 // Variable ist deklariert, wird jedoch niemals verwendet
+                                        catch (Exception ex)
+#pragma warning restore CS0168 // Variable ist deklariert, wird jedoch niemals verwendet
+                                        {
+                                            createBom = false;
+#if Android && DEBUG
+                                            Android.Util.Log.Debug(Tag, string.Format("LogString Exception: {0}", GetExceptionText(ex)));
+#endif
+                                        }
                                     }
                                 }
 
                                 newFile = true;
-                                _swLog = new StreamWriter(_zipStream, Encoding, 1024, true);
+                                _swLog = new StreamWriter(_zipStream, new UTF8Encoding(createBom), 1024, true);
                             }
                             else
 #endif
                             {
+                                long fileSize = 0;
                                 string traceFile = Path.Combine(tracePath, traceFileName);
-                                try
+                                if (allowAppend)
                                 {
-                                    if (appendTrace != 0 && File.Exists(traceFile))
+                                    try
                                     {
-                                        DateTime lastWriteTime = File.GetLastWriteTime(traceFile);
-                                        TimeSpan diffTime = DateTime.Now - lastWriteTime;
-                                        if (diffTime.Hours > TraceAppendDiffHours)
+                                        if (File.Exists(traceFile))
                                         {
-                                            appendTrace = 0;
+                                            FileInfo fileInfo = new FileInfo(traceFile);
+                                            fileSize = fileInfo.Length;
+
+                                            if (appendTrace != 0)
+                                            {
+                                                DateTime lastWriteTime = File.GetLastWriteTime(traceFile);
+                                                TimeSpan diffTime = DateTime.Now - lastWriteTime;
+                                                if (diffTime.Hours > TraceAppendDiffHours)
+                                                {
+                                                    allowAppend = false;
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            allowAppend = false;
                                         }
                                     }
-                                }
-                                catch (Exception e)
-                                {
-                                    Console.WriteLine(e);
-                                    throw;
+                                    catch (Exception)
+                                    {
+                                        allowAppend = false;
+                                    }
                                 }
 
                                 FileMode fileMode = FileMode.Append;
-                                if (_firstLog && appendTrace == 0)
+                                if (!allowAppend)
                                 {
                                     fileMode = FileMode.Create;
+                                    fileSize = 0;
                                 }
 
+                                bool createBom = fileSize == 0;
                                 newFile = true;
-                                _swLog = new StreamWriter(
-                                    new FileStream(traceFile, fileMode, FileAccess.Write, FileShare.ReadWrite), Encoding)
+                                _swLog = new StreamWriter(new FileStream(traceFile, fileMode, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(createBom))
                                     {
                                         AutoFlush = buffering == 0
                                     };
                             }
+
                             _firstLog = false;
                         }
                     }
@@ -5750,9 +6082,24 @@ namespace EdiabasLib
                         {
                             string currDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
                             _swLog.WriteLine(string.Format(CultureInfo.InvariantCulture, "Date: {0}", currDateTime));
+
+                            string logInfo = LogInfo;
+                            if (!string.IsNullOrEmpty(logInfo))
+                            {
+                                _swLog.WriteLine(logInfo);
+                            }
+#if Android
+                            _swLog.WriteLine(string.Format(CultureInfo.InvariantCulture, "Android version: {0}", (long)Android.OS.Build.VERSION.SdkInt));
+                            _swLog.WriteLine(string.Format(CultureInfo.InvariantCulture, "Android fingerprint: {0}", Android.OS.Build.Fingerprint));
+#endif
                         }
+
                         _swLog.WriteLine(info);
                     }
+                }
+                finally
+                {
+                    ReleaseLogMutex();
                 }
             }
             catch (Exception)
@@ -5795,18 +6142,30 @@ namespace EdiabasLib
 
         private void CloseLog()
         {
-            lock (_logLock)
+            if (!AcquireLogMutex(-1))
+            {
+                return;
+            }
+
+            try
             {
                 if (_swLog != null)
                 {
                     try
                     {
+                        _swLog.Flush();
                         _swLog.Dispose();
                     }
-                    catch (Exception)
+#pragma warning disable CS0168 // Variable ist deklariert, wird jedoch niemals verwendet
+                    catch (Exception ex)
+#pragma warning restore CS0168 // Variable ist deklariert, wird jedoch niemals verwendet
                     {
                         // ignored
+#if Android && DEBUG
+                        Android.Util.Log.Debug(Tag, string.Format("CloseLog swLog Exception: {0}", GetExceptionText(ex)));
+#endif
                     }
+
                     _swLog = null;
                 }
 #if COMPRESS_TRACE
@@ -5819,14 +6178,24 @@ namespace EdiabasLib
                         _zipStream.Close();
                         _zipStream.Dispose();
                     }
-                    catch (Exception)
+#pragma warning disable CS0168 // Variable ist deklariert, wird jedoch niemals verwendet
+                    catch (Exception ex)
+#pragma warning restore CS0168 // Variable ist deklariert, wird jedoch niemals verwendet
                     {
                         // ignored
+#if Android && DEBUG
+                        Android.Util.Log.Debug(Tag, string.Format("CloseLog zipStream Exception: {0}", GetExceptionText(ex)));
+#endif
                     }
+
                     _zipStream = null;
                 }
 #endif
                 _logLevelCached = -1;
+            }
+            finally
+            {
+                ReleaseLogMutex();
             }
         }
 
@@ -5834,10 +6203,19 @@ namespace EdiabasLib
         {
             if (_logLevelCached < 0)
             {
-                lock (_logLock)
+                if (!AcquireLogMutex())
+                {
+                    return;
+                }
+
+                try
                 {
                     string ifhTrace = GetConfigProperty("IfhTrace");
                     _logLevelCached = (int)StringToValue(ifhTrace);
+                }
+                finally
+                {
+                    ReleaseLogMutex();
                 }
             }
         }

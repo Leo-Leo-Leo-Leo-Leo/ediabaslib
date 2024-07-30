@@ -425,20 +425,20 @@ namespace BmwDeepObd
                 return -1;
             }
 
-            int status = -1;
+            int dbStatus = -1;
             try
             {
-                IntPtr statusFieldId = Android.Runtime.JNIEnv.GetFieldID(db.Class.Handle, "mStatus", "I");
-                if (statusFieldId != IntPtr.Zero)
+                nint statusFieldId = Android.Runtime.JNIEnv.GetFieldID(db.Class.Handle, "mStatus", "I");
+                if (statusFieldId != nint.Zero)
                 {
-                    status = Android.Runtime.JNIEnv.GetIntField(db.Handle, statusFieldId);
+                    dbStatus = Android.Runtime.JNIEnv.GetIntField(db.Handle, statusFieldId);
                 }
             }
             catch (Exception)
             {
-                status = -1;
+                dbStatus = -1;
             }
-            return status;
+            return dbStatus;
         }
 
         public static DownloadInfo GetDownloadInfoByFileName(DownloadsDB db, string filename)
@@ -468,8 +468,8 @@ namespace BmwDeepObd
             int fileStatus = -1;
             try
             {
-                IntPtr statusFieldId = Android.Runtime.JNIEnv.GetFieldID(ex.Class.Handle, "mStatus", "I");
-                if (statusFieldId != IntPtr.Zero)
+                nint statusFieldId = Android.Runtime.JNIEnv.GetFieldID(ex.Class.Handle, "mStatus", "I");
+                if (statusFieldId != nint.Zero)
                 {
                     fileStatus = Android.Runtime.JNIEnv.GetIntField(ex.Handle, statusFieldId);
                 }
@@ -491,11 +491,11 @@ namespace BmwDeepObd
             string message = string.Empty;
             try
             {
-                IntPtr messageFieldId = Android.Runtime.JNIEnv.GetFieldID(ex.Class.Handle, "mMessage", "Ljava/lang/String;");
-                if (messageFieldId != IntPtr.Zero)
+                nint messageFieldId = Android.Runtime.JNIEnv.GetFieldID(ex.Class.Handle, "mMessage", "Ljava/lang/String;");
+                if (messageFieldId != nint.Zero)
                 {
-                    IntPtr messageObject = Android.Runtime.JNIEnv.GetObjectField(ex.Handle, messageFieldId);
-                    if (messageObject != IntPtr.Zero)
+                    nint messageObject = Android.Runtime.JNIEnv.GetObjectField(ex.Handle, messageFieldId);
+                    if (messageObject != nint.Zero)
                     {
                         Java.Lang.String javaString = GetObject<Java.Lang.String>(messageObject, Android.Runtime.JniHandleOwnership.DoNotTransfer);
                         if (javaString != null)
@@ -566,7 +566,6 @@ namespace BmwDeepObd
         /// This version assumes that the intent contains the pending intent as
         /// a parameter. This is used for responding to alarms.
         /// The pending intent must be in an extra with the key 
-        /// <see cref="CustomDownloaderService#PendingIntent"/>.
         /// </summary>
         /// <param name="context">
         /// Your application Context.
@@ -870,9 +869,9 @@ namespace BmwDeepObd
                 this.packageInfo = ActivityCommon.GetPackageInfo(this.PackageManager, this.PackageName);
                 string applicationLabel = this.PackageManager?.GetApplicationLabel(this.ApplicationInfo);
 #if false
-                IntPtr downloaderNotification = Android.Runtime.JNIEnv.CreateInstance(typeof(DownloadNotification),
+                nint downloaderNotification = Android.Runtime.JNIEnv.CreateInstance(typeof(DownloadNotification),
                     "(Landroid/content/Context;Ljava/lang/CharSequence;)V", new Android.Runtime.JValue[] {new (this), new (new Java.Lang.String(applicationLabel)) });
-                if (downloaderNotification != IntPtr.Zero)
+                if (downloaderNotification != nint.Zero)
                 {
                     this.downloadNotification = GetObject<DownloadNotification>(downloaderNotification, Android.Runtime.JniHandleOwnership.DoNotTransfer);
                 }
@@ -1037,6 +1036,7 @@ namespace BmwDeepObd
         /// The ExpansionDownloader.Service.DownloaderService+NetworkState.
         /// </returns>
 #pragma warning disable CS0618
+#pragma warning disable CA1422
         private NetworkState GetNetworkState(NetworkInfo info)
         {
             NetworkState state = NetworkState.Disconnected;
@@ -1064,6 +1064,7 @@ namespace BmwDeepObd
 
             return state;
         }
+#pragma warning restore CA1422
 #pragma warning restore CS0618
 
         /// <summary>
@@ -1147,10 +1148,12 @@ namespace BmwDeepObd
                     {
                         this.connectionReceiver = new InnerBroadcastReceiver(this);
 #pragma warning disable CS0618
+#pragma warning disable CA1422
                         Android.Content.IntentFilter intentFilter = new Android.Content.IntentFilter(ConnectivityManager.ConnectivityAction);
+#pragma warning restore CA1422
 #pragma warning restore CS0618
                         intentFilter.AddAction(WifiManager.WifiStateChangedAction);
-                        this.RegisterReceiver(this.connectionReceiver, intentFilter);
+                        this.RegisterReceiver(this.connectionReceiver, intentFilter);   // system broadcasts
                     }
                 }
                 else
@@ -1392,7 +1395,9 @@ namespace BmwDeepObd
                 else
                 {
 #pragma warning disable CS0618
+#pragma warning disable CA1422
                     NetworkInfo activeInfo = this.connectivityManager.ActiveNetworkInfo;
+#pragma warning restore CA1422
 #pragma warning restore CS0618
                     this.UpdateNetworkState(activeInfo);
                 }
@@ -1420,13 +1425,20 @@ namespace BmwDeepObd
             intent.PutExtra(DownloaderServiceExtras.PendingIntent, this.pPendingIntent);
             intent.SetClassName(this.PackageName, this.AlarmReceiverClassName);
 
-            Android.App.PendingIntentFlags intentFlags = Android.App.PendingIntentFlags.OneShot;
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.M)
+            try
             {
-                intentFlags |= Android.App.PendingIntentFlags.Immutable;
+                Android.App.PendingIntentFlags intentFlags = Android.App.PendingIntentFlags.OneShot;
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.M)
+                {
+                    intentFlags |= Android.App.PendingIntentFlags.Immutable;
+                }
+                this.alarmIntent = Android.App.PendingIntent.GetBroadcast(this, 0, intent, intentFlags);
+                alarms.Set(Android.App.AlarmType.RtcWakeup, Java.Lang.JavaSystem.CurrentTimeMillis() + wakeUp, this.alarmIntent);
             }
-            this.alarmIntent = Android.App.PendingIntent.GetBroadcast(this, 0, intent, intentFlags);
-            alarms.Set(Android.App.AlarmType.RtcWakeup, Java.Lang.JavaSystem.CurrentTimeMillis() + wakeUp, this.alarmIntent);
+            catch (Exception ex)
+            {
+                Log.Debug(Tag, "DownloaderService ScheduleAlarm alarm exception: {0}", ex.Message);
+            }
         }
 
         /// <summary>
@@ -1508,6 +1520,7 @@ namespace BmwDeepObd
         /// The info.
         /// </param>
 #pragma warning disable CS0618
+#pragma warning disable CA1422
         private void UpdateNetworkState(NetworkInfo info)
         {
             NetworkState tempState = this.networkState;
@@ -1532,6 +1545,7 @@ namespace BmwDeepObd
 
             CheckNetworkChange(tempState);
         }
+#pragma warning restore CA1422
 #pragma warning restore CS0618
 
         private NetworkState CheckNetworkType(NetworkType networkType)

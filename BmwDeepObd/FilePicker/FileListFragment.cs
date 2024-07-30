@@ -9,6 +9,7 @@ using Android.Views;
 using Android.Views.InputMethods;
 using Android.Widget;
 using AndroidX.Fragment.App;
+using Skydoves.BalloonLib;
 
 // ReSharper disable LoopCanBeConvertedToQuery
 
@@ -36,8 +37,13 @@ namespace BmwDeepObd.FilePicker
                 {
                     DefaultInitialDirectory = Path.DirectorySeparatorChar.ToString();
                 }
+
+                DirSelectHintShown = false;
             }
+
             public string DefaultInitialDirectory { get; set; }
+
+            public bool DirSelectHintShown { get; set; }
         }
 
         private InstanceData _instanceData = new InstanceData();
@@ -54,6 +60,7 @@ namespace BmwDeepObd.FilePicker
         private bool _showCurrentDir;
         private bool _showFiles;
         private bool _showFileExtensions;
+        private string _infoText;
 
         public override void OnCreate(Bundle savedInstanceState)
         {
@@ -108,6 +115,7 @@ namespace BmwDeepObd.FilePicker
             _showCurrentDir = Activity.Intent?.GetBooleanExtra(FilePickerActivity.ExtraShowCurrentDir, false) ?? false;
             _showFiles = Activity.Intent?.GetBooleanExtra(FilePickerActivity.ExtraShowFiles, true) ?? true;
             _showFileExtensions = Activity.Intent?.GetBooleanExtra(FilePickerActivity.ExtraShowExtension, true) ?? true;
+            _infoText = Activity.Intent?.GetStringExtra(FilePickerActivity.ExtraInfoText);
 
             _adapter = new FileListAdapter(Activity, Array.Empty<FileInfoEx>());
             ListAdapter = _adapter;
@@ -152,9 +160,17 @@ namespace BmwDeepObd.FilePicker
                     }
                 }
             };
+
+            if (!string.IsNullOrWhiteSpace(_infoText))
+            {
+                Balloon.Builder balloonBuilder = ActivityCommon.GetBalloonBuilder(Activity);
+                balloonBuilder.Text = _infoText;
+                Balloon balloon = balloonBuilder.Build();
+                balloon.ShowAlignTop(ListView);
+            }
         }
 
-        public override void OnListItemClick(ListView l, View v, int position, long id)
+        public override void OnListItemClick(ListView listView, View view, int position, long id)
         {
             FileInfoEx fileSystemInfo = _adapter.GetItem(position);
             if (fileSystemInfo == null)
@@ -178,7 +194,7 @@ namespace BmwDeepObd.FilePicker
                 }
 
                 _instanceData.DefaultInitialDirectory = fileSystemInfo.RootDir;
-                RefreshFilesList(fileSystemInfo.RootDir);
+                RefreshFilesList(fileSystemInfo.RootDir, view);
             }
             else
             {
@@ -198,17 +214,25 @@ namespace BmwDeepObd.FilePicker
                     {
                         if (_dirSelect)
                         {
-                            Toast.MakeText(Activity, Resource.String.file_picker_dir_select, ToastLength.Short)?.Show();
+                            if (!_instanceData.DirSelectHintShown)
+                            {
+                                Balloon.Builder balloonBuilder = ActivityCommon.GetBalloonBuilder(Activity);
+                                balloonBuilder.Text = Activity.GetString(Resource.String.file_picker_dir_select);
+                                Balloon balloon = balloonBuilder.Build();
+                                balloon.Show(view);
+
+                                _instanceData.DirSelectHintShown = true;
+                            }
                         }
 
                         // Dig into this directory, and display it's contents
                         _instanceData.DefaultInitialDirectory = fileSystemInfo.FileSysInfo.FullName;
-                        RefreshFilesList(fileSystemInfo.FileSysInfo.FullName);
+                        RefreshFilesList(fileSystemInfo.FileSysInfo.FullName, view);
                     }
                 }
             }
 
-            base.OnListItemClick(l, v, position, id);
+            base.OnListItemClick(listView, view, position, id);
         }
 
         public override void OnSaveInstanceState(Bundle outState)
@@ -244,7 +268,7 @@ namespace BmwDeepObd.FilePicker
             RefreshFilesList(_instanceData.DefaultInitialDirectory);
         }
 
-        public void RefreshFilesList(string directory)
+        public void RefreshFilesList(string directory, View view = null)
         {
             _visibleFiles = null;
             IList<FileInfoEx> visibleThings = new List<FileInfoEx>();
@@ -348,7 +372,14 @@ namespace BmwDeepObd.FilePicker
             }
             catch (Exception)
             {
-                Toast.MakeText(Activity, GetString(Resource.String.access_dir_failed) + " " + directory, ToastLength.Long)?.Show();
+                if (view != null)
+                {
+                    string message = GetString(Resource.String.access_dir_failed) + "\r\n" + directory;
+                    Balloon.Builder balloonBuilder = ActivityCommon.GetBalloonBuilder(Activity);
+                    balloonBuilder.Text = message;
+                    Balloon balloon = balloonBuilder.Build();
+                    balloon.Show(view);
+                }
                 return;
             }
 

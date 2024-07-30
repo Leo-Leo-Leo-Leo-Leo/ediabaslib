@@ -9,18 +9,6 @@ namespace EdiabasLib
 {
     public class MemoryStreamReader : Stream
     {
-        [DllImport("libc", SetLastError = true)]
-        static extern int open(string path, int flags, int access);
-
-        [DllImport("libc")]
-        static extern int close(int fd);
-
-        [DllImport("libc")]
-        static extern IntPtr mmap(IntPtr addr, IntPtr len, int prot, int flags, int fd, int offset);
-
-        [DllImport("libc")]
-        static extern int munmap(IntPtr addr, IntPtr size);
-
         // ReSharper disable UnusedMember.Local
         const int Deffilemode = 0x666;
         const int ORdonly = 0x0;
@@ -35,83 +23,85 @@ namespace EdiabasLib
         const int MapShared = 0x1;
         // ReSharper restore UnusedMember.Local
 
-        public MemoryStreamReader(string path)
+        private bool _disposed;
+        private long _filePos;
+        private readonly long _fileLength;
+        private long _mapAddr;
+        private static readonly object DirDictLock = new object();
+        private static string _dirDictName = string.Empty;
+        private static Dictionary<string, string> _dirDict;
+        private static DirectoryObserver _directoryObserver;
+#if DEBUG
+        private static readonly string Tag = typeof(MemoryStreamReader).FullName;
+#endif
+
+        public MemoryStreamReader(string filePath)
         {
             _filePos = 0;
             _fileLength = 0;
-            _fd = -1;
-            _mapAddr = (IntPtr)(-1);
+            _mapAddr = -1;
 
-            if (!File.Exists(path))
-            {   // get the case sensitive name from the directory
-                string fileName = Path.GetFileName(path);
-                string dirName = Path.GetDirectoryName(path);
-                if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(dirName))
-                {
-                    throw new FileNotFoundException();
-                }
-                lock (DirDictLock)
-                {
-                    if ((_dirDict == null) || (_directoryObserver == null) ||
-                        (string.Compare(dirName, _dirDictName, StringComparison.Ordinal) != 0))
-                    {
-                        Dictionary<string, string> dirDict = GetDirDict(dirName);
-                        // ReSharper disable once JoinNullCheckWithUsage
-                        if (dirDict == null)
-                        {
-                            throw new FileNotFoundException();
-                        }
-                        _dirDictName = dirName;
-                        _dirDict = dirDict;
-                        RemoveDirectoryObserver();
-                        // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
-                        if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
-                        {
-                            _directoryObserver = new DirectoryObserver(dirName);
-                        }
-                        else
-                        {
-                            _directoryObserver = new DirectoryObserver(new Java.IO.File(dirName));
-                        }
-                        _directoryObserver.StartWatching();
-                    }
-
-                    if (!_dirDict.TryGetValue(fileName.ToUpperInvariant(), out string realName))
-                    {
-                        throw new FileNotFoundException();
-                    }
-
-                    path = Path.Combine(dirName, realName);
-                    if (!File.Exists(path))
-                    {
-                        throw new FileNotFoundException();
-                    }
-                }
-            }
-
-            FileInfo fileInfo = new FileInfo(path);
+            string realPath = GetRealFileName(filePath);
+            FileInfo fileInfo = new FileInfo(realPath);
             _fileLength = fileInfo.Length;
 
             bool openSuccess = false;
-            _fd = open(path, ORdonly, Deffilemode);
-            if (_fd != -1)
+            string failureReason = string.Empty;
+            Java.IO.FileDescriptor fd = Android.Systems.Os.Open(realPath, ORdonly, Deffilemode);
+
+            try
             {
-                _mapAddr = mmap(IntPtr.Zero, (IntPtr)_fileLength, ProtRead, MapPrivate, _fd, 0);
-                if (_mapAddr != (IntPtr)(-1))
+                if (fd != null)
                 {
-                    openSuccess = true;
+                    _mapAddr = Android.Systems.Os.Mmap(0, _fileLength, ProtRead, MapPrivate, fd, 0);
+                    if (_mapAddr != -1)
+                    {
+                        openSuccess = true;
+                    }
+                    else
+                    {
+                        failureReason = "Mmap failed";
+                    }
+                }
+                else
+                {
+                    failureReason = "Open failed";
                 }
             }
+            finally
+            {
+                if (fd != null)
+                {
+                    Android.Systems.Os.Close(fd);
+                }
+            }
+
+#if DEBUG
+            Android.Util.Log.Info(Tag, string.Format("MemoryStreamReader Success={0}, FileLength={1}, Address={2:X08}", openSuccess, _fileLength, _mapAddr));
+#endif
             if (!openSuccess)
             {
                 CloseHandles();
-                throw new FileNotFoundException();
+                throw new FileNotFoundException(failureReason);
             }
         }
 
         public static MemoryStreamReader OpenRead(string path)
         {
             return new MemoryStreamReader(path);
+        }
+
+        public static bool Exists(string path)
+        {
+            try
+            {
+                path = GetRealFileName(path);
+                return File.Exists(path);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         public override bool CanRead
@@ -186,9 +176,27 @@ namespace EdiabasLib
         {
         }
 
-        public override void Close()
+        // Stream Close() calls Dispose(true)
+        protected override void Dispose(bool disposing)
         {
-            CloseHandles();
+            // Check to see if Dispose has already been called.
+            if (!_disposed)
+            {
+                // Dispose unmanged resources.
+                CloseHandles();
+
+                // If disposing equals true, dispose all managed
+                // and unmanaged resources.
+                if (disposing)
+                {
+                    // Dispose managed resources.
+                }
+
+                // Note disposing has been done.
+                _disposed = true;
+            }
+
+            base.Dispose(disposing);
         }
 
         public override int Read(byte[] buffer, int offset, int count)
@@ -199,18 +207,33 @@ namespace EdiabasLib
             {
                 throw new Exception("Attempt to read before the start of the stream");
             }
-            int useCount = count;
+
+            long useCount = count;
             if (num2 > _fileLength)
             {
-                useCount = (int)(_fileLength - offset - _filePos);
+#if DEBUG
+                Android.Util.Log.Info(Tag, string.Format("Read Overflow Pos={0}, FileLength={1}", num2, _fileLength));
+#endif
+                useCount = _fileLength - _filePos;
                 if (useCount < 0)
                 {
                     useCount = 0;
                 }
+
+                if (useCount > count)
+                {
+                    useCount = count;
+                }
             }
-            Marshal.Copy(PosPtr, buffer, offset, useCount);
+
+            if (useCount == 0)
+            {
+                return 0;
+            }
+
+            Marshal.Copy((nint) PosPtr, buffer, offset, (int) useCount);
             _filePos += useCount;
-            return useCount;
+            return (int) useCount;
         }
 
         public override long Seek(long offset, SeekOrigin origin)
@@ -278,29 +301,24 @@ namespace EdiabasLib
             RemoveDirectoryObserver();
         }
 
-        private IntPtr PosPtr
+        private long PosPtr
         {
             get
             {
-                return IntPtr.Add(_mapAddr, (int)_filePos);
+                return _mapAddr + _filePos;
             }
         }
 
         private void CloseHandles()
         {
-            if (_mapAddr != (IntPtr)(-1))
+            if (_mapAddr != -1)
             {
-                munmap(_mapAddr, (IntPtr)_fileLength);
-                _mapAddr = (IntPtr)(-1);
-            }
-            if (_fd != -1)
-            {
-                close(_fd);
-                _fd = -1;
+                Android.Systems.Os.Munmap(_mapAddr, _fileLength);
+                _mapAddr = -1;
             }
         }
 
-        private Dictionary<string, string> GetDirDict(string dirName)
+        private static Dictionary<string, string> GetDirDict(string dirName)
         {
             try
             {
@@ -323,6 +341,61 @@ namespace EdiabasLib
             catch (Exception)
             {
                 return null;
+            }
+        }
+
+        private static string GetRealFileName(string filePath)
+        {
+            if (File.Exists(filePath))
+            {
+                return filePath;
+            }
+
+            // get the case-sensitive name from the directory
+            string fileName = Path.GetFileName(filePath);
+            string dirName = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(fileName) || string.IsNullOrEmpty(dirName))
+            {
+                throw new FileNotFoundException("Empty file name");
+            }
+            lock (DirDictLock)
+            {
+                if ((_dirDict == null) || (_directoryObserver == null) ||
+                    (string.Compare(dirName, _dirDictName, StringComparison.Ordinal) != 0))
+                {
+                    Dictionary<string, string> dirDict = GetDirDict(dirName);
+                    // ReSharper disable once JoinNullCheckWithUsage
+                    if (dirDict == null)
+                    {
+                        throw new FileNotFoundException("Dir dict empty");
+                    }
+                    _dirDictName = dirName;
+                    _dirDict = dirDict;
+                    RemoveDirectoryObserver();
+                    // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
+                    if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
+                    {
+                        _directoryObserver = new DirectoryObserver(dirName);
+                    }
+                    else
+                    {
+                        _directoryObserver = new DirectoryObserver(new Java.IO.File(dirName));
+                    }
+                    _directoryObserver.StartWatching();
+                }
+
+                if (!_dirDict.TryGetValue(fileName.ToUpperInvariant(), out string realName))
+                {
+                    throw new FileNotFoundException($"File not found in dict: {fileName}");
+                }
+
+                string realPath = Path.Combine(dirName, realName);
+                if (!File.Exists(realPath))
+                {
+                    throw new FileNotFoundException($"Real file not found: {realName}");
+                }
+
+                return realPath;
             }
         }
 
@@ -354,7 +427,9 @@ namespace EdiabasLib
 
             public DirectoryObserver(String rootPath)
 #pragma warning disable 618
+#pragma warning disable CA1422
                 : base(rootPath, Events)
+#pragma warning restore CA1422
 #pragma warning restore 618
             {
             }
@@ -377,14 +452,5 @@ namespace EdiabasLib
                 }
             }
         }
-
-        private long _filePos;
-        private readonly long _fileLength;
-        private int _fd;
-        private IntPtr _mapAddr;
-        private static readonly object DirDictLock = new object();
-        private static string _dirDictName = string.Empty;
-        private static Dictionary<string, string> _dirDict;
-        private static DirectoryObserver _directoryObserver;
     }
 }

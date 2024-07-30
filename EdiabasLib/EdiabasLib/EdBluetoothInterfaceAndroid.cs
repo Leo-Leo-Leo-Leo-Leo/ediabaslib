@@ -62,6 +62,9 @@ namespace EdiabasLib
         private static readonly AutoResetEvent ConnectedEvent = new AutoResetEvent(false);
         private static string _connectDeviceAddress = string.Empty;
 
+        public static Stream BluetoothInStream => _bluetoothInStream;
+        public static Stream BluetoothOutStream => _bluetoothOutStream;
+
         public static EdiabasNet Ediabas
         {
             get => CustomAdapter.Ediabas;
@@ -71,8 +74,6 @@ namespace EdiabasLib
         static EdBluetoothInterface()
         {
         }
-
-        public static BluetoothSocket BluetoothSocket => _bluetoothSocket;
 
         public static bool InterfaceConnect(string port, object parameter)
         {
@@ -120,7 +121,9 @@ namespace EdiabasLib
                 else
                 {
 #pragma warning disable 618
+#pragma warning disable CA1422
                     bluetoothAdapter = BluetoothAdapter.DefaultAdapter;
+#pragma warning restore CA1422
 #pragma warning restore 618
                 }
 
@@ -181,7 +184,7 @@ namespace EdiabasLib
                         Android.Content.IntentFilter filter = new Android.Content.IntentFilter();
                         filter.AddAction(BluetoothDevice.ActionAclConnected);
                         filter.AddAction(BluetoothDevice.ActionAclDisconnected);
-                        context.RegisterReceiver(receiver, filter);
+                        context.RegisterReceiver(receiver, filter);   // system broadcasts
                     }
 
                     _connectDeviceAddress = device.Address;
@@ -252,15 +255,15 @@ namespace EdiabasLib
                         if (_bluetoothSocket == null)
                         {
                             // this socket sometimes looses data for long telegrams
-                            IntPtr createRfcommSocket = Android.Runtime.JNIEnv.GetMethodID(device.Class.Handle,
+                            nint createRfcommSocket = Android.Runtime.JNIEnv.GetMethodID(device.Class.Handle,
                                 "createRfcommSocket", "(I)Landroid/bluetooth/BluetoothSocket;");
-                            if (createRfcommSocket == IntPtr.Zero)
+                            if (createRfcommSocket == nint.Zero)
                             {
                                 throw new Exception("No createRfcommSocket");
                             }
-                            IntPtr rfCommSocket = Android.Runtime.JNIEnv.CallObjectMethod(device.Handle,
+                            nint rfCommSocket = Android.Runtime.JNIEnv.CallObjectMethod(device.Handle,
                                 createRfcommSocket, new Android.Runtime.JValue(1));
-                            if (rfCommSocket == IntPtr.Zero)
+                            if (rfCommSocket == nint.Zero)
                             {
                                 throw new Exception("No rfCommSocket");
                             }
@@ -417,7 +420,7 @@ namespace EdiabasLib
             {
                 if (_bluetoothInStream != null)
                 {
-                    _bluetoothInStream.Close();
+                    _bluetoothInStream.Dispose();
                     _bluetoothInStream = null;
                 }
             }
@@ -429,7 +432,7 @@ namespace EdiabasLib
             {
                 if (_bluetoothOutStream != null)
                 {
-                    _bluetoothOutStream.Close();
+                    _bluetoothOutStream.Dispose();
                     _bluetoothOutStream = null;
                 }
             }
@@ -1019,7 +1022,9 @@ namespace EdiabasLib
             else
             {
 #pragma warning disable CS0618
+#pragma warning disable CA1422
                 parcel = intent.GetParcelableExtra(name);
+#pragma warning restore CA1422
 #pragma warning restore CS0618
             }
 

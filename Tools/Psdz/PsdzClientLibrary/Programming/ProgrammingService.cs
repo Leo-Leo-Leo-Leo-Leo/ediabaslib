@@ -8,6 +8,7 @@ using BMW.Rheingold.Programming;
 using BMW.Rheingold.Psdz;
 using BMW.Rheingold.Psdz.Client;
 using PsdzClient.Core;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Programming
 {
@@ -24,6 +25,19 @@ namespace PsdzClient.Programming
             this.EventManager = new ProgrammingEventManager();
             this.PsdzDatabase = new PsdzDatabase(istaFolder);
             PreparePsdzBackupDataPath(istaFolder);
+
+            // [UH] create services
+            IFasta2Service fasta2Service = ServiceLocator.Current.GetService<IFasta2Service>();
+            if (fasta2Service == null)
+            {
+                ServiceLocator.Current.TryAddService((IFasta2Service)new Fasta2Service());
+            }
+
+            IDiagnosticsBusinessData diagnosticsBusiness = ServiceLocator.Current.GetService<IDiagnosticsBusinessData>();
+            if (diagnosticsBusiness == null)
+            {
+                ServiceLocator.Current.TryAddService((IDiagnosticsBusinessData)new DiagnosticsBusinessData());
+            }
         }
 
         public bool CollectPsdzLog(string targetLogFilePath)
@@ -41,9 +55,9 @@ namespace PsdzClient.Programming
 					File.Move(text, targetLogFilePath);
 					flag = true;
 				}
-				catch (Exception)
+				catch (Exception exception)
 				{
-					//Log.WarningException("ProgrammingService.CollectPsdzLog", exception);
+					Log.WarningException("ProgrammingService.CollectPsdzLog", exception);
 				}
 				if (!flag)
 				{
@@ -87,9 +101,9 @@ namespace PsdzClient.Programming
 			{
 				this.psdz.CloseConnectionsToPsdzHost();
 			}
-			catch (Exception)
+			catch (Exception exception)
 			{
-				//Log.WarningException("ProgrammingService.CloseConnectionsToPsdzHost()", exception);
+				Log.WarningException("ProgrammingService.CloseConnectionsToPsdzHost()", exception);
 			}
 		}
 

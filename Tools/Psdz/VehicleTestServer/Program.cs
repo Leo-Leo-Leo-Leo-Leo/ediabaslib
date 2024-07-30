@@ -23,6 +23,7 @@ namespace VehicleTestServer
     {
         static int Main(string[] args)
         {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             TextWriter outWriter = Console.Out;
             EdiabasNet ediabas = EdiabasSetup();
             EdWebServer edWebServer = new EdWebServer(ediabas, message =>
@@ -52,6 +53,7 @@ namespace VehicleTestServer
                 EdInterfaceClass = edInterfaceEnet,
             };
             edInterfaceEnet.RemoteHost = "127.0.0.1";
+            edInterfaceEnet.VehicleProtocol = EdInterfaceEnet.ProtocolHsfz;
             edInterfaceEnet.IcomAllocate = false;
 
             return ediabas;

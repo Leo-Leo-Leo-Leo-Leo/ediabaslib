@@ -12,6 +12,7 @@ using Android.Views;
 using Android.Views.InputMethods;
 using Android.Widget;
 using AndroidX.AppCompat.App;
+using BmwDeepObd.Dialogs;
 using EdiabasLib;
 
 namespace BmwDeepObd
@@ -348,7 +349,6 @@ namespace BmwDeepObd
                 try
                 {
                     _updateHandler.RemoveCallbacksAndMessages(null);
-                    _updateHandler.Dispose();
                 }
                 catch (Exception)
                 {
@@ -414,17 +414,7 @@ namespace BmwDeepObd
                     AbortJobFunc = AbortEdiabasJob
                 };
                 _ediabas.SetConfigProperty("EcuPath", _ecuDir);
-                if (!string.IsNullOrEmpty(_traceDir))
-                {
-                    _ediabas.SetConfigProperty("TracePath", _traceDir);
-                    _ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
-                    _ediabas.SetConfigProperty("AppendTrace", _traceAppend ? "1" : "0");
-                    _ediabas.SetConfigProperty("CompressTrace", "1");
-                }
-                else
-                {
-                    _ediabas.SetConfigProperty("IfhTrace", "0");
-                }
+                ActivityCommon.SetEdiabasConfigProperties(_ediabas, _traceDir, _traceAppend);
             }
 
             _activityCommon.SetEdiabasInterface(_ediabas, _deviceAddress);
@@ -1629,7 +1619,6 @@ namespace BmwDeepObd
                         return;
                     }
                     progress.Dismiss();
-                    progress.Dispose();
 
                     if (executeFailed)
                     {

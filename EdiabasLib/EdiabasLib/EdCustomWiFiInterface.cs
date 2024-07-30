@@ -32,6 +32,7 @@ namespace EdiabasLib
         private static readonly string Tag = typeof(EdCustomWiFiInterface).FullName;
 #endif
         public const string PortId = "DEEPOBDWIFI";
+        public const string RawTag = "RAW";
         public static string AdapterIp = "192.168.0.10";
         public static string AdapterIpEspLink = "192.168.4.1";
         public static int AdapterPort = 35000;
@@ -126,28 +127,39 @@ namespace EdiabasLib
                     // special ip
                     string addr = portData.Remove(0, 1);
                     string[] stringList = addr.Split(':');
-                    if (stringList.Length == 0)
+                    int listLength = stringList.Length;
+                    if (listLength == 0)
                     {
                         Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Connecting: Missing port parameters: {0}", port);
                         InterfaceDisconnect();
                         return false;
                     }
 
-                    ipSpecified = true;
-                    adapterIp = stringList[0].Trim();
-                    if (string.Compare(adapterIp, AdapterIpEspLink, StringComparison.Ordinal) == 0)
+                    if (string.Compare(stringList[listLength - 1], RawTag, StringComparison.Ordinal) == 0)
                     {
-                        Ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Using ESP-Link port");
-                        adapterPort = AdapterPortEspLink;
+                        Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Connecting: Raw mode enabled");
+                        CustomAdapter.RawMode = true;
+                        listLength--;
                     }
 
-                    if (stringList.Length > 1)
+                    if (listLength > 0)
                     {
-                        if (!int.TryParse(stringList[1].Trim(), out adapterPort))
+                        ipSpecified = true;
+                        adapterIp = stringList[0].Trim();
+                        if (string.Compare(adapterIp, AdapterIpEspLink, StringComparison.Ordinal) == 0)
                         {
-                            Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Connecting: Invalid port parameters: {0}", port);
-                            InterfaceDisconnect();
-                            return false;
+                            Ediabas?.LogString(EdiabasNet.EdLogLevel.Ifh, "Using ESP-Link port");
+                            adapterPort = AdapterPortEspLink;
+                        }
+
+                        if (listLength > 1)
+                        {
+                            if (!int.TryParse(stringList[1].Trim(), out adapterPort))
+                            {
+                                Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Connecting: Invalid port parameters: {0}", port);
+                                InterfaceDisconnect();
+                                return false;
+                            }
                         }
                     }
                 }
@@ -158,10 +170,12 @@ namespace EdiabasLib
                     if (Android.OS.Build.VERSION.SdkInt < Android.OS.BuildVersionCodes.S)
                     {
 #pragma warning disable 618
+#pragma warning disable CA1422
                         if (wifiManager.ConnectionInfo != null && wifiManager.DhcpInfo != null)
                         {
                             serverIp = TcpClientWithTimeout.ConvertIpAddress(wifiManager.DhcpInfo.ServerAddress);
                         }
+#pragma warning restore CA1422
 #pragma warning restore 618
                     }
                     else
@@ -245,28 +259,31 @@ namespace EdiabasLib
                 TcpStream = TcpClient.GetStream();
                 WriteStream = new EscapeStreamWriter(TcpStream);
 
-                if (!reconnect)
+                if (!CustomAdapter.RawMode)
                 {
-                    if (!UpdateWriteEscapeRequired())
+                    if (!reconnect)
                     {
-                        Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Update write escape failed");
+                        if (!UpdateWriteEscapeRequired())
+                        {
+                            Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Update write escape failed");
+                            InterfaceDisconnect(true);
+                            return false;
+                        }
+                    }
+
+                    CustomAdapter.EscapeModeWrite = WriteEscapeRequired;
+                    if (!CustomAdapter.UpdateAdapterInfo(true))
+                    {
+                        Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Update adapter info failed");
                         InterfaceDisconnect(true);
                         return false;
                     }
-                }
-
-                CustomAdapter.EscapeModeWrite = WriteEscapeRequired;
-                if (!CustomAdapter.UpdateAdapterInfo(true))
-                {
-                    Ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Update adapter info failed");
-                    InterfaceDisconnect(true);
-                    return false;
-                }
 
 #if DEBUG_ANDROID
-                Android.Util.Log.Info(Tag, string.Format("InterfaceConnect WriteEscape={0}", CustomAdapter.EscapeModeWrite));
+                    Android.Util.Log.Info(Tag, string.Format("InterfaceConnect WriteEscape={0}", CustomAdapter.EscapeModeWrite));
 #endif
-                WriteStream.SetEscapeMode(CustomAdapter.EscapeModeWrite);
+                    WriteStream.SetEscapeMode(CustomAdapter.EscapeModeWrite);
+                }
             }
             catch (Exception ex)
             {
@@ -306,13 +323,13 @@ namespace EdiabasLib
             {
                 if (WriteStream != null)
                 {
-                    WriteStream.Close();
+                    WriteStream.Dispose();
                     WriteStream = null;
                 }
 
                 if (TcpStream != null)
                 {
-                    TcpStream.Close();
+                    TcpStream.Dispose();
                     TcpStream = null;
                 }
             }
@@ -325,7 +342,7 @@ namespace EdiabasLib
             {
                 if (TcpClient != null)
                 {
-                    TcpClient.Close();
+                    TcpClient.Dispose();
                     TcpClient = null;
                 }
             }
@@ -671,7 +688,7 @@ namespace EdiabasLib
 
                         case 1:
                             // CAN mode (zero request)
-                            respLen = 9;
+                            respLen = 6;
                             testTel = new byte[] { 0x82, 0xF1, 0xF1, 0x82, 0x00, 0x00 };
                             break;
                     }

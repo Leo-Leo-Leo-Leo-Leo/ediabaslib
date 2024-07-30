@@ -11,13 +11,15 @@ using NDesk.Options;
 
 namespace EdiabasTest
 {
-    class Program
+    static class Program
     {
         private static readonly CultureInfo Culture = CultureInfo.CreateSpecificCulture("en");
         private static readonly Encoding Encoding = Encoding.GetEncoding(1252);
         private static TextWriter _outputWriter;
         private static bool _compareOutput;
         private static List<List<Dictionary<string, EdiabasNet.ResultData>>> _apiResultList;
+        private static bool _api76;
+        private static bool _errorPrinted;
 
         static int Main(string[] args)
         {
@@ -96,7 +98,12 @@ namespace EdiabasTest
                     return 1;
                 }
 
-                _outputWriter.WriteLine("API Version: {0}.{1}.{2}", (EdiabasNet.EdiabasVersion >> 8) & 0xF, (EdiabasNet.EdiabasVersion >> 4) & 0xF, EdiabasNet.EdiabasVersion & 0xF);
+                _outputWriter.WriteLine("API Version: {0}", EdiabasNet.EdiabasVersionString);
+
+                if (EdiabasNet.IsMinVersion760)
+                {
+                    _api76 = true;
+                }
 
                 if (storeResults)
                 {
@@ -179,6 +186,7 @@ namespace EdiabasTest
                             return 1;
                         }
 
+                        _errorPrinted = false;
                         ediabas.ArgBinary = null;
                         ediabas.ArgBinaryStd = null;
                         ediabas.ResultsRequests = string.Empty;
@@ -308,8 +316,14 @@ namespace EdiabasTest
 
         static void ErrorRaisedFunc(EdiabasNet.ErrorCodes error)
         {
+            if (_errorPrinted)
+            {
+                return;
+            }
+
             string errorText = EdiabasNet.GetErrorDescription(error);
             _outputWriter.WriteLine(string.Format(Culture, "Error occured: 0x{0:X08} {1}", (UInt32)error, errorText));
+            _errorPrinted = true;
         }
 
         static void PrintResults(List<string> formatList, bool printAllTypes, List<Dictionary<string, EdiabasNet.ResultData>> resultSets)
@@ -334,14 +348,15 @@ namespace EdiabasTest
                     foreach (string key in resultDict.Keys.OrderBy(x => x))
                     {
                         EdiabasNet.ResultData resultData = resultDict[key];
-                        string resultText = string.Empty;
+                        StringBuilder sbResult = new StringBuilder();
+
                         if (resultData.OpData is string)
                         {
-                            resultText = (string)resultData.OpData;
+                            sbResult.Append((string)resultData.OpData);
                         }
                         else if (resultData.OpData is double)
                         {
-                            resultText = string.Format(Culture, "R: {0}", (Double)resultData.OpData);
+                            sbResult.Append(string.Format(Culture, "R: {0}", (Double)resultData.OpData));
                         }
                         else if (resultData.OpData is long)
                         {
@@ -349,31 +364,31 @@ namespace EdiabasTest
                             switch (resultData.ResType)
                             {
                                 case EdiabasNet.ResultType.TypeB:  // 8 bit
-                                    resultText = string.Format(Culture, "B: {0} 0x{1:X02}", value, (Byte)value);
+                                    sbResult.Append(string.Format(Culture, "B: {0} 0x{1:X02}", value, (Byte)value));
                                     break;
 
                                 case EdiabasNet.ResultType.TypeC:  // 8 bit char
-                                    resultText = string.Format(Culture, "C: {0} 0x{1:X02}", value, (Byte)value);
+                                    sbResult.Append(string.Format(Culture, "C: {0} 0x{1:X02}", value, (Byte)value));
                                     break;
 
                                 case EdiabasNet.ResultType.TypeW:  // 16 bit
-                                    resultText = string.Format(Culture, "W: {0} 0x{1:X04}", value, (UInt16)value);
+                                    sbResult.Append(string.Format(Culture, "W: {0} 0x{1:X04}", value, (UInt16)value));
                                     break;
 
                                 case EdiabasNet.ResultType.TypeI:  // 16 bit signed
-                                    resultText = string.Format(Culture, "I: {0} 0x{1:X04}", value, (UInt16)value);
+                                    sbResult.Append(string.Format(Culture, "I: {0} 0x{1:X04}", value, (UInt16)value));
                                     break;
 
                                 case EdiabasNet.ResultType.TypeD:  // 32 bit
-                                    resultText = string.Format(Culture, "D: {0} 0x{1:X08}", value, (UInt32)value);
+                                    sbResult.Append(string.Format(Culture, "D: {0} 0x{1:X08}", value, (UInt32)value));
                                     break;
 
                                 case EdiabasNet.ResultType.TypeL:  // 32 bit signed
-                                    resultText = string.Format(Culture, "L: {0} 0x{1:X08}", value, (UInt32)value);
+                                    sbResult.Append(string.Format(Culture, "L: {0} 0x{1:X08}", value, (UInt32)value));
                                     break;
 
                                 default:
-                                    resultText = "?";
+                                    sbResult.Append("?");
                                     break;
                             }
                         }
@@ -382,7 +397,7 @@ namespace EdiabasTest
                             byte[] data = (byte[])resultData.OpData;
                             foreach (byte value in data)
                             {
-                                resultText += string.Format(Culture, "{0:X02} ", value);
+                                sbResult.Append(string.Format(Culture, "{0:X02} ", value));
                             }
                         }
 
@@ -390,29 +405,46 @@ namespace EdiabasTest
                         {
                             if ((resultData.OpData is long) || (resultData.OpData is double))
                             {
-                                resultText += " ALL: ";
+                                sbResult.Append(" ALL: ");
                                 if (resultData.OpData is long)
                                 {
                                     Int64 value = (Int64)resultData.OpData;
-                                    resultText += string.Format(Culture, " {0}", (sbyte)value);
-                                    resultText += string.Format(Culture, " {0}", (byte)value);
-                                    resultText += string.Format(Culture, " {0}", (short)value);
-                                    resultText += string.Format(Culture, " {0}", (ushort)value);
-                                    resultText += string.Format(Culture, " {0}", (int)value);
-                                    resultText += string.Format(Culture, " {0}", (uint)value);
-                                    resultText += string.Format(Culture, " {0}", (double)value);
+                                    sbResult.Append(string.Format(Culture, " {0}", (sbyte)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (byte)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (short)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (ushort)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (int)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (uint)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (double)value));
+                                    if (_api76)
+                                    {
+                                        if (resultData.ResType == EdiabasNet.ResultType.TypeD)
+                                        {
+                                            sbResult.Append(string.Format(Culture, " {0}", (uint)value));
+                                        }
+                                        else
+                                        {
+                                            sbResult.Append(string.Format(Culture, " {0}", (int)value));
+                                        }
+                                        sbResult.Append(string.Format(Culture, " {0}", (uint)value));
+                                    }
                                 }
                                 else
                                 {
                                     Double valueDouble = (Double)resultData.OpData;
                                     Int64 value = (Int64)valueDouble;
-                                    resultText += string.Format(Culture, " {0}", (sbyte)value);
-                                    resultText += string.Format(Culture, " {0}", (byte)value);
-                                    resultText += string.Format(Culture, " {0}", (short)value);
-                                    resultText += string.Format(Culture, " {0}", (ushort)value);
-                                    resultText += string.Format(Culture, " {0}", (int)value);
-                                    resultText += string.Format(Culture, " {0}", (uint)value);
-                                    resultText += string.Format(Culture, " {0}", valueDouble);
+                                    sbResult.Append(string.Format(Culture, " {0}", (sbyte)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (byte)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (short)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (ushort)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (int)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", (uint)value));
+                                    sbResult.Append(string.Format(Culture, " {0}", valueDouble));
+                                    if (_api76)
+                                    {
+                                        sbResult.Append(string.Format(Culture, " {0}", (int)value));
+                                        sbResult.Append(string.Format(Culture, " {0}", (uint)value));
+                                    }
                                 }
                             }
                         }
@@ -428,13 +460,13 @@ namespace EdiabasTest
                                     string resultString = EdiabasNet.FormatResult(resultData, formatString);
                                     if (resultString != null)
                                     {
-                                        resultText += string.Format(" F({0}): '{1}'", formatString, resultString);
+                                        sbResult.Append(string.Format(" F({0}): '{1}'", formatString, resultString));
                                     }
                                 }
                             }
                         }
 
-                        _outputWriter.WriteLine(resultData.Name + ": " + resultText);
+                        _outputWriter.WriteLine(resultData.Name + ": " + sbResult);
                     }
                     dataSet++;
                 }

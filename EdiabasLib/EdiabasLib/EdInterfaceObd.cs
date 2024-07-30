@@ -104,7 +104,7 @@ namespace EdiabasLib
         public const byte UdsNoSendData = 0x00;
         protected const string MutexName = "EdiabasLib_InterfaceObd";
         protected const int TransBufferSize = 0x800; // transmit buffer size
-        protected static readonly CultureInfo Culture = CultureInfo.CreateSpecificCulture("en");
+        protected static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
         protected static readonly byte[] ByteArray0 = new byte[0];
         protected static readonly long TickResolMs = Stopwatch.Frequency / 1000;
 #if USE_SERIAL_PORT
@@ -130,6 +130,8 @@ namespace EdiabasLib
         protected int AddRecTimeout = 20;
         protected bool EnableFtdiBitBang;
         protected bool ConnectedProtected;
+        protected int BatteryVoltageValue = 12000;
+        protected int IgnitionVoltageValue = 12000;
         protected const int DefaultStdTimeout = 60000;  // 60 sec.
         protected const int EchoTimeout = 100;
         protected const int Kwp1281ByteTimeout = 55;
@@ -334,6 +336,18 @@ namespace EdiabasLib
                 {
                     EnableFtdiBitBang = EdiabasNet.StringToValue(prop) != 0;
                 }
+
+                prop = EdiabasProtected.GetConfigProperty("ObdBatteryVoltage");
+                if (prop != null)
+                {
+                    BatteryVoltageValue = (int) EdiabasNet.StringToValue(prop);
+                }
+
+                prop = EdiabasProtected.GetConfigProperty("ObdIgnitionVoltage");
+                if (prop != null)
+                {
+                    IgnitionVoltageValue = (int)EdiabasNet.StringToValue(prop);
+                }
             }
         }
 
@@ -408,6 +422,7 @@ namespace EdiabasLib
                 }
                 if (CommParameterProtected.Length < 1)
                 {
+                    EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "*** Parameter length too short: {0}", CommParameterProtected.Length);
                     EdiabasProtected.SetError(EdiabasNet.ErrorCodes.EDIABAS_IFH_0041);
                     return;
                 }
@@ -442,11 +457,13 @@ namespace EdiabasLib
                     case 0x0000:    // Raw (EDIC)
                         if (!EdicSimulation)
                         {
+                            EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "*** No EDIC simulation mode");
                             EdiabasProtected.SetError(EdiabasNet.ErrorCodes.EDIABAS_IFH_0014);
                             return;
                         }
                         if (CommParameterProtected.Length < 5)
                         {
+                            EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "*** Concept 0 parameter length too short: {0}", CommParameterProtected.Length);
                             EdiabasProtected.SetError(EdiabasNet.ErrorCodes.EDIABAS_IFH_0041);
                             return;
                         }
@@ -641,6 +658,11 @@ namespace EdiabasLib
                         ParSupportFrequent = true;
                         break;
 
+                    case 0x010B:    // KWP2000 Standard (motorbikes)
+                        EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "*** Concept KWP2000 standard not implemented");
+                        EdiabasProtected.SetError(EdiabasNet.ErrorCodes.EDIABAS_IFH_0014);
+                        return;
+
                     case 0x010C:    // KWP2000 BMW
                         if (CommParameterProtected.Length < 33)
                         {
@@ -773,6 +795,7 @@ namespace EdiabasLib
                         break;
 
                     default:
+                        EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "*** Concept not implemented: {0:X04}", concept);
                         EdiabasProtected.SetError(EdiabasNet.ErrorCodes.EDIABAS_IFH_0014);
                         return;
                 }
@@ -1003,7 +1026,7 @@ namespace EdiabasLib
                     EdiabasProtected.SetError(EdiabasNet.ErrorCodes.EDIABAS_IFH_0056);
                     return Int64.MinValue;
                 }
-                Int64 voltage = GetDsrState() ? 12000 : 0;
+                Int64 voltage = GetDsrState() ? BatteryVoltageValue : 0;
                 EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Battery voltage: {0}", voltage);
                 return voltage;
             }
@@ -1022,7 +1045,7 @@ namespace EdiabasLib
                 }
                 if (!HasIgnitionStatus || EdicSimulation || (ParTransmitFunc != null && ParTransmitFunc != TransBmwFast))
                 {
-                    voltage = GetDsrState() ? 12000 : 0;
+                    voltage = GetDsrState() ? IgnitionVoltageValue : 0;
                     EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ignition voltage from DSR: {0}", voltage);
                     return voltage;
                 }
@@ -1067,7 +1090,7 @@ namespace EdiabasLib
                 if (RecErrorCode != EdiabasNet.ErrorCodes.EDIABAS_ERR_NONE)
                 {
                     EdiabasProtected.LogString(EdiabasNet.EdLogLevel.Ifh, "Read ignition status failed, assume active");
-                    return 12000;
+                    return IgnitionVoltageValue;
                 }
                 byte[] receiveData;
                 lock (CommThreadLock)
@@ -1092,7 +1115,7 @@ namespace EdiabasLib
                         ignitionOn = true;
                     }
                 }
-                voltage = ignitionOn ? 12000 : 0;
+                voltage = ignitionOn ? IgnitionVoltageValue : 0;
                 EdiabasProtected.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ignition voltage: {0}", voltage);
 
                 return voltage;
@@ -1169,7 +1192,7 @@ namespace EdiabasLib
 
         static EdInterfaceObd()
         {
-#if WindowsCE || Android
+#if Android
             _interfaceMutex = new Mutex(false);
 #else
             _interfaceMutex = new Mutex(false, MutexName);
@@ -1257,7 +1280,6 @@ namespace EdiabasLib
                 InterfaceReceiveDataFuncInt = EdFtdiInterface.InterfaceReceiveData;
                 InterfaceSendPulseFuncInt = null;
             }
-#if !WindowsCE
             else if (ComPortProtected.ToUpper(Culture).StartsWith(EdBluetoothInterface.PortId))
             {   // automtatic hook of bluetooth functions
                 EdBluetoothInterface.Ediabas = Ediabas;
@@ -1336,7 +1358,6 @@ namespace EdiabasLib
                 InterfaceReceiveDataFuncInt = EdCustomWiFiInterface.InterfaceReceiveData;
                 InterfaceSendPulseFuncInt = EdCustomWiFiInterface.InterfaceSendPulse;
             }
-#endif
             else
             {
                 InterfaceConnectFuncInt = null;
@@ -3174,6 +3195,10 @@ namespace EdiabasLib
                 }
                 if (errorCode == EdiabasNet.ErrorCodes.EDIABAS_IFH_0011)
                 {   // unknown interface
+                    break;
+                }
+                if (sendDataLength <= 0)
+                {   // no data to send
                     break;
                 }
             }

@@ -9,8 +9,10 @@ namespace EdiabasLib
 {
     public class EscapeStreamReader : Stream
     {
+        private bool _disposed;
         private Stream _inStream;
         private Mutex _readMutex;
+        private AutoResetEvent _writeEvent;
         private bool _escapeMode;
         private byte _escapeCode;
         private byte _escapeMask;
@@ -21,6 +23,7 @@ namespace EdiabasLib
         {
             _inStream = inStream;
             _readMutex = new Mutex(false);
+            _writeEvent = new AutoResetEvent(false);
             SetEscapeMode(escapeMode, escapeCode, escapeMask);
             _readDataList = new List<byte>();
         }
@@ -72,7 +75,20 @@ namespace EdiabasLib
         {
             get
             {
-                return _readDataList.Count;
+                if (!AcquireReadMutex())
+                {
+                    return 0;
+                }
+
+                try
+                {
+                    ReadInStream();
+                    return _readDataList.Count;
+                }
+                finally
+                {
+                    ReleaseReadMutex();
+                }
             }
         }
 
@@ -129,45 +145,97 @@ namespace EdiabasLib
             }
         }
 
-        public override void Close()
+        // Stream Close() calls Dispose(true)
+        protected override void Dispose(bool disposing)
         {
-            if (!AcquireReadMutex(-1))
+            // Check to see if Dispose has already been called.
+            if (!_disposed)
             {
-                return;
+                // If disposing equals true, dispose all managed
+                // and unmanaged resources.
+                if (disposing)
+                {
+                    // Dispose managed resources.
+                    if (!AcquireReadMutex(-1))
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        if (_inStream != null)
+                        {
+                            _inStream.Dispose();
+                            _inStream = null;
+                        }
+                        _readDataList.Clear();
+                        _readEscape = false;
+                    }
+                    finally
+                    {
+                        ReleaseReadMutex();
+                    }
+
+                    try
+                    {
+                        if (_writeEvent != null)
+                        {
+                            _writeEvent.Dispose();
+                            _writeEvent = null;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+
+                    try
+                    {
+                        if (_readMutex != null)
+                        {
+                            _readMutex.Dispose();
+                            _readMutex = null;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+                }
+
+                // Note disposing has been done.
+                _disposed = true;
             }
 
-            try
-            {
-                if (_inStream != null)
-                {
-                    _inStream.Close();
-                    _inStream = null;
-                }
-                _readDataList.Clear();
-                _readEscape = false;
-            }
-            finally
-            {
-                ReleaseReadMutex();
-            }
+            base.Dispose(disposing);
         }
 
-        public bool IsDataAvailable()
+        public bool IsDataAvailable(int timeout = 0, ManualResetEvent cancelEvent = null)
         {
-            if (!AcquireReadMutex())
+            _writeEvent.Reset();
+            if (Length > 0)
             {
-                return false;
+                return true;
             }
 
-            try
+            if (timeout > 0)
             {
-                ReadInStream();
-                return _readDataList.Count > 0;
+                if (cancelEvent != null)
+                {
+                    WaitHandle[] waitHandles = { _writeEvent, cancelEvent };
+                    if (WaitHandle.WaitAny(waitHandles, timeout) == 1)
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    _writeEvent.WaitOne(timeout);
+                }
+                return Length > 0;
             }
-            finally
-            {
-                ReleaseReadMutex();
-            }
+
+            return false;
         }
 
         public override int ReadByte()
@@ -284,11 +352,7 @@ namespace EdiabasLib
                 return;
             }
 
-#if Android
-            while (_inStream.IsDataAvailable())
-#else
-            while (_inStream.Length > 0)
-#endif
+            while (_inStream.HasData())
             {
                 int data = _inStream.ReadByteAsync();
                 //Android.Util.Log.Debug("InStream", "Main Data: {0}", data);
@@ -317,6 +381,11 @@ namespace EdiabasLib
                     if (!_readEscape)
                     {
                         _readDataList.Add((byte)data);
+                    }
+
+                    if (_readDataList.Count > 0)
+                    {
+                        _writeEvent.Set();
                     }
                 }
                 else

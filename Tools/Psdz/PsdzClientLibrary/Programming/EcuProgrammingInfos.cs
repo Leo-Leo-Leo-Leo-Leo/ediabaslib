@@ -14,6 +14,7 @@ using BMW.Rheingold.Programming.API;
 using BMW.Rheingold.Psdz.Model.Ecu;
 using BMW.Rheingold.Psdz.Model.Tal;
 using PsdzClient.Core;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Programming
 {
@@ -258,36 +259,33 @@ namespace PsdzClient.Programming
 			this.RefreshProgrammingInfoBeforeReplace(this.DataContext.List.ToList<IEcuProgrammingInfoData>());
 		}
 
-		internal void SetSvkTargetForEachEcu(ISvt svt)
-		{
-			if (svt == null)
-			{
-				foreach (EcuProgrammingInfo ecuProgrammingInfo in this.ecuProgrammingInfos)
-				{
-					ecuProgrammingInfo.SvkTarget = null;
-				}
-				return;
-			}
-			foreach (IEcuObj ecuObj in svt.Ecus)
-			{
-				EcuProgrammingInfo ecuProgrammingInfo2 = this.GetItemFromProgrammingInfos((long)ecuObj.EcuIdentifier.DiagAddrAsInt);
-				if (ecuProgrammingInfo2 != null)
-				{
-					ecuProgrammingInfo2.SvkTarget = ecuObj.StandardSvk;
-				}
-				else
-				{
-					ECU ecu = this.programmingObjectBuilder.Build(ecuObj);
-					if (ecu != null)
-					{
-						ecuProgrammingInfo2 = this.GetEcuProgrammingInfo(ecu);
-                        ecuProgrammingInfo2.SvkTarget = ecuObj.StandardSvk;
-					}
-				}
-			}
-		}
+        internal void SetSvkTargetForEachEcu(ISvt svt)
+        {
+            if (svt == null)
+            {
+                foreach (EcuProgrammingInfo ecuProgrammingInfo in ecuProgrammingInfos)
+                {
+                    ecuProgrammingInfo.SvkTarget = null;
+                }
+                return;
+            }
+            foreach (IEcuObj ecu in svt.Ecus)
+            {
+                EcuProgrammingInfo itemFromProgrammingInfos = GetItemFromProgrammingInfos(ecu.EcuIdentifier.DiagAddrAsInt);
+                if (itemFromProgrammingInfos != null)
+                {
+                    itemFromProgrammingInfos.SvkTarget = ecu.StandardSvk;
+                    continue;
+                }
+                ECU eCU = programmingObjectBuilder.Build(ecu);
+                if (eCU != null)
+                {
+                    itemFromProgrammingInfos = GetEcuProgrammingInfo(eCU);
+                }
+            }
+        }
 
-		internal void UpdateProgrammingActions(IPsdzTal tal, int escalationStep)
+        internal void UpdateProgrammingActions(IPsdzTal tal, int escalationStep)
 		{
 			foreach (IPsdzEcuIdentifier psdzEcuIdentifier in tal.AffectedEcus)
 			{
@@ -302,10 +300,10 @@ namespace PsdzClient.Programming
 				}
 				else
 				{
-					//Log.Warning("EcuProgrammingInfos.UpdateProgrammingActions", "Could not find ecu programming object for 0x{0:X2}", new object[]
-					//{
-					//	psdzEcuIdentifier.DiagAddrAsInt
-					//});
+					Log.Warning("EcuProgrammingInfos.UpdateProgrammingActions", "Could not find ecu programming object for 0x{0:X2}", new object[]
+					{
+						psdzEcuIdentifier.DiagAddrAsInt
+					});
 				}
 			}
 		}

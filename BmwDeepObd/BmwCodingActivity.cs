@@ -22,8 +22,10 @@ using AndroidX.WebKit;
 using Android.Webkit;
 using AndroidX.AppCompat.App;
 using AndroidX.Core.Content.PM;
+using BmwDeepObd.Dialogs;
 using EdiabasLib;
 using Java.Interop;
+using Skydoves.BalloonLib;
 
 namespace BmwDeepObd
 {
@@ -199,6 +201,17 @@ namespace BmwDeepObd
             _webViewCoding = FindViewById<WebView>(Resource.Id.webViewCoding);
             try
             {
+                ProxyConfig proxyConfig = new ProxyConfig.Builder().Build();
+                ProxyController.Instance.ClearProxyOverride(new ProxyExecutor(), new Java.Lang.Runnable(() => { }));
+                ProxyController.Instance.SetProxyOverride(proxyConfig, new ProxyExecutor(), new Java.Lang.Runnable(() => { }));
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            try
+            {
                 WebSettings webSettings = _webViewCoding?.Settings;
                 if (webSettings != null)
                 {
@@ -206,19 +219,15 @@ namespace BmwDeepObd
                     webSettings.JavaScriptCanOpenWindowsAutomatically = true;
                     webSettings.DomStorageEnabled = true;
                     webSettings.BuiltInZoomControls = true;
+                    webSettings.LoadWithOverviewMode = true;
+                    webSettings.UseWideViewPort = true;
                     webSettings.CacheMode = CacheModes.NoCache;
 
                     string userAgent = webSettings.UserAgentString;
                     if (!string.IsNullOrEmpty(userAgent))
                     {
-                        PackageInfo packageInfo = _activityCommon.GetPackageInfo();
-                        long packageVersion = -1;
-                        if (packageInfo != null)
-                        {
-                            packageVersion = PackageInfoCompat.GetLongVersionCode(packageInfo);
-                        }
-
-                        string language = ActivityCommon.GetCurrentLanguage();
+                        long packageVersion = _activityCommon.VersionCode;
+                        string language = _activityCommon.GetCurrentLanguage();
                         string userAgentAppend = string.Format(CultureInfo.InvariantCulture, " DeepObd/{0}/{1}", packageVersion, language);
                         userAgent += userAgentAppend;
 
@@ -235,6 +244,11 @@ namespace BmwDeepObd
             catch (Exception)
             {
                 // ignored
+            }
+
+            lock (_ediabasLock)
+            {
+                UpdateLogInfo();
             }
 
             UpdateConnectTime();
@@ -357,7 +371,6 @@ namespace BmwDeepObd
                 try
                 {
                     _updateHandler.RemoveCallbacksAndMessages(null);
-                    _updateHandler.Dispose();
                 }
                 catch (Exception)
                 {
@@ -372,6 +385,7 @@ namespace BmwDeepObd
             {
                 try
                 {
+                    _infoHttpClient.CancelPendingRequests();
                     _infoHttpClient.Dispose();
                 }
                 catch (Exception)
@@ -485,14 +499,7 @@ namespace BmwDeepObd
                             return;
                         }
 
-                        try
-                        {
-                            StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"https://github.com/uholeschak/ediabaslib/blob/master/docs/BMW_Coding.md")));
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
+                        _activityCommon.OpenWebUrl("https://github.com/uholeschak/ediabaslib/blob/master/docs/BMW_Coding.md");
                     });
                     return true;
             }
@@ -540,7 +547,7 @@ namespace BmwDeepObd
             }
 
             bool commActive = IsEdiabasConnected();
-            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable();
+            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable(true);
 
             IMenuItem logSubMenu = menu.FindItem(Resource.Id.menu_submenu_log);
             logSubMenu?.SetEnabled(interfaceAvailable && !commActive);
@@ -796,7 +803,8 @@ namespace BmwDeepObd
                 _infoHttpClient = new HttpClient(new HttpClientHandler()
                 {
                     SslProtocols = ActivityCommon.DefaultSslProtocols,
-                    ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
+                    ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true,
+                    Proxy = ActivityCommon.GetProxySettings()
                 });
             }
 
@@ -815,10 +823,9 @@ namespace BmwDeepObd
                 {
                     MultipartFormDataContent formInfo = new MultipartFormDataContent
                     {
-                        { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}",
-                            packageInfo != null ? PackageInfoCompat.GetLongVersionCode(packageInfo) : 0)), "app_ver" },
+                        { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", _activityCommon.VersionCode)), "app_ver" },
                         { new StringContent(ActivityCommon.AppId), "app_id" },
-                        { new StringContent(ActivityCommon.GetCurrentLanguage()), "lang" },
+                        { new StringContent(_activityCommon.GetCurrentLanguage()), "lang" },
                         { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", (long) Build.VERSION.SdkInt)), "android_ver" },
                         { new StringContent(_activityCommon.SelectedInterface.ToDescriptionString()), "interface_type" },
                         { new StringContent(ActivityCommon.LastAdapterSerial ?? string.Empty), "adapter_serial" },
@@ -855,7 +862,6 @@ namespace BmwDeepObd
                     if (progress != null)
                     {
                         progress.Dismiss();
-                        progress.Dispose();
                         progress = null;
                         _activityCommon.SetLock(ActivityCommon.LockType.None);
                     }
@@ -872,7 +878,6 @@ namespace BmwDeepObd
                         if (progress != null)
                         {
                             progress.Dismiss();
-                            progress.Dispose();
                             progress = null;
                             _activityCommon.SetLock(ActivityCommon.LockType.None);
                         }
@@ -1180,11 +1185,6 @@ namespace BmwDeepObd
 
         private void UpdateLogInfo()
         {
-            if (_ediabas == null)
-            {
-                return;
-            }
-
             string logDir = string.Empty;
             try
             {
@@ -1205,16 +1205,9 @@ namespace BmwDeepObd
                 _instanceData.TraceDir = logDir;
             }
 
-            if (!string.IsNullOrEmpty(_instanceData.TraceDir))
+            if (_ediabas != null)
             {
-                _ediabas.SetConfigProperty("TracePath", _instanceData.TraceDir);
-                _ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
-                _ediabas.SetConfigProperty("AppendTrace", _instanceData.TraceAppend ? "1" : "0");
-                _ediabas.SetConfigProperty("CompressTrace", "1");
-            }
-            else
-            {
-                _ediabas.SetConfigProperty("IfhTrace", "0");
+                ActivityCommon.SetEdiabasConfigProperties(_ediabas, _instanceData.TraceDir, _instanceData.TraceAppend);
             }
         }
 
@@ -1300,7 +1293,7 @@ namespace BmwDeepObd
                     return false;
                 }
 
-                _ediabas?.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ediabas connect, SessionId={0}", sessionId);
+                _ediabas.LogFormat(EdiabasNet.EdLogLevel.Ifh, "Ediabas connect, SessionId={0}", sessionId);
 
                 try
                 {
@@ -1594,7 +1587,13 @@ namespace BmwDeepObd
                 {
                     return;
                 }
+
                 SparseBooleanArray sparseArray = listView.CheckedItemPositions;
+                if (sparseArray == null)
+                {
+                    return;
+                }
+
                 for (int i = 0; i < sparseArray.Size(); i++)
                 {
                     bool value = sparseArray.ValueAt(i);
@@ -1610,13 +1609,24 @@ namespace BmwDeepObd
                     }
                 }
 
-                UpdateLogInfo();
+                lock (_ediabasLock)
+                {
+                    UpdateLogInfo();
+                }
+
                 UpdateOptionsMenu();
             });
             builder.SetNegativeButton(Resource.String.button_abort, (sender, args) =>
             {
             });
-            builder.Show();
+
+            AlertDialog alertDialog = builder.Create();
+            alertDialog.Show();
+
+            if (ActivityCommon.IsDocumentTreeSupported())
+            {
+                ActivityCommon.ShowAlertDialogBallon(this, alertDialog, Resource.String.menu_hint_copy_folder);
+            }
         }
 
         private bool SendTraceFile(EventHandler<EventArgs> handler)
@@ -1866,16 +1876,6 @@ namespace BmwDeepObd
             }
         }
 
-        private class ConnectStatusCallback : Java.Lang.Object, IValueCallback
-        {
-            public void OnReceiveValue(Java.Lang.Object value)
-            {
-#if DEBUG
-                Android.Util.Log.Debug(Tag, string.Format("ConnectStatusCallback: {0}", value));
-#endif
-            }
-        }
-
         private class WebViewJSInterface : Java.Lang.Object
         {
             BmwCodingActivity _activity;
@@ -1961,5 +1961,13 @@ namespace BmwDeepObd
                 return connectTimeouts;
             }
         }
+
+        private class ProxyExecutor : Java.Lang.Object, Java.Util.Concurrent.IExecutor
+        {
+            public void Execute(Java.Lang.IRunnable command)
+            {
+            }
+        }
+
     }
 }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using BMW.Rheingold.CoreFramework.Contracts.Vehicle;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Core
 {
@@ -29,7 +30,7 @@ namespace PsdzClient.Core
             }
 			if (vec == null)
 			{
-				//Log.Error("EquipmentExpression.Evaluate()", "vec was null", Array.Empty<object>());
+				Log.Error("EquipmentExpression.Evaluate()", "vec was null", Array.Empty<object>());
 				return false;
 			}
 			if (vec.VehicleIdentLevel == IdentificationLevel.None)
@@ -125,7 +126,11 @@ namespace PsdzClient.Core
             StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.Append(FormulaSeparator(formulaConfig));
             stringBuilder.Append(formulaConfig.RuleValidFunc);
-            stringBuilder.Append("(\"");
+            stringBuilder.Append("(");
+            if (!formulaConfig.IsRuleValidNumFunc)
+            {
+                stringBuilder.Append("\"");
+            }
             if (equipmentById != null)
             {
                 string ruleId = this.value.ToString(CultureInfo.InvariantCulture);
@@ -135,7 +140,11 @@ namespace PsdzClient.Core
                     formulaConfig.SubRuleIds.Add(ruleId);
                 }
             }
-            stringBuilder.Append("\")");
+            if (!formulaConfig.IsRuleValidNumFunc)
+            {
+                stringBuilder.Append("\"");
+            }
+            stringBuilder.Append(")");
             stringBuilder.Append(FormulaSeparator(formulaConfig));
 
             return stringBuilder.ToString();

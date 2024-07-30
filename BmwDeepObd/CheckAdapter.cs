@@ -9,6 +9,7 @@ using Android.Text.Method;
 using Android.Views;
 using Android.Widget;
 using AndroidX.AppCompat.App;
+using BmwDeepObd.Dialogs;
 using EdiabasLib;
 
 namespace BmwDeepObd;
@@ -97,15 +98,16 @@ public class CheckAdapter : IDisposable
                     {
                         case ActivityCommon.InterfaceType.Bluetooth:
                         {
-                            BluetoothSocket bluetoothSocket = EdBluetoothInterface.BluetoothSocket;
-                            if (bluetoothSocket == null)
+                            Stream bluetoothInStream = EdBluetoothInterface.BluetoothInStream;
+                            Stream bluetoothOutStream = EdBluetoothInterface.BluetoothOutStream;
+                            if (bluetoothInStream == null || bluetoothOutStream == null)
                             {
                                 connectOk = false;
                                 break;
                             }
 
-                            inStream = bluetoothSocket.InputStream;
-                            outStream = bluetoothSocket.OutputStream;
+                            inStream = bluetoothInStream;
+                            outStream = bluetoothOutStream;
                             break;
                         }
 
@@ -177,7 +179,6 @@ public class CheckAdapter : IDisposable
                     return;
                 }
                 progress.Dismiss();
-                progress.Dispose();
 
                 switch (adapterType)
                 {
@@ -432,21 +433,28 @@ public class CheckAdapter : IDisposable
 
     private bool InterfacePrepare()
     {
-        if (!_ediabas.EdInterfaceClass.Connected)
+        try
         {
-            if (!_ediabas.EdInterfaceClass.InterfaceConnect())
+            if (!_ediabas.EdInterfaceClass.Connected)
             {
-                return false;
+                if (!_ediabas.EdInterfaceClass.InterfaceConnect())
+                {
+                    return false;
+                }
+                _ediabas.EdInterfaceClass.CommParameter =
+                    new UInt32[] { 0x0000010F, 0x0001C200, 0x000004B0, 0x00000014, 0x0000000A, 0x00000002, 0x00001388 };
+                _ediabas.EdInterfaceClass.CommAnswerLen =
+                    new Int16[] { 0x0000, 0x0000 };
             }
-            _ediabas.EdInterfaceClass.CommParameter =
-                new UInt32[] { 0x0000010F, 0x0001C200, 0x000004B0, 0x00000014, 0x0000000A, 0x00000002, 0x00001388 };
-            _ediabas.EdInterfaceClass.CommAnswerLen =
-                new Int16[] { 0x0000, 0x0000 };
-        }
 
-        _transmitCancelEvent.Reset();
-        _ediabas.EdInterfaceClass.TransmitCancel(false);
-        return true;
+            _transmitCancelEvent.Reset();
+            _ediabas.EdInterfaceClass.TransmitCancel(false);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     public void Dispose()
@@ -484,9 +492,9 @@ public class CheckAdapter : IDisposable
                 }
             }
 
+            _activityCommon = null;
             // Note disposing has been done.
             _disposed = true;
-            _activityCommon = null;
         }
     }
 }

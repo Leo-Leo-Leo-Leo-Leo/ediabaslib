@@ -15,6 +15,8 @@ namespace BmwFileReader
         public const string FaultDataBaseName = "faultdata_";
         public const string FaultDataTypeFault = "F";
         public const string FaultDataTypeInfo = "I";
+        public delegate bool ProgressDelegate(long progress);
+
         private readonly string _rootDir;
         private readonly object _lockObject = new object();
         private readonly Dictionary<string, EcuFunctionStructs.EcuVariant> _ecuVariantDict;
@@ -23,6 +25,68 @@ namespace BmwFileReader
         private readonly Dictionary<string, EcuFunctionStructs.EcuEnvCondLabel> _ecuEnvCondLabelDict;
         private EcuFunctionStructs.EcuFaultData _ecuFaultData;
         private string _ecuFaultDataLanguage;
+
+        private class StreamEventReader : StreamReader
+        {
+            public delegate bool ReadEventHandler(int bytesRead);
+
+            private ReadEventHandler _readHandler;
+            private bool _aborted = false;
+
+            public bool Aborted => _aborted;
+
+            public StreamEventReader(Stream stream, ReadEventHandler readHandler) : base(stream)
+            {
+                _readHandler = readHandler;
+            }
+
+            public override int Read()
+            {
+                int readValue = base.Read();
+                if (readValue != -1)
+                {
+                    CallHandler(1);
+                }
+                return readValue;
+            }
+
+            public override int Read(char[] buffer, int index, int count)
+            {
+                int readCount = base.Read(buffer, index, count);
+                CallHandler(readCount);
+                return readCount;
+            }
+
+            public override int ReadBlock(char[] buffer, int index, int count)
+            {
+                int readCount = base.ReadBlock(buffer, index, count);
+                CallHandler(readCount);
+                return readCount;
+            }
+
+            public override string ReadLine()
+            {
+                string line = base.ReadLine();
+                CallHandler(line?.Length ?? 0);
+                return line;
+            }
+
+            private void CallHandler(int bytesRead)
+            {
+                if (_readHandler != null)
+                {
+                    if (_readHandler(bytesRead))
+                    {
+                        _aborted = true;
+                    }
+                }
+
+                if (_aborted)
+                {
+                    throw new IOException("Read aborted");
+                }
+            }
+        }
 
         public EcuFunctionReader(string rootDir)
         {
@@ -33,10 +97,10 @@ namespace BmwFileReader
             _ecuEnvCondLabelDict = new Dictionary<string, EcuFunctionStructs.EcuEnvCondLabel>();
         }
 
-        public bool Init(string language, out string errorMessage)
+        public bool Init(string language, out string errorMessage, ProgressDelegate progressHandler)
         {
             errorMessage = null;
-            EcuFunctionStructs.EcuFaultData ecuFaultData = GetEcuFaultDataCached(language);
+            EcuFunctionStructs.EcuFaultData ecuFaultData = GetEcuFaultDataCached(language, progressHandler);
             if (ecuFaultData == null)
             {
                 return false;
@@ -91,39 +155,44 @@ namespace BmwFileReader
             List<Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>> fixedFuncStructList =
                 new List<Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>>();
 
-            if (ecuVariant.RefEcuVariantList != null)
+            if (ecuVariant != null)
             {
-                foreach (EcuFunctionStructs.RefEcuVariant refEcuVariant in ecuVariant.RefEcuVariantList)
+                if (ecuVariant.RefEcuVariantList != null)
                 {
-                    if (refEcuVariant.FixedFuncStructList != null)
+                    foreach (EcuFunctionStructs.RefEcuVariant refEcuVariant in ecuVariant.RefEcuVariantList)
                     {
-                        foreach (EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct in refEcuVariant.FixedFuncStructList)
+                        if (refEcuVariant.FixedFuncStructList != null)
                         {
-                            fixedFuncStructList.Add(new Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>(ecuFixedFuncStruct, null));
+                            foreach (EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct in refEcuVariant.FixedFuncStructList)
+                            {
+                                fixedFuncStructList.Add(new Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>(ecuFixedFuncStruct, null));
+                            }
                         }
                     }
                 }
-            }
 
-            if (ecuVariant.EcuFuncStructList != null)
-            {
-                foreach (EcuFunctionStructs.EcuFuncStruct ecuFuncStruct in ecuVariant.EcuFuncStructList)
+                if (ecuVariant.EcuFuncStructList != null)
                 {
-                    if (ecuFuncStruct.FixedFuncStructList != null)
+                    foreach (EcuFunctionStructs.EcuFuncStruct ecuFuncStruct in ecuVariant.EcuFuncStructList)
                     {
-                        foreach (EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct in ecuFuncStruct.FixedFuncStructList)
+                        if (ecuFuncStruct.FixedFuncStructList != null)
                         {
-                            fixedFuncStructList.Add(new Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>(ecuFixedFuncStruct, ecuFuncStruct));
+                            foreach (EcuFunctionStructs.EcuFixedFuncStruct ecuFixedFuncStruct in ecuFuncStruct.FixedFuncStructList)
+                            {
+                                fixedFuncStructList.Add(new Tuple<EcuFunctionStructs.EcuFixedFuncStruct, EcuFunctionStructs.EcuFuncStruct>(ecuFixedFuncStruct, ecuFuncStruct));
+                            }
                         }
                     }
                 }
+
             }
 
             return fixedFuncStructList;
         }
 
-        public bool IsValidFaultCode(Int64 errorCode, bool info, EcuFunctionStructs.EcuVariant ecuVariant, RuleEvalBmw ruleEvalBmw = null, bool relevantOnly = false)
+        public bool IsValidFaultCode(Int64 errorCode, bool info, EcuFunctionStructs.EcuVariant ecuVariant, RuleEvalBmw ruleEvalBmw, out bool isVisible)
         {
+            isVisible = true;
             lock (_lockObject)
             {
                 if (errorCode == 0x0000)
@@ -136,21 +205,16 @@ namespace BmwFileReader
                     return false;
                 }
 
-                if (!relevantOnly)
-                {
-                    return true;
-                }
-
                 if (ecuFaultCode.Relevance.ConvertToInt() < 1)
                 {
-                    return false;
+                    isVisible = false;
                 }
 
                 if (ruleEvalBmw != null)
                 {
                     if (!ruleEvalBmw.EvaluateRule(ecuFaultCode.Id, RuleEvalBmw.RuleType.Fault))
                     {
-                        return false;
+                        isVisible = false;
                     }
                 }
 
@@ -331,14 +395,14 @@ namespace BmwFileReader
             }
         }
 
-        public EcuFunctionStructs.EcuFaultData GetEcuFaultDataCached(string language)
+        public EcuFunctionStructs.EcuFaultData GetEcuFaultDataCached(string language, ProgressDelegate progressHandler)
         {
             lock (_lockObject)
             {
                 if (IsInitRequired(language))
                 {
                     Reset();
-                    _ecuFaultData = GetEcuFaultData(language);
+                    _ecuFaultData = GetEcuFaultData(language, progressHandler);
                     if (_ecuFaultData != null)
                     {
                         _ecuFaultDataLanguage = language;
@@ -408,19 +472,19 @@ namespace BmwFileReader
             return ecuVariant;
         }
 
-        protected EcuFunctionStructs.EcuFaultData GetEcuFaultData(string language)
+        protected EcuFunctionStructs.EcuFaultData GetEcuFaultData(string language, ProgressDelegate progressHandler)
         {
             string fileName = FaultDataBaseName + language.ToLowerInvariant();
-            EcuFunctionStructs.EcuFaultData ecuFaultData = GetEcuDataObject(fileName, typeof(EcuFunctionStructs.EcuFaultData)) as EcuFunctionStructs.EcuFaultData;
+            EcuFunctionStructs.EcuFaultData ecuFaultData = GetEcuDataObject(fileName, typeof(EcuFunctionStructs.EcuFaultData), progressHandler) as EcuFunctionStructs.EcuFaultData;
             if (ecuFaultData == null)
             {
                 fileName = FaultDataBaseName + "en";
-                ecuFaultData = GetEcuDataObject(fileName, typeof(EcuFunctionStructs.EcuFaultData)) as EcuFunctionStructs.EcuFaultData;
+                ecuFaultData = GetEcuDataObject(fileName, typeof(EcuFunctionStructs.EcuFaultData), progressHandler) as EcuFunctionStructs.EcuFaultData;
             }
             return ecuFaultData;
         }
 
-        protected object GetEcuDataObject(string name, Type type)
+        protected object GetEcuDataObject(string name, Type type, ProgressDelegate progressHandler = null)
         {
             try
             {
@@ -444,11 +508,28 @@ namespace BmwFileReader
                         }
                         if (string.Compare(zipEntry.Name, fileName, StringComparison.OrdinalIgnoreCase) == 0)
                         {
-                            Stream zipStream = zf.GetInputStream(zipEntry);
-                            using (TextReader reader = new StreamReader(zipStream))
+                            using (Stream zipStream = zf.GetInputStream(zipEntry))
                             {
-                                XmlSerializer serializer = new XmlSerializer(type);
-                                ecuObject = serializer.Deserialize(reader);
+                                long maxLength = zipEntry.Size;
+                                long readPos = 0;
+                                using (StreamEventReader reader = new StreamEventReader(zipStream, read =>
+                                       {
+                                           if (progressHandler == null)
+                                           {
+                                               return false;
+                                           }
+
+                                           readPos += read;
+                                           return progressHandler(readPos * 100 / maxLength);
+                                       }))
+                                {
+                                    XmlSerializer serializer = new XmlSerializer(type);
+                                    ecuObject = serializer.Deserialize(reader);
+                                    if (reader.Aborted)
+                                    {
+                                        return null;
+                                    }
+                                }
                             }
                             break;
                         }

@@ -5,6 +5,9 @@
     <item name="android:dropDownListViewStyle">@style/SpinnerDividerStyle</item>
     <item name="captionBackgroundColor">@color/colorCaptionBackground</item>
     <item name="captionTextColor">@color/colorCaptionText</item>
+    <item name="balloonBackgroundColor">@color/colorBalloonBackground</item>
+    <item name="balloonTextColor">@color/colorBalloonText</item>
+    <item name="dragBackgroundColor">@color/colorBackgroundDrag</item>
     <item name="gaugePointStartColor">@color/colorGaugePoint</item>
     <item name="gaugePointEndColor">@color/colorGaugePoint</item>
     <item name="gaugeStrokeColor">@color/colorGaugeStroke</item>
@@ -15,6 +18,9 @@
     <item name="android:dropDownListViewStyle">@style/SpinnerDividerStyle</item>
     <item name="captionBackgroundColor">@color/colorCaptionBackgroundLight</item>
     <item name="captionTextColor">@color/colorCaptionTextLight</item>
+    <item name="balloonBackgroundColor">@color/colorBalloonBackgroundLight</item>
+    <item name="balloonTextColor">@color/colorBalloonTextLight</item>
+    <item name="dragBackgroundColor">@color/colorBackgroundDragLight</item>
     <item name="gaugePointStartColor">@color/colorGaugePointLight</item>
     <item name="gaugePointEndColor">@color/colorGaugePointLight</item>
     <item name="gaugeStrokeColor">@color/colorGaugeStrokeLight</item>
@@ -43,5 +49,10 @@
     <item name="android:windowIsFloating">true</item>
     <item name="android:backgroundDimEnabled">false</item>
     <item name="android:windowAnimationStyle">@null</item>
+  </style>
+  <style name="Divider">
+    <item name="android:layout_width">match_parent</item>
+    <item name="android:layout_height">1dp</item>
+    <item name="android:background">?android:attr/listDivider</item>
   </style>
 </resources>

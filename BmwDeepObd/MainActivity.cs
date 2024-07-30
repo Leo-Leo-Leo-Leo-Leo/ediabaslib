@@ -8,11 +8,10 @@ using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
-using System.Xml.Serialization;
-using Android.App.Backup;
 using Android.Content;
 using Android.Content.PM;
 using Android.Content.Res;
@@ -25,7 +24,6 @@ using Android.Widget;
 using AndroidX.AppCompat.App;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
-using AndroidX.Core.Content.PM;
 using AndroidX.Core.View;
 using AndroidX.Fragment.App;
 using AndroidX.Lifecycle;
@@ -33,12 +31,13 @@ using AndroidX.RecyclerView.Widget;
 using AndroidX.ViewPager2.Adapter;
 using AndroidX.ViewPager2.Widget;
 using Base62;
+using BmwDeepObd.Dialogs;
 using BmwDeepObd.FilePicker;
 using BmwFileReader;
 using EdiabasLib;
 using Google.Android.Material.Tabs;
 using Java.Interop;
-using Mono.CSharp;
+using Skydoves.BalloonLib;
 // ReSharper disable MergeCastWithTypeCheck
 // ReSharper disable IdentifierTypo
 // ReSharper disable StringLiteralTypo
@@ -76,27 +75,12 @@ namespace BmwDeepObd
             RequestEdiabasTool,
             RequestBmwCoding,
             RequestOpenExternalFile,
+            RequestServiceBusy,
             RequestYandexKey,
             RequestGlobalSettings,
             RequestGlobalSettingsCopy,
             RequestEditConfig,
             RequestEditXml,
-        }
-
-        public enum SettingsMode
-        {
-            All,
-            Private,
-            Public,
-        }
-
-        public enum LastAppState
-        {
-            [XmlEnum(Name = "Init")] Init,
-            [XmlEnum(Name = "Compile")] Compile,
-            [XmlEnum(Name = "Compiled")] Compiled,
-            [XmlEnum(Name = "TabsCreated")] TabsCreated,
-            [XmlEnum(Name = "Stopped")] Stopped,
         }
 
         private class DownloadInfo
@@ -152,284 +136,19 @@ namespace BmwDeepObd
             public string Message { get; }
         }
 
-        public class InstanceData
+        public class InstanceData : ActivityCommon.InstanceDataCommon
         {
             public InstanceData()
             {
-                LastLocale = string.Empty;
-                LastAppState = LastAppState.Init;
-                LastSettingsHash = string.Empty;
-                AppDataPath = string.Empty;
-                EcuPath = string.Empty;
-                VagPath = string.Empty;
-                TraceActive = true;
-                DeviceName = string.Empty;
-                DeviceAddress = string.Empty;
-                ConfigFileName = string.Empty;
-                CheckCpuUsage = true;
-                VerifyEcuFiles = true;
-                SelectedEnetIp = string.Empty;
-                SelectedElmWifiIp = string.Empty;
-                SelectedDeepObdWifiIp = string.Empty;
             }
 
-            public string LastLocale { get; set; }
-            public ActivityCommon.ThemeType? LastThemeType { get; set; }
-            public LastAppState LastAppState { get; set; }
-            public string LastSettingsHash { get; set; }
-            public bool GetSettingsCalled { get; set; }
-            public string AppDataPath { get; set; }
-            public string EcuPath { get; set; }
-            public string VagPath { get; set; }
-            public string BmwPath { get; set; }
-            public bool UserEcuFiles { get; set; }
-            public bool TraceActive { get; set; }
-            public bool TraceAppend { get; set; }
-            public bool DataLogActive { get; set; }
-            public bool DataLogAppend { get; set; }
-            public string DeviceName { get; set; }
-            public string DeviceAddress { get; set; }
-            public string ConfigFileName { get; set; }
-            public long LastVersionCode { get; set; }
-            public bool VersionInfoShown { get; set; }
-            public bool StorageRequirementsAccepted { get; set; }
-            public bool LocationProviderShown { get; set; }
-            public bool BatteryWarningShown { get; set; }
-            public bool ConfigMatchVehicleShown { get; set; }
-            public bool DataLogTemporaryShown { get; set; }
-            public bool CheckCpuUsage { get; set; }
-            public bool VerifyEcuFiles { get; set; }
-            public bool VerifyEcuMd5 { get; set; }
-            public int CommErrorsCount { get; set; }
-            public bool AutoStart { get; set; }
-            public bool AdapterCheckOk { get; set; }
-            public bool VagInfoShown { get; set; }
-            public string DataLogDir { get; set; }
-            public string TraceDir { get; set; }
-            public string TraceBackupDir { get; set; }
-            public bool UpdateAvailable { get; set; }
-            public int UpdateVersionCode { get; set; }
-            public string UpdateMessage { get; set; }
-            public long UpdateCheckTime { get; set; }
-            public int UpdateSkipVersion { get; set; }
-            public long TransLoginTimeNext { get; set; }
-            public string XmlEditorPackageName { get; set; }
-            public string XmlEditorClassName { get; set; }
-
-            public ActivityCommon.InterfaceType SelectedInterface { get; set; }
-            public string SelectedEnetIp { get; set; }
-            public string SelectedElmWifiIp { get; set; }
-            public string SelectedDeepObdWifiIp { get; set; }
-        }
-
-        [XmlInclude(typeof(ActivityCommon.SerialInfoEntry))]
-        [XmlType("Settings")]
-        public class StorageData
-        {
-            public StorageData()
-            {
-                InitCommonData();
-                ActivityMain activityMain = GetActivityFromStack(typeof(ActivityMain)) as ActivityMain;
-                if (activityMain != null)
-                {
-                    InitData(activityMain);
-                }
-            }
-
-            public StorageData(ActivityMain activityMain, bool storage = false)
-            {
-                InitCommonData();
-                InitData(activityMain, storage);
-            }
-
-            public void InitCommonData()
-            {
-                LastAppState = LastAppState.Init;
-                SelectedLocale = ActivityCommon.SelectedLocale ?? string.Empty;
-                SelectedTheme = ActivityCommon.SelectedTheme ?? ActivityCommon.ThemeDefault;
-                DeviceName = string.Empty;
-                DeviceAddress = string.Empty;
-                ConfigFileName = string.Empty;
-                UpdateCheckTime = DateTime.MinValue.Ticks;
-                UpdateSkipVersion = -1;
-                TransLoginTimeNext = DateTime.MinValue.Ticks;
-                LastVersionCode = -1;
-                StorageRequirementsAccepted = false;
-                XmlEditorPackageName = string.Empty;
-                XmlEditorClassName = string.Empty;
-
-                RecentConfigFiles = new List<string>();
-                CustomStorageMedia = ActivityCommon.CustomStorageMedia;
-                CopyToAppSrc = ActivityCommon.CopyToAppSrc;
-                CopyToAppDst = ActivityCommon.CopyToAppDst;
-                CopyFromAppSrc = ActivityCommon.CopyFromAppSrc;
-                CopyFromAppDst = ActivityCommon.CopyFromAppDst;
-                UsbFirmwareFileName = ActivityCommon.UsbFirmwareFileName;
-                EnableTranslation = ActivityCommon.EnableTranslation;
-                YandexApiKey = ActivityCommon.YandexApiKey;
-                IbmTranslatorApiKey = ActivityCommon.IbmTranslatorApiKey;
-                IbmTranslatorUrl = ActivityCommon.IbmTranslatorUrl;
-                DeeplApiKey = ActivityCommon.DeeplApiKey;
-                Translator = ActivityCommon.SelectedTranslator;
-                ShowBatteryVoltageWarning = ActivityCommon.ShowBatteryVoltageWarning;
-                BatteryWarnings = ActivityCommon.BatteryWarnings;
-                BatteryWarningVoltage = ActivityCommon.BatteryWarningVoltage;
-                SerialInfo = new List<ActivityCommon.SerialInfoEntry>();
-                AdapterBlacklist = ActivityCommon.AdapterBlacklist;
-                LastAdapterSerial = ActivityCommon.LastAdapterSerial;
-                EmailAddress = ActivityCommon.EmailAddress;
-                TraceInfo = ActivityCommon.TraceInfo;
-                AppId = ActivityCommon.AppId;
-                AutoHideTitleBar = ActivityCommon.AutoHideTitleBar;
-                SuppressTitleBar = ActivityCommon.SuppressTitleBar;
-                FullScreenMode = ActivityCommon.FullScreenMode;
-                SwapMultiWindowOrientation = ActivityCommon.SwapMultiWindowOrientation;
-                SelectedInternetConnection = ActivityCommon.SelectedInternetConnection;
-                SelectedManufacturer = ActivityCommon.SelectedManufacturer;
-                BtEnbaleHandling = ActivityCommon.BtEnbaleHandling;
-                BtDisableHandling = ActivityCommon.BtDisableHandling;
-                LockTypeCommunication = ActivityCommon.LockTypeCommunication;
-                LockTypeLogging = ActivityCommon.LockTypeLogging;
-                StoreDataLogSettings = ActivityCommon.StoreDataLogSettings;
-                AutoConnectHandling = ActivityCommon.AutoConnectHandling;
-                UpdateCheckDelay = ActivityCommon.UpdateCheckDelay;
-                DoubleClickForAppExit = ActivityCommon.DoubleClickForAppExit;
-                SendDataBroadcast = ActivityCommon.SendDataBroadcast;
-                CheckCpuUsage = ActivityCommon.CheckCpuUsage;
-                CheckEcuFiles = ActivityCommon.CheckEcuFiles;
-                OldVagMode = ActivityCommon.OldVagMode;
-                UseBmwDatabase = ActivityCommon.UseBmwDatabase;
-                ShowOnlyRelevantErrors = ActivityCommon.ShowOnlyRelevantErrors;
-                ScanAllEcus = ActivityCommon.ScanAllEcus;
-                CollectDebugInfo = ActivityCommon.CollectDebugInfo;
-            }
-
-            public void InitData(ActivityMain activityMain, bool storage = false)
-            {
-                if (activityMain == null)
-                {
-                    return;
-                }
-
-                InstanceData instanceData = activityMain._instanceData;
-                ActivityCommon activityCommon = activityMain.ActivityCommonMain;
-
-                if (instanceData == null || activityCommon == null)
-                {
-                    return;
-                }
-
-                LastAppState = instanceData.LastAppState;
-                SelectedEnetIp = activityCommon.SelectedEnetIp;
-                SelectedElmWifiIp = activityCommon.SelectedElmWifiIp;
-                SelectedDeepObdWifiIp = activityCommon.SelectedDeepObdWifiIp;
-                DeviceName = instanceData.DeviceName;
-                DeviceAddress = instanceData.DeviceAddress;
-                ConfigFileName = instanceData.ConfigFileName;
-                UpdateCheckTime = instanceData.UpdateCheckTime;
-                UpdateSkipVersion = instanceData.UpdateSkipVersion;
-                LastVersionCode = activityMain._currentVersionCode;
-                StorageRequirementsAccepted = instanceData.StorageRequirementsAccepted;
-                XmlEditorPackageName = instanceData.XmlEditorPackageName ?? string.Empty;
-                XmlEditorClassName = instanceData.XmlEditorClassName ?? string.Empty;
-                DataLogActive = instanceData.DataLogActive;
-                DataLogAppend = instanceData.DataLogAppend;
-                if (storage)
-                {
-                    RecentConfigFiles = ActivityCommon.GetRecentConfigList();
-                    SerialInfo = ActivityCommon.GetSerialInfoList();
-                }
-            }
-
-            public string CalcualeHash()
-            {
-                StringBuilder sb = new StringBuilder();
-                PropertyInfo[] properties = GetType().GetProperties();
-                foreach (PropertyInfo property in properties)
-                {
-                    object value = property.GetValue(this);
-                    if (value != null)
-                    {
-                        sb.Append(value);
-                    }
-                }
-
-                using (SHA256Managed sha256 = new SHA256Managed())
-                {
-                    return BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()))).Replace("-", "");
-                }
-            }
-
-            [XmlElement("LastAppState")] public LastAppState LastAppState { get; set; }
-            [XmlElement("Locale")] public string SelectedLocale { get; set; }
-            [XmlElement("Theme")] public ActivityCommon.ThemeType SelectedTheme { get; set; }
-            [XmlElement("EnetIp")] public string SelectedEnetIp { get; set; }
-            [XmlElement("ElmWifiIp")] public string SelectedElmWifiIp { get; set; }
-            [XmlElement("DeepObdWifiIp")] public string SelectedDeepObdWifiIp { get; set; }
-            [XmlElement("DeviceName")] public string DeviceName { get; set; }
-            [XmlElement("DeviceAddress")] public string DeviceAddress { get; set; }
-            [XmlElement("ConfigFile")] public string ConfigFileName { get; set; }
-            [XmlElement("UpdateCheckTime")] public long UpdateCheckTime { get; set; }
-            [XmlElement("UpdateSkipVersion")] public int UpdateSkipVersion { get; set; }
-            [XmlElement("TransLoginTimeNext")] public long TransLoginTimeNext { get; set; }
-            [XmlElement("VersionCode")] public long LastVersionCode { get; set; }
-            [XmlElement("StorageAccepted")] public bool StorageRequirementsAccepted { get; set; }
-            [XmlElement("XmlEditorPackageName")] public string XmlEditorPackageName { get; set; }
-            [XmlElement("XmlEditorClassName")] public string XmlEditorClassName { get; set; }
-            [XmlElement("DataLogActive")] public bool DataLogActive { get; set; }
-            [XmlElement("DataLogAppend")] public bool DataLogAppend { get; set; }
-
-            [XmlElement("RecentConfigFiles")] public List<string> RecentConfigFiles { get; set; }
-            [XmlElement("StorageMedia")] public string CustomStorageMedia { get; set; }
-            [XmlElement("CopyToAppSrc")] public string CopyToAppSrc { get; set; }
-            [XmlElement("CopyToAppDst")] public string CopyToAppDst { get; set; }
-            [XmlElement("CopyFromAppSrc")] public string CopyFromAppSrc { get; set; }
-            [XmlElement("CopyFromAppDst")] public string CopyFromAppDst { get; set; }
-            [XmlElement("UsbFirmwareFile")] public string UsbFirmwareFileName { get; set; }
-            [XmlElement("EnableTranslation")] public bool EnableTranslation { get; set; }
-            [XmlElement("YandexApiKey")] public string YandexApiKey { get; set; }
-            [XmlElement("IbmTranslatorApiKey")] public string IbmTranslatorApiKey { get; set; }
-            [XmlElement("IbmTranslatorUrl")] public string IbmTranslatorUrl { get; set; }
-            [XmlElement("DeeplApiKey")] public string DeeplApiKey { get; set; }
-            [XmlElement("Translator")] public ActivityCommon.TranslatorType Translator { get; set; }
-            [XmlElement("ShowBatteryVoltageWarning")] public bool ShowBatteryVoltageWarning { get; set; }
-            [XmlElement("BatteryWarnings")] public long BatteryWarnings { get; set; }
-            [XmlElement("BatteryWarningVoltage")] public double BatteryWarningVoltage { get; set; }
-            [XmlElement("SerialInfo")] public List<ActivityCommon.SerialInfoEntry> SerialInfo { get; set; }
-            [XmlElement("AdapterBlacklist")] public string AdapterBlacklist { get; set; }
-            [XmlElement("LastAdapterSerial")] public string LastAdapterSerial { get; set; }
-            [XmlElement("EmailAddress")] public string EmailAddress { get; set; }
-            [XmlElement("TraceInfo")] public string TraceInfo { get; set; }
-            [XmlElement("AppId")] public string AppId { get; set; }
-            [XmlElement("AutoHideTitleBar")] public bool AutoHideTitleBar { get; set; }
-            [XmlElement("SuppressTitleBar")] public bool SuppressTitleBar { get; set; }
-            [XmlElement("FullScreenMode")] public bool FullScreenMode { get; set; }
-            [XmlElement("SwapMultiWindowOrientation")] public bool SwapMultiWindowOrientation { get; set; }
-            [XmlElement("InternetConnection")] public ActivityCommon.InternetConnectionType SelectedInternetConnection { get; set; }
-            [XmlElement("Manufacturer")] public ActivityCommon.ManufacturerType SelectedManufacturer { get; set; }
-            [XmlElement("BtEnbale")] public ActivityCommon.BtEnableType BtEnbaleHandling { get; set; }
-            [XmlElement("BtDisable")] public ActivityCommon.BtDisableType BtDisableHandling { get; set; }
-            [XmlElement("LockComm")] public ActivityCommon.LockType LockTypeCommunication { get; set; }
-            [XmlElement("LockLog")] public ActivityCommon.LockType LockTypeLogging { get; set; }
-            [XmlElement("StoreDataLogSettings")] public bool StoreDataLogSettings { get; set; }
-            [XmlElement("AutoConnect")] public ActivityCommon.AutoConnectType AutoConnectHandling { get; set; }
-            [XmlElement("UpdateCheckDelay")] public long UpdateCheckDelay { get; set; }
-            [XmlElement("DoubleClickForAppExit")] public bool DoubleClickForAppExit { get; set; }
-            [XmlElement("SendDataBroadcast")] public bool SendDataBroadcast { get; set; }
-            [XmlElement("CheckCpuUsage")] public bool CheckCpuUsage { get; set; }
-            [XmlElement("CheckEcuFiles")] public bool CheckEcuFiles { get; set; }
-            [XmlElement("OldVagMode")] public bool OldVagMode { get; set; }
-            [XmlElement("UseBmwDatabase")] public bool UseBmwDatabase { get; set; }
-            [XmlElement("ShowOnlyRelevantErrors")] public bool ShowOnlyRelevantErrors { get; set; }
-            [XmlElement("ScanAllEcus")] public bool ScanAllEcus { get; set; }
-            [XmlElement("CollectDebugInfo")] public bool CollectDebugInfo { get; set; }
+            public bool MtcBtDisconnectWarnShown { get; set; }
+            public bool AutoConnectExecuted { get; set; }
         }
 
 #if DEBUG
         private static readonly string Tag = typeof(ActivityMain).FullName;
 #endif
-        private const string SharedAppName = ActivityCommon.AppNameSpace;
-        private const string AppFolderName = ActivityCommon.AppNameSpace;
         private const string EcuDownloadUrl = @"https://www.holeschak.de/BmwDeepObd/Obb.php";
         private const long EcuExtractSize = 2600000000;         // extracted ecu files size
         private const string InfoXmlName = "ObbInfo.xml";
@@ -449,15 +168,13 @@ namespace BmwDeepObd
         };
 
         public const string ExtraShowTitle = "show_title";
-        public static readonly CultureInfo Culture = CultureInfo.CreateSpecificCulture("en");
+        public static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
         public static bool StoreXmlEditor = Build.VERSION.SdkInt >= BuildVersionCodes.LollipopMr1;
         private InstanceData _instanceData = new InstanceData();
         private bool _activityRecreated;
         private bool _lastCompileCrash;
-        private ActivityCommon.AutoConnectType _connectTypeRequest;
         private bool _backPressed;
         private long _lastBackPressedTime;
-        private long _currentVersionCode;
         private bool _activityActive;
         private bool _onResumeExecuted;
         private bool _storageAccessGranted;
@@ -485,11 +202,11 @@ namespace BmwDeepObd
         private Java.Lang.Runnable _updateDisplayRunnable;
         private Java.Lang.Runnable _updateDisplayForceRunnable;
         private SelectTabPageRunnable _selectTabPageRunnable;
-        private BackupManager _backupManager;
         private CheckAdapter _checkAdapter;
         private TabLayout _tabLayout;
         private ViewPager2 _viewPager;
         private TabsFragmentStateAdapter _fragmentStateAdapter;
+        protected View _contentView;
         private readonly ConnectButtonInfo _connectButtonInfo = new ConnectButtonInfo();
         private ImageView _imageBackground;
         private HttpClient _httpClient;
@@ -510,18 +227,7 @@ namespace BmwDeepObd
 
         public ActivityCommon ActivityCommonMain => _activityCommon;
 
-        private string ManufacturerEcuDirName
-        {
-            get
-            {
-                switch (ActivityCommon.SelectedManufacturer)
-                {
-                    case ActivityCommon.ManufacturerType.Bmw:
-                        return Path.Combine(ActivityCommon.EcuBaseDir, ActivityCommon.EcuDirNameBmw);
-                }
-                return Path.Combine(ActivityCommon.EcuBaseDir, ActivityCommon.EcuDirNameVag);
-            }
-        }
+        public InstanceData InstanceDataMain => _instanceData;
 
         public void OnTabReselected(TabLayout.Tab tab)
         {
@@ -546,7 +252,7 @@ namespace BmwDeepObd
         protected override void OnCreate(Bundle savedInstanceState)
         {
             AddActivityToStack(this);
-            GetThemeSettings();
+            ActivityCommon.GetThemeSettings();
             SetTheme(ActivityCommon.SelectedThemeId);
             base.OnCreate(savedInstanceState);
 
@@ -573,6 +279,7 @@ namespace BmwDeepObd
             _tabLayout.TabMode = TabLayout.ModeScrollable;
             _tabLayout.TabGravity = TabLayout.GravityStart;
             _tabLayout.Visibility = ViewStates.Gone;
+            _contentView = FindViewById<View>(Android.Resource.Id.Content);
 
             StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
             StrictMode.SetVmPolicy(builder.Build());
@@ -596,16 +303,17 @@ namespace BmwDeepObd
                 _activityCommon.SelectedEnetIp = _instanceData.SelectedEnetIp;
                 _activityCommon.SelectedElmWifiIp = _instanceData.SelectedElmWifiIp;
                 _activityCommon.SelectedDeepObdWifiIp = _instanceData.SelectedDeepObdWifiIp;
+                _activityCommon.MtcBtDisconnectWarnShown = _instanceData.MtcBtDisconnectWarnShown;
             }
 
             GetSettings();
             _lastCompileCrash = false;
             if (!_activityRecreated && _instanceData != null)
             {
-                if (_instanceData.LastAppState == LastAppState.Compile)
+                if (_instanceData.LastAppState == ActivityCommon.LastAppState.Compile)
                 {
                     _lastCompileCrash = true;
-                    _instanceData.LastAppState = LastAppState.Init;
+                    _instanceData.LastAppState = ActivityCommon.LastAppState.Init;
                     _instanceData.ConfigFileName = string.Empty;
                     StoreSettings();
                 }
@@ -628,18 +336,18 @@ namespace BmwDeepObd
 
             _selectTabPageRunnable = new SelectTabPageRunnable(this);
 
-            _backupManager = new BackupManager(this);
             _checkAdapter = new CheckAdapter(_activityCommon);
             _imageBackground = FindViewById<ImageView>(Resource.Id.imageBackground);
 
-            StoreLastAppState(LastAppState.Init);
+            StoreLastAppState(ActivityCommon.LastAppState.Init);
 
             if (_httpClient == null)
             {
                 _httpClient = new HttpClient(new HttpClientHandler()
                 {
                     SslProtocols = ActivityCommon.DefaultSslProtocols,
-                    ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
+                    ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true,
+                    Proxy = ActivityCommon.GetProxySettings()
                 });
             }
 
@@ -649,16 +357,38 @@ namespace BmwDeepObd
                 _instanceDataBase.ActionBarVisible = true;
             }
 
-            _connectTypeRequest = ActivityCommon.AutoConnectHandling;
             if (ActivityCommon.CommActive)
             {
-                ConnectEdiabasEvents();
+                lock (ActivityCommon.GlobalLockObject)
+                {
+                    ConnectEdiabasEvents();
+                }
             }
             else
             {
+                if (!ForegroundService.IsCommThreadRunning())
+                {
+                    ActivityCommon.StopForegroundService(this);
+                }
+
                 if (!_activityRecreated)
                 {
                     ActivityCommon.BtInitiallyEnabled = _activityCommon.IsBluetoothEnabled();
+#if false
+                    if (ActivityCommon.AutoConnectHandling == ActivityCommon.AutoConnectType.StartBoot)
+                    {
+                        try
+                        {
+                            Intent broadcastIntent = new Intent(ActionBroadcastReceiver.ActionStartService);
+                            broadcastIntent.SetClass(this, typeof(ActionBroadcastReceiver));
+                            SendBroadcast(broadcastIntent);
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+                    }
+#endif
                 }
             }
         }
@@ -699,6 +429,7 @@ namespace BmwDeepObd
             }
             _createTabsPending = false;
 
+            bool autoConnect = false;
             // get last active tab
             JobReader.PageInfo currentPage = null;
             if (IsCommActive())
@@ -708,6 +439,17 @@ namespace BmwDeepObd
             }
             else
             {
+                if (!_instanceData.AutoConnectExecuted)
+                {
+                    switch (ActivityCommon.AutoConnectHandling)
+                    {
+                        case ActivityCommon.AutoConnectType.Connect:
+                        case ActivityCommon.AutoConnectType.ConnectClose:
+                            autoConnect = true;
+                            break;
+                    }
+                }
+
                 if (_tabsCreated)
                 {
                     currentPage = GetSelectedPage();
@@ -715,17 +457,24 @@ namespace BmwDeepObd
             }
 
             int pageIndex = 0;
-            if (currentPage != null)
+            if (autoConnect)
             {
-                int i = 0;
-                foreach (JobReader.PageInfo pageInfo in ActivityCommon.JobReader.PageList)
+                pageIndex = _instanceData.LastSelectedJobIndex;
+            }
+            else
+            {
+                if (currentPage != null)
                 {
-                    if (pageInfo == currentPage)
+                    int i = 0;
+                    foreach (JobReader.PageInfo pageInfo in ActivityCommon.JobReader.PageList)
                     {
-                        pageIndex = i;
-                        break;
+                        if (pageInfo == currentPage)
+                        {
+                            pageIndex = i;
+                            break;
+                        }
+                        i++;
                     }
-                    i++;
                 }
             }
 
@@ -761,25 +510,28 @@ namespace BmwDeepObd
             _ignoreTabsChange = false;
             _tabsCreated = true;
             UpdateDisplay();
-            StoreLastAppState(LastAppState.TabsCreated);
+            StoreLastAppState(ActivityCommon.LastAppState.TabsCreated);
 
-            switch (_connectTypeRequest)
+            if (autoConnect)
             {
-                case ActivityCommon.AutoConnectType.Connect:
-                case ActivityCommon.AutoConnectType.ConnectClose:
-                    if (ActivityCommon.JobReader.PageList.Count > 0 &&
-                        !ActivityCommon.CommActive && _activityCommon.IsInterfaceAvailable())
+                if (ActivityCommon.JobReader.PageList.Count > 0 &&
+                    !ActivityCommon.CommActive && _activityCommon.IsInterfaceAvailable())
+                {
+                    ButtonConnectClick(_connectButtonInfo.Button, new EventArgsConnect(true));
+                    if (UseCommService() && ActivityCommon.CommActive &&
+                        ActivityCommon.AutoConnectHandling == ActivityCommon.AutoConnectType.ConnectClose)
                     {
-                        ButtonConnectClick(_connectButtonInfo.Button, EventArgs.Empty);
-                        if (UseCommService() && ActivityCommon.SendDataBroadcast && ActivityCommon.CommActive &&
-                            _connectTypeRequest == ActivityCommon.AutoConnectType.ConnectClose)
-                        {
-                            Finish();
-                        }
+                        _instanceData.AutoConnectExecuted = true;
+                        Finish();
                     }
-                    break;
+                }
             }
-            _connectTypeRequest = ActivityCommon.AutoConnectType.Offline;
+            else
+            {
+                StoreActiveJobIndex();
+            }
+
+            _instanceData.AutoConnectExecuted = true;
         }
 
         protected override void OnSaveInstanceState(Bundle outState)
@@ -789,6 +541,7 @@ namespace BmwDeepObd
             _instanceData.SelectedEnetIp = _activityCommon.SelectedEnetIp;
             _instanceData.SelectedElmWifiIp = _activityCommon.SelectedElmWifiIp;
             _instanceData.SelectedDeepObdWifiIp = _activityCommon.SelectedDeepObdWifiIp;
+            _instanceData.MtcBtDisconnectWarnShown = _activityCommon.MtcBtDisconnectWarnShown;
             StoreInstanceState(outState, _instanceData);
             base.OnSaveInstanceState(outState);
         }
@@ -824,7 +577,7 @@ namespace BmwDeepObd
             base.OnStop();
 
             _activityCommon?.StopMtcService();
-            StoreLastAppState(LastAppState.Stopped);
+            StoreLastAppState(ActivityCommon.LastAppState.Stopped);
 #if false
             try
             {
@@ -848,6 +601,11 @@ namespace BmwDeepObd
 #endif
             base.OnResume();
 
+            if (CheckForegroundService((int)ActivityRequest.RequestServiceBusy))
+            {
+                return;
+            }
+
             bool firstStart = !_onResumeExecuted;
             if (!_onResumeExecuted)
             {
@@ -863,7 +621,6 @@ namespace BmwDeepObd
             _activityActive = true;
             if (_activityCommon != null)
             {
-                _activityCommon.MtcBtDisconnectWarnShown = false;
                 _activityCommon.NotificationManagerCompat?.Cancel(CustomDownloadNotification.NotificationId);
             }
 
@@ -959,6 +716,8 @@ namespace BmwDeepObd
         public override void Finish()
         {
             base.Finish();
+
+            _instanceData.AutoConnectExecuted = false;
             if (!ActivityCommon.CommActive && _activityCommon != null)
             {
                 _activityCommon.BluetoothDisableAtExit();
@@ -973,7 +732,11 @@ namespace BmwDeepObd
             {
                 StopEdiabasThread(true);
             }
-            DisconnectEdiabasEvents();
+
+            lock (ActivityCommon.GlobalLockObject)
+            {
+                DisconnectEdiabasEvents();
+            }
 
             if (IsErrorEvalJobRunning())
             {
@@ -984,6 +747,7 @@ namespace BmwDeepObd
             {
                 try
                 {
+                    _httpClient.CancelPendingRequests();
                     _httpClient.Dispose();
                 }
                 catch (Exception)
@@ -1019,7 +783,6 @@ namespace BmwDeepObd
                 try
                 {
                     _updateHandler.RemoveCallbacksAndMessages(null);
-                    _updateHandler.Dispose();
                 }
                 catch (Exception)
                 {
@@ -1052,7 +815,7 @@ namespace BmwDeepObd
             {
                 _backPressed = true;
                 _lastBackPressedTime = Stopwatch.GetTimestamp();
-                Toast.MakeText(this, GetString(Resource.String.back_button_twice_for_exit), ToastLength.Short)?.Show();
+                ShowBallonMessage(GetString(Resource.String.back_button_twice_for_exit));
             }
         }
 
@@ -1233,6 +996,31 @@ namespace BmwDeepObd
                     UpdateDisplay();
                     break;
 
+                case ActivityRequest.RequestServiceBusy:
+                    if (resultCode == Android.App.Result.Canceled)
+                    {
+                        Finish();
+                        return;
+                    }
+
+                    if (CheckForegroundService((int)ActivityRequest.RequestServiceBusy))
+                    {
+                        return;
+                    }
+
+                    if (ActivityCommon.CommActive)
+                    {
+                        lock (ActivityCommon.GlobalLockObject)
+                        {
+                            DisconnectEdiabasEvents();
+                            ConnectEdiabasEvents();
+                        }
+                    }
+
+                    UpdateOptionsMenu();
+                    UpdateDisplay();
+                    break;
+
                 case ActivityRequest.RequestYandexKey:
                     ActivityCommon.EnableTranslation = ActivityCommon.IsTranslationAvailable();
                     StoreSettings();
@@ -1248,10 +1036,11 @@ namespace BmwDeepObd
                         {
                             string exportFileName = data.Extras.GetString(GlobalSettingsActivity.ExtraExportFile);
                             string importFileName = data.Extras.GetString(GlobalSettingsActivity.ExtraImportFile);
-                            SettingsMode settingsMode = (SettingsMode)data.Extras.GetInt(GlobalSettingsActivity.ExtraSettingsMode, (int)SettingsMode.Private);
+                            ActivityCommon.SettingsMode settingsMode = (ActivityCommon.SettingsMode)data.Extras.GetInt(GlobalSettingsActivity.ExtraSettingsMode,
+                                (int)ActivityCommon.SettingsMode.Private);
                             if (!string.IsNullOrEmpty(exportFileName))
                             {
-                                if (!StoreSettings(exportFileName, settingsMode, out string errorMessage))
+                                if (!_activityCommon.StoreSettingsToFile(_instanceData, exportFileName, settingsMode, out string errorMessage))
                                 {
                                     string message = GetString(Resource.String.store_settings_failed);
                                     if (errorMessage != null)
@@ -1269,7 +1058,11 @@ namespace BmwDeepObd
                             }
                             else if (!string.IsNullOrEmpty(importFileName))
                             {
-                                GetSettings(importFileName, SettingsMode.Private);
+                                if (!_activityCommon.GetSettingsFromFile(_instanceData, importFileName, ActivityCommon.SettingsMode.Private, !_activityRecreated))
+                                {
+                                    string message = GetString(Resource.String.settings_import_no_file) + "\r\n" + exportFileName;
+                                    _activityCommon.ShowAlert(message, Resource.String.alert_title_error);
+                                }
                             }
                         }
 
@@ -1314,7 +1107,7 @@ namespace BmwDeepObd
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
             MenuInflater inflater = MenuInflater;
-            inflater.Inflate(Resource.Menu.option_menu, menu);
+            inflater.Inflate(Resource.Menu.main_option_menu, menu);
             _optionsMenu = menu;
             return base.OnCreateOptionsMenu(menu);
         }
@@ -1327,9 +1120,21 @@ namespace BmwDeepObd
             }
 
             bool commActive = IsCommActive();
-            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable();
+            bool interfaceAvailable = _activityCommon.IsInterfaceAvailable(true);
             bool pageSgbd = !string.IsNullOrEmpty(GetSelectedPageSgbd());
             bool selectedPageFuncAvail = SelectedPageFunctionsAvailable();
+            JobReader.PageInfo currentPage = GetSelectedPage();
+            bool enableSelectedPageEdit = !string.IsNullOrEmpty(currentPage?.XmlFileName);
+
+            bool hasDisplayOrder = false;
+            if (currentPage != null)
+            {
+                if (currentPage.ErrorsInfo == null)
+                {
+                    int orderCount = currentPage.DisplayList.Count(x => x.DisplayOrder != null);
+                    hasDisplayOrder = orderCount > 1 && orderCount == currentPage.DisplayList.Count;
+                }
+            }
 
             IMenuItem actionProviderConnect = menu.FindItem(Resource.Id.menu_action_provider_connect);
             if (actionProviderConnect != null)
@@ -1376,7 +1181,6 @@ namespace BmwDeepObd
             IMenuItem cfgSubmenu = menu.FindItem(Resource.Id.menu_cfg_submenu);
             if (cfgSubmenu != null)
             {
-                _activityCommon.SetMenuDocumentTreeTooltip(cfgSubmenu);
                 cfgSubmenu.SetEnabled(!commActive);
             }
 
@@ -1491,8 +1295,29 @@ namespace BmwDeepObd
             IMenuItem cfgPagesEditMenu = menu.FindItem(Resource.Id.menu_cfg_pages_edit);
             cfgPagesEditMenu?.SetEnabled(!commActive && !string.IsNullOrEmpty(_instanceData.ConfigFileName) && !string.IsNullOrEmpty(ActivityCommon.JobReader.XmlFileNamePages));
 
+            IMenuItem cfgPageMenu = menu.FindItem(Resource.Id.menu_cfg_page_menu);
+            cfgPageMenu?.SetEnabled(!commActive && enableSelectedPageEdit);
+
             IMenuItem cfgPageEditMenu = menu.FindItem(Resource.Id.menu_cfg_page_edit);
-            cfgPageEditMenu?.SetEnabled(!commActive && !string.IsNullOrEmpty(GetSelectedPage()?.XmlFileName));
+            cfgPageEditMenu?.SetEnabled(!commActive && enableSelectedPageEdit);
+
+            IMenuItem cfgPageEditFontsizeMenu = menu.FindItem(Resource.Id.menu_cfg_page_edit_fontsize);
+            cfgPageEditFontsizeMenu?.SetEnabled(
+                !commActive && enableSelectedPageEdit &&
+                currentPage.DisplayFontSize != null && currentPage.DisplayMode == JobReader.PageInfo.DisplayModeType.List);
+
+            IMenuItem cfgPageEditGaugesLandscapeMenu = menu.FindItem(Resource.Id.menu_cfg_page_edit_gauges_landscape);
+            cfgPageEditGaugesLandscapeMenu?.SetEnabled(
+                !commActive && enableSelectedPageEdit &&
+                currentPage.GaugesLandscape != null && currentPage.DisplayMode == JobReader.PageInfo.DisplayModeType.Grid);
+
+            IMenuItem cfgPageEditGaugesPortraitMenu = menu.FindItem(Resource.Id.menu_cfg_page_edit_gauges_portrait);
+            cfgPageEditGaugesPortraitMenu?.SetEnabled(
+                !commActive && enableSelectedPageEdit &&
+                currentPage.GaugesPortrait != null && currentPage.DisplayMode == JobReader.PageInfo.DisplayModeType.Grid);
+
+            IMenuItem cfgPageEditDisplayOrderMenu = menu.FindItem(Resource.Id.menu_cfg_page_edit_display_order);
+            cfgPageEditDisplayOrderMenu?.SetEnabled(!commActive && enableSelectedPageEdit && hasDisplayOrder);
 
             IMenuItem cfgSelectEditMenu = menu.FindItem(Resource.Id.menu_cfg_select_edit);
             cfgSelectEditMenu?.SetEnabled(!commActive);
@@ -1534,7 +1359,6 @@ namespace BmwDeepObd
             IMenuItem logSubMenu = menu.FindItem(Resource.Id.menu_submenu_log);
             if (logSubMenu != null)
             {
-                _activityCommon.SetMenuDocumentTreeTooltip(logSubMenu);
                 logSubMenu.SetEnabled(interfaceAvailable && !commActive);
             }
 
@@ -1567,14 +1391,14 @@ namespace BmwDeepObd
             if (translationSubmenu != null)
             {
                 translationSubmenu.SetEnabled(true);
-                translationSubmenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationSubmenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
 
             IMenuItem translationEnableMenu = menu.FindItem(Resource.Id.menu_translation_enable);
             if (translationEnableMenu != null)
             {
                 translationEnableMenu.SetEnabled(!commActive || ActivityCommon.IsTranslationAvailable());
-                translationEnableMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationEnableMenu.SetVisible(_activityCommon.IsTranslationRequired());
                 translationEnableMenu.SetChecked(ActivityCommon.EnableTranslation);
             }
 
@@ -1582,14 +1406,14 @@ namespace BmwDeepObd
             if (translationYandexKeyMenu != null)
             {
                 translationYandexKeyMenu.SetEnabled(!commActive);
-                translationYandexKeyMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationYandexKeyMenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
 
             IMenuItem translationClearCacheMenu = menu.FindItem(Resource.Id.menu_translation_clear_cache);
             if (translationClearCacheMenu != null)
             {
                 translationClearCacheMenu.SetEnabled(!_activityCommon.IsTranslationCacheEmpty());
-                translationClearCacheMenu.SetVisible(ActivityCommon.IsTranslationRequired());
+                translationClearCacheMenu.SetVisible(_activityCommon.IsTranslationRequired());
             }
 
             IMenuItem globalSettingsMenu = menu.FindItem(Resource.Id.menu_global_settings);
@@ -1615,15 +1439,6 @@ namespace BmwDeepObd
             if (_activityCommon == null)
             {
                 return base.OnOptionsItemSelected(item);
-            }
-
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
-            {
-                string tooltipText = item.TooltipText;
-                if (!string.IsNullOrWhiteSpace(tooltipText))
-                {
-                    Toast.MakeText(this, tooltipText, ToastLength.Short)?.Show();
-                }
             }
 
             if (item.GroupId == MenuGroupRecentId)
@@ -1655,6 +1470,7 @@ namespace BmwDeepObd
                 }
             }
 
+            JobReader.PageInfo currentPage = GetSelectedPage();
             switch (item.ItemId)
             {
                 case Resource.Id.menu_manufacturer:
@@ -1725,7 +1541,23 @@ namespace BmwDeepObd
                     return true;
 
                 case Resource.Id.menu_cfg_page_edit:
-                    StartEditXml(GetSelectedPage()?.XmlFileName);
+                    StartEditXml(currentPage?.XmlFileName);
+                    return true;
+
+                case Resource.Id.menu_cfg_page_edit_fontsize:
+                    EditFontSize(currentPage);
+                    return true;
+
+                case Resource.Id.menu_cfg_page_edit_gauges_landscape:
+                    EditGaugesCount(currentPage, true);
+                    return true;
+
+                case Resource.Id.menu_cfg_page_edit_gauges_portrait:
+                    EditGaugesCount(currentPage, false);
+                    return true;
+
+                case Resource.Id.menu_cfg_page_edit_display_order:
+                    EditDisplayOrder(currentPage);
                     return true;
 
                 case Resource.Id.menu_cfg_select_edit:
@@ -1874,14 +1706,7 @@ namespace BmwDeepObd
                             return;
                         }
 
-                        try
-                        {
-                            StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"https://github.com/uholeschak/ediabaslib/blob/master/docs/Deep_OBD_for_BMW_and_VAG.md")));
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
+                        _activityCommon.OpenWebUrl("https://github.com/uholeschak/ediabaslib/blob/master/docs/Deep_OBD_for_BMW_and_VAG.md");
                     });
                     return true;
 
@@ -2045,6 +1870,12 @@ namespace BmwDeepObd
                 return;
             }
 
+            bool autoConnect = false;
+            if (e is EventArgsConnect eventArgsConnect)
+            {
+                autoConnect = eventArgsConnect.AutoConnect;
+            }
+
             if (string.IsNullOrEmpty(_instanceData.DeviceAddress))
             {
                 if (!_activityCommon.RequestBluetoothDeviceSelect((int)ActivityRequest.RequestSelectDevice, _instanceData.AppDataPath, (s, args) =>
@@ -2062,7 +1893,7 @@ namespace BmwDeepObd
                 }
             }
 
-            if (!ActivityCommon.CommActive && _connectTypeRequest == ActivityCommon.AutoConnectType.Offline)
+            if (!ActivityCommon.CommActive && !autoConnect)
             {
                 if (_activityCommon.SelectedInterface == ActivityCommon.InterfaceType.Enet)
                 {
@@ -2149,6 +1980,7 @@ namespace BmwDeepObd
             if (ActivityCommon.CommActive)
             {
                 StopEdiabasThread(false);
+                StoreActiveJobIndex(true);
             }
             else
             {
@@ -2399,6 +2231,11 @@ namespace BmwDeepObd
         // ReSharper disable once UnusedMethodReturnValue.Local
         private bool UpdateCheck()
         {
+            if (!_activityActive)
+            {
+                return false;
+            }
+
             long updateCheckDelay = ActivityCommon.UpdateCheckDelay;
             bool serialCheck = ActivityCommon.IsSerialNumberCheckRequired();
             if (serialCheck)
@@ -2485,120 +2322,58 @@ namespace BmwDeepObd
         private bool UseCommService()
         {
             bool useService = true;
-            if (_instanceData.DataLogActive)
+            if (ActivityCommon.AutoConnectHandling != ActivityCommon.AutoConnectType.StartBoot)
             {
-                if (ActivityCommon.LockTypeLogging == ActivityCommon.LockType.None)
+                if (_instanceData.DataLogActive)
                 {
-                    useService = false;
+                    if (ActivityCommon.LockTypeLogging == ActivityCommon.LockType.None)
+                    {
+                        useService = false;
+                    }
                 }
-            }
-            else
-            {
-                if (ActivityCommon.LockTypeCommunication == ActivityCommon.LockType.None)
+                else
                 {
-                    useService = false;
+                    if (ActivityCommon.LockTypeCommunication == ActivityCommon.LockType.None)
+                    {
+                        useService = false;
+                    }
                 }
+
             }
             return useService;
         }
 
         private bool StartEdiabasThread()
         {
-            _instanceData.AutoStart = false;
-            _instanceData.CommErrorsCount = 0;
             try
             {
-                if (ActivityCommon.EdiabasThread == null)
+                JobReader.PageInfo pageInfo = GetSelectedPage();
+                if (pageInfo == null)
                 {
-                    ActivityCommon.EdiabasThread = new EdiabasThread(string.IsNullOrEmpty(ActivityCommon.JobReader.EcuPath) ? _instanceData.EcuPath : ActivityCommon.JobReader.EcuPath, _activityCommon, this);
-                    ConnectEdiabasEvents();
-                }
-                string logDir = string.Empty;
-                if (_instanceData.DataLogActive && !string.IsNullOrEmpty(ActivityCommon.JobReader.LogPath))
-                {
-                    logDir = Path.IsPathRooted(ActivityCommon.JobReader.LogPath) ? ActivityCommon.JobReader.LogPath : Path.Combine(_instanceData.AppDataPath, ActivityCommon.JobReader.LogPath);
-                    try
-                    {
-                        Directory.CreateDirectory(logDir);
-                    }
-                    catch (Exception)
-                    {
-                        logDir = string.Empty;
-                    }
-                }
-                _instanceData.DataLogDir = logDir;
-
-                _instanceData.TraceDir = null;
-                if (_instanceData.TraceActive && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
-                {
-                    _instanceData.TraceDir = Path.Combine(_instanceData.AppDataPath, "Log");
+                    return false;
                 }
 
+                _instanceData.AutoStart = false;
+                _instanceData.CommErrorsCount = 0;
                 _translationList = null;
                 _translatedList = null;
                 _maxDispUpdateTime = 0;
 
-                JobReader.PageInfo pageInfo = GetSelectedPage();
-                object connectParameter = null;
-                if (pageInfo != null)
+                if (!_activityCommon.StartEdiabasThread(_instanceData, pageInfo, EdiabasEventHandler))
                 {
-                    string portName = string.Empty;
-                    switch (_activityCommon.SelectedInterface)
-                    {
-                        case ActivityCommon.InterfaceType.Bluetooth:
-                            portName = EdBluetoothInterface.PortId + ":" + _instanceData.DeviceAddress;
-                            connectParameter = new EdBluetoothInterface.ConnectParameterType(_activityCommon.NetworkData, _activityCommon.MtcBtService, _activityCommon.MtcBtEscapeMode,
-                                () => ActivityCommon.EdiabasThread.ActiveContext);
-                            _activityCommon.ConnectMtcBtDevice(_instanceData.DeviceAddress);
-                            break;
+                    return false;
+                }
 
-                        case ActivityCommon.InterfaceType.Enet:
-                            connectParameter = new EdInterfaceEnet.ConnectParameterType(_activityCommon.NetworkData);
-                            if (_activityCommon.Emulator && !string.IsNullOrEmpty(ActivityCommon.EmulatorEnetIp))
-                            {
-                                // broadcast is not working with emulator
-                                portName = ActivityCommon.EmulatorEnetIp;
-                                break;
-                            }
-                            portName = string.IsNullOrEmpty(_activityCommon.SelectedEnetIp) ? "auto:all" : _activityCommon.SelectedEnetIp;
-                            break;
-
-                        case ActivityCommon.InterfaceType.ElmWifi:
-                            portName = EdElmWifiInterface.PortId;
-                            if (!string.IsNullOrEmpty(_activityCommon.SelectedElmWifiIp))
-                            {
-                                portName += ":" + _activityCommon.SelectedElmWifiIp;
-                            }
-                            connectParameter = new EdElmWifiInterface.ConnectParameterType(_activityCommon.NetworkData);
-                            break;
-
-                        case ActivityCommon.InterfaceType.DeepObdWifi:
-                            portName = EdCustomWiFiInterface.PortId;
-                            if (!string.IsNullOrEmpty(_activityCommon.SelectedDeepObdWifiIp))
-                            {
-                                portName += ":" + _activityCommon.SelectedDeepObdWifiIp;
-                            }
-                            connectParameter = new EdCustomWiFiInterface.ConnectParameterType(_activityCommon.NetworkData, _activityCommon.MaWifi);
-                            break;
-
-                        case ActivityCommon.InterfaceType.Ftdi:
-                            portName = EdFtdiInterface.PortId + "0";
-                            connectParameter = new EdFtdiInterface.ConnectParameterType(_activityCommon.UsbManager);
-                            break;
-                    }
-
-                    ActivityCommon.EdiabasThread.StartThread(portName, connectParameter, pageInfo, true,
-                        _instanceData.VagPath, _instanceData.BmwPath, _instanceData.TraceDir, _instanceData.TraceAppend, _instanceData.DataLogDir, _instanceData.DataLogAppend);
-                    if (UseCommService())
-                    {
-                        _activityCommon.StartForegroundService();
-                    }
+                if (UseCommService())
+                {
+                    ActivityCommon.StartForegroundService(this);
                 }
             }
             catch (Exception)
             {
                 return false;
             }
+
             UpdateLockState();
             UpdateOptionsMenu();
             return true;
@@ -2606,36 +2381,8 @@ namespace BmwDeepObd
 
         private void StopEdiabasThread(bool wait)
         {
-            if (ActivityCommon.EdiabasThread != null)
-            {
-                try
-                {
-                    lock (ActivityCommon.GlobalLockObject)
-                    {
-                        if (ActivityCommon.EdiabasThread != null)
-                        {
-                            ActivityCommon.EdiabasThread.StopThread(wait);
-                        }
-                    }
-                    if (wait)
-                    {
-                        _activityCommon?.StopForegroundService();
-                        DisconnectEdiabasEvents();
-                        lock (ActivityCommon.GlobalLockObject)
-                        {
-                            if (ActivityCommon.EdiabasThread != null)
-                            {
-                                ActivityCommon.EdiabasThread.Dispose();
-                                ActivityCommon.EdiabasThread = null;
-                            }
-                        }
-                    }
-                }
-                catch (Exception)
-                {
-                    return;
-                }
-            }
+            _activityCommon.StopEdiabasThread(wait, EdiabasEventHandler);
+
             UpdateLockState();
             UpdateOptionsMenu();
 
@@ -2660,6 +2407,19 @@ namespace BmwDeepObd
                 ActivityCommon.EdiabasThread.DataUpdated -= DataUpdated;
                 ActivityCommon.EdiabasThread.PageChanged -= PageChanged;
                 ActivityCommon.EdiabasThread.ThreadTerminated -= ThreadTerminated;
+            }
+        }
+
+        private void EdiabasEventHandler(bool connect)
+        {
+            // the GloblalLockObject is already locked
+            if (connect)
+            {
+                ConnectEdiabasEvents();
+            }
+            else
+            {
+                DisconnectEdiabasEvents();
             }
         }
 
@@ -2699,84 +2459,8 @@ namespace BmwDeepObd
             }
         }
 
-        public static string GetLocaleSetting(InstanceData instanceData = null)
-        {
-            if (instanceData == null)
-            {
-                if (ActivityCommon.SelectedLocale == null)
-                {
-                    string settingsFile = ActivityCommon.GetSettingsFileName();
-                    if (!string.IsNullOrEmpty(settingsFile) && File.Exists(settingsFile))
-                    {
-                        GetLocaleThemeSettings(settingsFile, true, false);
-                    }
-                }
-
-                if (ActivityCommon.SelectedLocale != null)
-                {
-                    return ActivityCommon.SelectedLocale;
-                }
-            }
-
-            try
-            {
-                if (ActivityCommon.SelectedLocale == null)
-                {
-                    ISharedPreferences prefs = Android.App.Application.Context.GetSharedPreferences(SharedAppName, FileCreationMode.Private);
-                    ActivityCommon.SelectedLocale = prefs.GetString("Locale", string.Empty);
-                }
-
-                if (instanceData != null)
-                {
-                    instanceData.LastLocale = ActivityCommon.SelectedLocale;
-                }
-                return ActivityCommon.SelectedLocale;
-            }
-            catch (Exception)
-            {
-                return string.Empty;
-            }
-        }
-
-        private void GetThemeSettings(InstanceData instanceData = null)
-        {
-            if (instanceData == null)
-            {
-                string settingsFile = ActivityCommon.GetSettingsFileName();
-                if (!string.IsNullOrEmpty(settingsFile) && File.Exists(settingsFile))
-                {
-                    if (ActivityCommon.SelectedTheme == null)
-                    {
-                        GetLocaleThemeSettings(settingsFile, false, true);
-                    }
-
-                    return;
-                }
-            }
-
-            try
-            {
-                if (ActivityCommon.SelectedTheme == null)
-                {
-                    ISharedPreferences prefs = Android.App.Application.Context.GetSharedPreferences(SharedAppName, FileCreationMode.Private);
-                    ActivityCommon.SelectedTheme = (ActivityCommon.ThemeType)prefs.GetInt("Theme", (int)ActivityCommon.ThemeDefault);
-                }
-
-                if (instanceData != null)
-                {
-                    instanceData.LastThemeType = ActivityCommon.SelectedTheme;
-                }
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-        }
-
         private void GetSettings()
         {
-            PackageInfo packageInfo = _activityCommon.GetPackageInfo();
-            _currentVersionCode = packageInfo != null ? PackageInfoCompat.GetLongVersionCode(packageInfo) : 0;
             string assetFileName = ExpansionDownloaderActivity.GetAssetFilename();
             if (!string.IsNullOrEmpty(assetFileName))
             {
@@ -2806,151 +2490,15 @@ namespace BmwDeepObd
             ActivityCommon.AssetFileName = _assetFileName;
             ActivityCommon.AssetFileSize = _assetFileSize;
 
-            string settingsFile = ActivityCommon.GetSettingsFileName();
-            if (!string.IsNullOrEmpty(settingsFile) && File.Exists(settingsFile))
+            if (_activityCommon.GetSettings(_instanceData, ActivityCommon.SettingsMode.All, !_activityRecreated))
             {
-                if (GetSettings(settingsFile, SettingsMode.All))
-                {
-                    return;
-                }
-            }
-
-            GetPrefSettings();
-        }
-
-        private void GetPrefSettings()
-        {
-            GetLocaleSetting(_instanceData);
-            GetThemeSettings(_instanceData);
-
-            try
-            {
-                ISharedPreferences prefs =
-                    Android.App.Application.Context.GetSharedPreferences(SharedAppName, FileCreationMode.Private);
-#if false // simulate settings reset
-                ISharedPreferencesEditor prefsEdit = prefs.Edit();
-                prefsEdit.Clear();
-                prefsEdit.Commit();
-#endif
-                if (!ActivityCommon.StaticDataInitialized || !_activityRecreated)
-                {
-                    string stateString = prefs.GetString("LastAppState", string.Empty);
-                    _instanceData.LastAppState = System.Enum.TryParse(stateString, true, out LastAppState lastAppState)
-                        ? lastAppState
-                        : LastAppState.Init;
-                    _activityCommon.SelectedEnetIp = prefs.GetString("EnetIp", string.Empty);
-                    _instanceData.DeviceName = prefs.GetString("DeviceName", string.Empty);
-                    _instanceData.DeviceAddress = prefs.GetString("DeviceAddress", string.Empty);
-                    _instanceData.ConfigFileName = prefs.GetString("ConfigFile", string.Empty);
-                    _instanceData.UpdateCheckTime = prefs.GetLong("UpdateCheckTime", DateTime.MinValue.Ticks);
-                    _instanceData.UpdateSkipVersion = prefs.GetInt("UpdateSkipVersion", -1);
-                    _instanceData.TransLoginTimeNext = prefs.GetLong("TransLoginTimeNext", DateTime.MinValue.Ticks);
-                    _instanceData.LastVersionCode = prefs.GetLong("VersionCodeLong", -1);
-                    _instanceData.StorageRequirementsAccepted = prefs.GetBoolean("StorageAccepted", false);
-                    _instanceData.XmlEditorPackageName = prefs.GetString("XmlEditorPackageName", string.Empty);
-                    _instanceData.XmlEditorClassName = prefs.GetString("XmlEditorClassName", string.Empty);
-
-                    _activityCommon.SetDefaultSettings();
-                    ActivityCommon.CustomStorageMedia =
-                        prefs.GetString("StorageMedia", ActivityCommon.CustomStorageMedia);
-                    ActivityCommon.EnableTranslation =
-                        prefs.GetBoolean("EnableTranslation", ActivityCommon.EnableTranslation);
-                    ActivityCommon.YandexApiKey = prefs.GetString("YandexApiKey", ActivityCommon.YandexApiKey);
-                    ActivityCommon.IbmTranslatorApiKey =
-                        prefs.GetString("IbmTranslatorApiKey", ActivityCommon.IbmTranslatorApiKey);
-                    ActivityCommon.IbmTranslatorUrl =
-                        prefs.GetString("IbmTranslatorUrl", ActivityCommon.IbmTranslatorUrl);
-                    _activityCommon.Translator =
-                        (ActivityCommon.TranslatorType) prefs.GetLong("Translator", (int)ActivityCommon.SelectedTranslator);
-                    ActivityCommon.ShowBatteryVoltageWarning = prefs.GetBoolean("ShowBatteryWarning",
-                        ActivityCommon.ShowBatteryVoltageWarning);
-                    ActivityCommon.BatteryWarnings = prefs.GetLong("BatteryWarnings", ActivityCommon.BatteryWarnings);
-                    ActivityCommon.BatteryWarningVoltage = prefs.GetFloat("BatteryWarningVoltage",
-                        (float) ActivityCommon.BatteryWarningVoltage);
-                    ActivityCommon.AdapterBlacklist =
-                        prefs.GetString("AdapterBlacklist", ActivityCommon.AdapterBlacklist);
-                    ActivityCommon.LastAdapterSerial =
-                        prefs.GetString("LastAdapterSerial", ActivityCommon.LastAdapterSerial);
-                    ActivityCommon.EmailAddress = prefs.GetString("EmailAddress", ActivityCommon.EmailAddress);
-                    ActivityCommon.TraceInfo = prefs.GetString("TraceInfo", ActivityCommon.TraceInfo);
-                    ActivityCommon.AppId = prefs.GetString("AppId", ActivityCommon.AppId);
-                    ActivityCommon.AutoHideTitleBar =
-                        prefs.GetBoolean("AutoHideTitleBar", ActivityCommon.AutoHideTitleBar);
-                    ActivityCommon.SuppressTitleBar =
-                        prefs.GetBoolean("SuppressTitleBar", ActivityCommon.SuppressTitleBar);
-                    ActivityCommon.FullScreenMode = prefs.GetBoolean("FullScreenMode", ActivityCommon.FullScreenMode);
-                    ActivityCommon.SwapMultiWindowOrientation = prefs.GetBoolean("SwapMultiWindowOrientation",
-                        ActivityCommon.SwapMultiWindowOrientation);
-                    ActivityCommon.SelectedInternetConnection =
-                        (ActivityCommon.InternetConnectionType) prefs.GetInt("InternetConnection",
-                            (int) ActivityCommon.SelectedInternetConnection);
-                    ActivityCommon.SelectedManufacturer =
-                        (ActivityCommon.ManufacturerType) prefs.GetInt("Manufacturer",
-                            (int) ActivityCommon.SelectedManufacturer);
-                    ActivityCommon.BtEnbaleHandling =
-                        (ActivityCommon.BtEnableType) prefs.GetInt("BtEnable", (int) ActivityCommon.BtEnbaleHandling);
-                    ActivityCommon.BtDisableHandling =
-                        (ActivityCommon.BtDisableType) prefs.GetInt("BtDisable",
-                            (int) ActivityCommon.BtDisableHandling);
-                    ActivityCommon.LockTypeCommunication =
-                        (ActivityCommon.LockType) prefs.GetInt("LockComm", (int) ActivityCommon.LockTypeCommunication);
-                    ActivityCommon.LockTypeLogging =
-                        (ActivityCommon.LockType) prefs.GetInt("LockLog", (int) ActivityCommon.LockTypeLogging);
-                    ActivityCommon.StoreDataLogSettings =
-                        prefs.GetBoolean("StoreDataLogSettings", ActivityCommon.StoreDataLogSettings);
-                    if (ActivityCommon.StoreDataLogSettings)
-                    {
-                        _instanceData.DataLogActive = prefs.GetBoolean("DataLogActive", _instanceData.DataLogActive);
-                        _instanceData.DataLogAppend = prefs.GetBoolean("DataLogAppend", _instanceData.DataLogAppend);
-                    }
-
-                    ActivityCommon.AutoConnectHandling =
-                        (ActivityCommon.AutoConnectType) prefs.GetInt("AutoConnect",
-                            (int) ActivityCommon.AutoConnectHandling);
-                    ActivityCommon.UpdateCheckDelay =
-                        prefs.GetLong("UpdateCheckDelay", ActivityCommon.UpdateCheckDelay);
-                    ActivityCommon.DoubleClickForAppExit =
-                        prefs.GetBoolean("DoubleClickForExit", ActivityCommon.DoubleClickForAppExit);
-                    ActivityCommon.SendDataBroadcast =
-                        prefs.GetBoolean("SendDataBroadcast", ActivityCommon.SendDataBroadcast);
-                    ActivityCommon.CheckCpuUsage = prefs.GetBoolean("CheckCpuUsage", ActivityCommon.CheckCpuUsage);
-                    ActivityCommon.CheckEcuFiles = prefs.GetBoolean("CheckEcuFiles", ActivityCommon.CheckEcuFiles);
-                    ActivityCommon.OldVagMode = prefs.GetBoolean("OldVagMode", ActivityCommon.OldVagMode);
-                    ActivityCommon.UseBmwDatabase = prefs.GetBoolean("UseBmwDatabase", ActivityCommon.UseBmwDatabase);
-                    ActivityCommon.ScanAllEcus = prefs.GetBoolean("ScanAllEcus", ActivityCommon.ScanAllEcus);
-                    ActivityCommon.CollectDebugInfo =
-                        prefs.GetBoolean("CollectDebugInfo", ActivityCommon.CollectDebugInfo);
-
-                    CheckSettingsVersionChange();
-                }
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-            finally
-            {
-                ActivityCommon.StaticDataInitialized = true;
-                _instanceData.LastSettingsHash = string.Empty;
-                _instanceData.GetSettingsCalled = true;
-            }
-        }
-
-        private void CheckSettingsVersionChange()
-        {
-            if (_instanceData.LastVersionCode != _currentVersionCode)
-            {
-                _instanceData.StorageRequirementsAccepted = false;
-                _instanceData.UpdateCheckTime = DateTime.MinValue.Ticks;
-                _instanceData.UpdateSkipVersion = -1;
-                ActivityCommon.BatteryWarnings = 0;
-                ActivityCommon.BatteryWarningVoltage = 0;
+                return;
             }
         }
 
         private void StoreSettings()
         {
-            if (!StoreSettings(ActivityCommon.GetSettingsFileName(), SettingsMode.All, out string errorMessage))
+            if (!_activityCommon.StoreSettings(_instanceData, ActivityCommon.SettingsMode.All, out string errorMessage))
             {
                 string message = GetString(Resource.String.store_settings_failed);
                 if (errorMessage != null)
@@ -2962,375 +2510,42 @@ namespace BmwDeepObd
             }
         }
 
-#if false
-        private void StorePrefsSettings()
-        {
-            try
-            {
-                if (!ActivityCommon.StaticDataInitialized || !_instanceData.GetSettingsCalled)
-                {
-                    return;
-                }
-
-                ISharedPreferences prefs = Android.App.Application.Context.GetSharedPreferences(SharedAppName, FileCreationMode.Private);
-                ISharedPreferencesEditor prefsEdit = prefs.Edit();
-                prefsEdit.Clear();
-                prefsEdit.PutString("LastAppState", _instanceData.LastAppState.ToString());
-                prefsEdit.PutString("DeviceName", _instanceData.DeviceName);
-                prefsEdit.PutString("DeviceAddress", _instanceData.DeviceAddress);
-                prefsEdit.PutString("EnetIp", _activityCommon.SelectedEnetIp);
-                prefsEdit.PutString("ConfigFile", _instanceData.ConfigFileName);
-                prefsEdit.PutLong("UpdateCheckTime", _instanceData.UpdateCheckTime);
-                prefsEdit.PutInt("UpdateSkipVersion", _instanceData.UpdateSkipVersion);
-                prefsEdit.PutLong("TransLoginTimeNext", _instanceData.TransLoginTimeNext);
-                prefsEdit.PutString("StorageMedia", _activityCommon.CustomStorageMedia ?? string.Empty);
-                prefsEdit.PutLong("VersionCodeLong", _currentVersionCode);
-                prefsEdit.PutBoolean("StorageAccepted", _instanceData.StorageRequirementsAccepted);
-                prefsEdit.PutString("XmlEditorPackageName", _instanceData.XmlEditorPackageName ?? string.Empty);
-                prefsEdit.PutString("XmlEditorClassName", _instanceData.XmlEditorClassName ?? string.Empty);
-                prefsEdit.PutBoolean("EnableTranslation", ActivityCommon.EnableTranslation);
-                prefsEdit.PutBoolean("EnableTranslateLogin", ActivityCommon.EnableTranslateLogin);
-                prefsEdit.PutString("YandexApiKey", ActivityCommon.YandexApiKey ?? string.Empty);
-                prefsEdit.PutString("IbmTranslatorApiKey", ActivityCommon.IbmTranslatorApiKey ?? string.Empty);
-                prefsEdit.PutString("IbmTranslatorUrl", ActivityCommon.IbmTranslatorUrl ?? string.Empty);
-                prefsEdit.PutLong("Translator", (int)ActivityCommon.SelectedTranslator);
-                prefsEdit.PutBoolean("ShowBatteryWarning", ActivityCommon.ShowBatteryVoltageWarning);
-                prefsEdit.PutLong("BatteryWarnings", ActivityCommon.BatteryWarnings);
-                prefsEdit.PutFloat("BatteryWarningVoltage", (float)ActivityCommon.BatteryWarningVoltage);
-                prefsEdit.PutString("AdapterBlacklist", ActivityCommon.AdapterBlacklist ?? string.Empty);
-                prefsEdit.PutString("LastAdapterSerial", ActivityCommon.LastAdapterSerial ?? string.Empty);
-                prefsEdit.PutString("EmailAddress", ActivityCommon.EmailAddress ?? string.Empty);
-                prefsEdit.PutString("TraceInfo", ActivityCommon.TraceInfo ?? string.Empty);
-                prefsEdit.PutString("AppId", ActivityCommon.AppId);
-                prefsEdit.PutString("Locale", ActivityCommon.SelectedLocale ?? string.Empty);
-                prefsEdit.PutInt("Theme", (int)ActivityCommon.SelectedTheme);
-                prefsEdit.PutBoolean("AutoHideTitleBar", ActivityCommon.AutoHideTitleBar);
-                prefsEdit.PutBoolean("SuppressTitleBar", ActivityCommon.SuppressTitleBar);
-                prefsEdit.PutBoolean("FullScreenMode", ActivityCommon.FullScreenMode);
-                prefsEdit.PutBoolean("SwapMultiWindowOrientation", ActivityCommon.SwapMultiWindowOrientation);
-                prefsEdit.PutInt("InternetConnection", (int)ActivityCommon.SelectedInternetConnection);
-                prefsEdit.PutInt("Manufacturer", (int) ActivityCommon.SelectedManufacturer);
-                prefsEdit.PutInt("BtEnable", (int)ActivityCommon.BtEnbaleHandling);
-                prefsEdit.PutInt("BtDisable", (int) ActivityCommon.BtDisableHandling);
-                prefsEdit.PutInt("LockComm", (int)ActivityCommon.LockTypeCommunication);
-                prefsEdit.PutInt("LockLog", (int)ActivityCommon.LockTypeLogging);
-                prefsEdit.PutBoolean("StoreDataLogSettings", ActivityCommon.StoreDataLogSettings);
-                prefsEdit.PutBoolean("DataLogActive", _instanceData.DataLogActive);
-                prefsEdit.PutBoolean("DataLogAppend", _instanceData.DataLogAppend);
-                prefsEdit.PutInt("AutoConnect", (int)ActivityCommon.AutoConnectHandling);
-                prefsEdit.PutLong("UpdateCheckDelay", ActivityCommon.UpdateCheckDelay);
-                prefsEdit.PutBoolean("DoubleClickForExit", ActivityCommon.DoubleClickForAppExit);
-                prefsEdit.PutBoolean("SendDataBroadcast", ActivityCommon.SendDataBroadcast);
-                prefsEdit.PutBoolean("CheckCpuUsage", ActivityCommon.CheckCpuUsage);
-                prefsEdit.PutBoolean("CheckEcuFiles", ActivityCommon.CheckEcuFiles);
-                prefsEdit.PutBoolean("OldVagMode", ActivityCommon.OldVagMode);
-                prefsEdit.PutBoolean("UseBmwDatabase", ActivityCommon.UseBmwDatabase);
-                prefsEdit.PutBoolean("ScanAllEcus", ActivityCommon.ScanAllEcus);
-                prefsEdit.PutBoolean("CollectDebugInfo", ActivityCommon.CollectDebugInfo);
-                prefsEdit.Commit();
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-        }
-#endif
-
-        private void StoreLastAppState(LastAppState lastAppState)
+        private void StoreLastAppState(ActivityCommon.LastAppState lastAppState)
         {
             _instanceData.LastAppState = lastAppState;
             StoreSettings();
         }
 
-        public static XmlAttributeOverrides GetStoreXmlAttributeOverrides(SettingsMode settingsMode)
+        private void StoreActiveJobIndex(bool disable = false)
         {
-            if (settingsMode == SettingsMode.All)
+            int selectedJobIndex = -1;
+            switch (ActivityCommon.AutoConnectHandling)
             {
-                return null;
-            }
-
-            StorageData storageData = new StorageData();
-            Type storageType = storageData.GetType();
-            XmlAttributes ignoreXmlAttributes = new XmlAttributes
-            {
-                XmlIgnore = true
-            };
-
-            XmlAttributeOverrides storageClassAttributes = new XmlAttributeOverrides();
-            storageClassAttributes.Add(storageType, nameof(storageData.LastAppState), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.UpdateCheckTime), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.UpdateSkipVersion), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.TransLoginTimeNext), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.LastVersionCode), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.StorageRequirementsAccepted), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.BatteryWarnings), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.BatteryWarningVoltage), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.SerialInfo), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.AdapterBlacklist), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.LastAdapterSerial), ignoreXmlAttributes);
-            storageClassAttributes.Add(storageType, nameof(storageData.AppId), ignoreXmlAttributes);
-            if (settingsMode == SettingsMode.Public)
-            {
-                storageClassAttributes.Add(storageType, nameof(storageData.SelectedEnetIp), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.SelectedElmWifiIp), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.SelectedDeepObdWifiIp), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.DeviceName), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.DeviceAddress), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.ConfigFileName), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.XmlEditorPackageName), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.XmlEditorClassName), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.RecentConfigFiles), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.CustomStorageMedia), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.UsbFirmwareFileName), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.YandexApiKey), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.IbmTranslatorApiKey), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.IbmTranslatorUrl), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.EmailAddress), ignoreXmlAttributes);
-                storageClassAttributes.Add(storageType, nameof(storageData.TraceInfo), ignoreXmlAttributes);
-            }
-
-            return storageClassAttributes;
-        }
-
-        public static StorageData GetStorageData(string fileName, SettingsMode settingsMode = SettingsMode.All)
-        {
-            StorageData storageData = null;
-            try
-            {
-                if (File.Exists(fileName))
-                {
-                    try
+                case ActivityCommon.AutoConnectType.Connect:
+                case ActivityCommon.AutoConnectType.ConnectClose:
+                    if (ActivityCommon.JobReader.PageList.Count > 0)
                     {
-                        lock (ActivityCommon.GlobalSettingLockObject)
+                        selectedJobIndex = _tabLayout.SelectedTabPosition;
+                    }
+                    break;
+
+                case ActivityCommon.AutoConnectType.StartBoot:
+                    if (!disable && ActivityCommon.CommActive)
+                    {
+                        JobReader.PageInfo pageInfo = ActivityCommon.EdiabasThread.JobPageInfo;
+                        if (pageInfo != null)
                         {
-                            XmlAttributeOverrides storageClassAttributes = GetStoreXmlAttributeOverrides(settingsMode);
-                            XmlSerializer xmlSerializer = new XmlSerializer(typeof(StorageData), storageClassAttributes);
-                            using (StreamReader sr = new StreamReader(fileName))
-                            {
-                                storageData = xmlSerializer.Deserialize(sr) as StorageData;
-                            }
+                            selectedJobIndex = ActivityCommon.JobReader.PageList.IndexOf(pageInfo);
                         }
                     }
-                    catch (Exception)
-                    {
-                        storageData = null;
-                    }
-                }
+                    break;
             }
-            catch (Exception)
+
+            if (_instanceData.LastSelectedJobIndex != selectedJobIndex)
             {
-                return null;
+                _instanceData.LastSelectedJobIndex = selectedJobIndex;
+                StoreSettings();
             }
-
-            storageData ??= new StorageData();
-
-            return storageData;
-        }
-
-        public static bool GetLocaleThemeSettings(string fileName, bool updateLocale, bool updateTheme)
-        {
-            StorageData storageData = GetStorageData(fileName);
-
-            if (updateLocale)
-            {
-                ActivityCommon.SelectedLocale = storageData.SelectedLocale;
-            }
-
-            if (updateTheme)
-            {
-                ActivityCommon.SelectedTheme = storageData.SelectedTheme;
-            }
-
-            return true;
-        }
-
-        public bool GetSettings(string fileName, SettingsMode settingsMode)
-        {
-            if (_instanceData == null || _activityCommon == null)
-            {
-                return false;
-            }
-
-            if (string.IsNullOrEmpty(fileName))
-            {
-                return false;
-            }
-
-            bool import = settingsMode != SettingsMode.All;
-            string hash = string.Empty;
-            try
-            {
-                bool init = false;
-                if (!ActivityCommon.StaticDataInitialized || !_activityRecreated)
-                {
-                    init = true;
-                    _activityCommon.SetDefaultSettings();
-                }
-
-                StorageData storageData = GetStorageData(fileName, settingsMode);
-                hash = storageData.CalcualeHash();
-
-                if (init || import)
-                {
-                    _instanceData.LastAppState = storageData.LastAppState;
-                    _activityCommon.SelectedEnetIp = storageData.SelectedEnetIp;
-                    _activityCommon.SelectedElmWifiIp = storageData.SelectedElmWifiIp;
-                    _activityCommon.SelectedDeepObdWifiIp = storageData.SelectedDeepObdWifiIp;
-                    _instanceData.DeviceName = storageData.DeviceName;
-                    _instanceData.DeviceAddress = storageData.DeviceAddress;
-                    _instanceData.ConfigFileName = storageData.ConfigFileName;
-                    _instanceData.UpdateCheckTime = storageData.UpdateCheckTime;
-                    _instanceData.UpdateSkipVersion = storageData.UpdateSkipVersion;
-                    _instanceData.TransLoginTimeNext = storageData.TransLoginTimeNext;
-                    _instanceData.LastVersionCode = storageData.LastVersionCode;
-                    _instanceData.StorageRequirementsAccepted = storageData.StorageRequirementsAccepted;
-                    _instanceData.XmlEditorPackageName = storageData.XmlEditorPackageName;
-                    _instanceData.XmlEditorClassName = storageData.XmlEditorClassName;
-
-                    ActivityCommon.SelectedLocale = storageData.SelectedLocale;
-                    ActivityCommon.SelectedTheme = storageData.SelectedTheme;
-
-                    ActivityCommon.SetRecentConfigList(storageData.RecentConfigFiles);
-                    ActivityCommon.CustomStorageMedia = storageData.CustomStorageMedia;
-                    ActivityCommon.CopyToAppSrc = storageData.CopyToAppSrc;
-                    ActivityCommon.CopyToAppDst = storageData.CopyToAppDst;
-                    ActivityCommon.CopyFromAppSrc = storageData.CopyFromAppSrc;
-                    ActivityCommon.CopyFromAppDst = storageData.CopyFromAppDst;
-                    ActivityCommon.UsbFirmwareFileName = storageData.UsbFirmwareFileName;
-                    ActivityCommon.EnableTranslation = storageData.EnableTranslation;
-                    ActivityCommon.YandexApiKey = storageData.YandexApiKey;
-                    ActivityCommon.IbmTranslatorApiKey = storageData.IbmTranslatorApiKey;
-                    ActivityCommon.IbmTranslatorUrl = storageData.IbmTranslatorUrl;
-                    ActivityCommon.DeeplApiKey = storageData.DeeplApiKey;
-                    _activityCommon.Translator = storageData.Translator;
-                    ActivityCommon.ShowBatteryVoltageWarning = storageData.ShowBatteryVoltageWarning;
-                    ActivityCommon.BatteryWarnings = storageData.BatteryWarnings;
-                    ActivityCommon.BatteryWarningVoltage = storageData.BatteryWarningVoltage;
-                    ActivityCommon.SetSerialInfoList(storageData.SerialInfo);
-                    ActivityCommon.AdapterBlacklist = storageData.AdapterBlacklist;
-                    ActivityCommon.LastAdapterSerial = storageData.LastAdapterSerial;
-                    ActivityCommon.EmailAddress = storageData.EmailAddress;
-                    ActivityCommon.TraceInfo = storageData.TraceInfo;
-                    ActivityCommon.AppId = storageData.AppId;
-                    ActivityCommon.AutoHideTitleBar = storageData.AutoHideTitleBar;
-                    ActivityCommon.SuppressTitleBar = storageData.SuppressTitleBar;
-                    ActivityCommon.FullScreenMode = storageData.FullScreenMode;
-                    ActivityCommon.SwapMultiWindowOrientation = storageData.SwapMultiWindowOrientation;
-                    ActivityCommon.SelectedInternetConnection = storageData.SelectedInternetConnection;
-                    ActivityCommon.SelectedManufacturer = storageData.SelectedManufacturer;
-                    ActivityCommon.BtEnbaleHandling = storageData.BtEnbaleHandling;
-                    ActivityCommon.BtDisableHandling = storageData.BtDisableHandling;
-                    ActivityCommon.LockTypeCommunication = storageData.LockTypeCommunication;
-                    ActivityCommon.LockTypeLogging = storageData.LockTypeLogging;
-                    ActivityCommon.StoreDataLogSettings = storageData.StoreDataLogSettings;
-                    if (ActivityCommon.StoreDataLogSettings)
-                    {
-                        _instanceData.DataLogActive = storageData.DataLogActive;
-                        _instanceData.DataLogAppend = storageData.DataLogAppend;
-                    }
-                    ActivityCommon.AutoConnectHandling = storageData.AutoConnectHandling;
-                    ActivityCommon.UpdateCheckDelay = storageData.UpdateCheckDelay;
-                    ActivityCommon.DoubleClickForAppExit = storageData.DoubleClickForAppExit;
-                    ActivityCommon.SendDataBroadcast = storageData.SendDataBroadcast;
-                    ActivityCommon.CheckCpuUsage = storageData.CheckCpuUsage;
-                    ActivityCommon.CheckEcuFiles = storageData.CheckEcuFiles;
-                    ActivityCommon.OldVagMode = storageData.OldVagMode;
-                    ActivityCommon.UseBmwDatabase = storageData.UseBmwDatabase;
-                    ActivityCommon.ShowOnlyRelevantErrors = storageData.ShowOnlyRelevantErrors;
-                    ActivityCommon.ScanAllEcus = storageData.ScanAllEcus;
-                    ActivityCommon.CollectDebugInfo = storageData.CollectDebugInfo;
-
-                    CheckSettingsVersionChange();
-                }
-
-                if (!import)
-                {
-                    _instanceData.LastLocale = ActivityCommon.SelectedLocale;
-                    _instanceData.LastThemeType = ActivityCommon.SelectedTheme;
-                }
-
-                return true;
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-            finally
-            {
-                ActivityCommon.StaticDataInitialized = true;
-                if (!import)
-                {
-                    _instanceData.LastSettingsHash = hash;
-                }
-
-                _instanceData.GetSettingsCalled = true;
-            }
-            return false;
-        }
-
-        public bool StoreSettings(string fileName, SettingsMode settingsMode, out string errorMessage)
-        {
-            errorMessage = null;
-            if (_instanceData == null || _activityCommon == null)
-            {
-                return false;
-            }
-
-            if (string.IsNullOrEmpty(fileName))
-            {
-                return false;
-            }
-
-            bool export = settingsMode != SettingsMode.All;
-            try
-            {
-                if (!ActivityCommon.StaticDataInitialized || !_instanceData.GetSettingsCalled)
-                {
-                    return false;
-                }
-
-                lock (ActivityCommon.GlobalSettingLockObject)
-                {
-                    StorageData storageData = new StorageData(this, true);
-                    string hash = storageData.CalcualeHash();
-
-                    if (!export && string.Compare(hash, _instanceData.LastSettingsHash, StringComparison.Ordinal) == 0)
-                    {
-                        return true;
-                    }
-
-                    XmlAttributeOverrides storageClassAttributes = GetStoreXmlAttributeOverrides(settingsMode);
-                    XmlSerializer xmlSerializer = new XmlSerializer(typeof(StorageData), storageClassAttributes);
-                    Java.IO.File tempFile = Java.IO.File.CreateTempFile("Settings", ".xml", Android.App.Application.Context.CacheDir);
-                    if (tempFile == null)
-                    {
-                        return false;
-                    }
-
-                    tempFile.DeleteOnExit();
-                    string tempFileName = tempFile.AbsolutePath;
-                    using (StreamWriter sw = new StreamWriter(tempFileName))
-                    {
-                        xmlSerializer.Serialize(sw, storageData);
-                    }
-
-                    File.Copy(tempFileName, fileName, true);
-                    tempFile.Delete();
-
-                    if (!export)
-                    {
-                        _instanceData.LastSettingsHash = hash;
-                    }
-                }
-
-                _backupManager?.DataChanged();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = EdiabasNet.GetExceptionText(ex);
-            }
-            return false;
         }
 
         private bool RequestOverlayPermissions(EventHandler<EventArgs> handler)
@@ -3545,7 +2760,7 @@ namespace BmwDeepObd
             UpdateDirectories();
             _activityCommon.RequestUsbPermission(null);
             ReadConfigFile();
-            if (_startAlertDialog == null && !_instanceData.VersionInfoShown && _currentVersionCode != _instanceData.LastVersionCode)
+            if (_startAlertDialog == null && !_instanceData.VersionInfoShown && _activityCommon.VersionCode != _instanceData.LastVersionCode)
             {
                 _instanceData.VersionInfoShown = true;
                 string message = (GetString(Resource.String.version_change_info_message) +
@@ -3703,39 +2918,16 @@ namespace BmwDeepObd
 
         private void UpdateDirectories()
         {
-            _instanceData.AppDataPath = string.Empty;
-            _instanceData.EcuPath = string.Empty;
-            _instanceData.VagPath = string.Empty;
-            _instanceData.BmwPath = string.Empty;
-            _instanceData.UserEcuFiles = false;
-            if (string.IsNullOrEmpty(ActivityCommon.CustomStorageMedia))
+            if (_activityCommon == null)
             {
-                if (string.IsNullOrEmpty(ActivityCommon.ExternalWritePath))
-                {
-                    if (string.IsNullOrEmpty(ActivityCommon.ExternalPath))
-                    {
-                        Toast.MakeText(this, GetString(Resource.String.no_ext_storage), ToastLength.Long)?.Show();
-                        Finish();
-                    }
-                    else
-                    {
-                        _instanceData.AppDataPath = Path.Combine(ActivityCommon.ExternalPath, AppFolderName);
-                    }
-                }
-                else
-                {
-                    _instanceData.AppDataPath = ActivityCommon.ExternalWritePath;
-                }
-            }
-            else
-            {
-                _instanceData.AppDataPath = Path.Combine(ActivityCommon.CustomStorageMedia, AppFolderName);
+                return;
             }
 
-            _instanceData.EcuPath = Path.Combine(_instanceData.AppDataPath, ManufacturerEcuDirName);
-            _instanceData.VagPath = Path.Combine(_instanceData.AppDataPath, ActivityCommon.EcuBaseDir, ActivityCommon.VagBaseDir);
-            _instanceData.BmwPath = Path.Combine(_instanceData.AppDataPath, ActivityCommon.EcuBaseDir, ActivityCommon.BmwBaseDir);
-            _instanceData.TraceBackupDir = Path.Combine(_instanceData.AppDataPath, ActivityCommon.TraceBackupDir);
+            if (!_activityCommon.UpdateDirectories(_instanceData))
+            {
+                Toast.MakeText(this, GetString(Resource.String.no_ext_storage), ToastLength.Long)?.Show();
+                Finish();
+            }
 
             string backgroundImageFile = Path.Combine(_instanceData.AppDataPath, "Images", "Background.jpg");
             if (File.Exists(backgroundImageFile))
@@ -3778,6 +2970,20 @@ namespace BmwDeepObd
                         if (request.Equals(ForegroundService.BroadcastStopComm))
                         {
                             StopEdiabasThread(false);
+                            break;
+                        }
+
+                        if (request.Equals(ForegroundService.BroadcastFinishActivity))
+                        {
+                            if (!ActivityCommon.CommActive && !_activityActive)
+                            {
+                                bool isEmpty = IsActivityListEmpty(new List<Type> { typeof(ActivityMain) });
+                                if (isEmpty)
+                                {
+                                    Finish();
+                                }
+                                break;
+                            }
                         }
                     }
                     break;
@@ -3836,6 +3042,8 @@ namespace BmwDeepObd
                 }
                 try
                 {
+                    StoreActiveJobIndex();
+
                     JobReader.PageInfo pageInfo = ActivityCommon.EdiabasThread?.JobPageInfo;
                     if (pageInfo != null)
                     {
@@ -3882,6 +3090,14 @@ namespace BmwDeepObd
             if (_instanceData.CommErrorsCount >= ActivityCommon.MinSendCommErrors && responseCount > 0 &&
                 _instanceData.TraceActive && !string.IsNullOrEmpty(_instanceData.TraceDir))
             {
+                if (_activityCommon.SelectedInterface == ActivityCommon.InterfaceType.Bluetooth)
+                {
+                    if (_activityCommon.MtcBtService && !_activityCommon.MtcBtConnected)
+                    {
+                        _activityCommon.MtcBtDisconnectWarnShown = false;
+                    }
+                }
+
                 _activityCommon.RequestSendTraceFile(_instanceData.AppDataPath, _instanceData.TraceDir, GetType());
             }
         }
@@ -3959,21 +3175,24 @@ namespace BmwDeepObd
 
         private void UpdateSelectedPage()
         {
-            if (!ActivityCommon.CommActive)
+            try
             {
-                return;
-            }
+                if (!ActivityCommon.CommActive)
+                {
+                    return;
+                }
 
-            JobReader.PageInfo newPageInfo = GetSelectedPage();
-            if (newPageInfo == null)
-            {
-                return;
-            }
-            bool newCommActive = !newPageInfo.JobActivate;
-            if (ActivityCommon.EdiabasThread.JobPageInfo != newPageInfo)
-            {
-                ActivityCommon.EdiabasThread.CommActive = newCommActive;
+                JobReader.PageInfo newPageInfo = GetSelectedPage();
+                if (newPageInfo == null)
+                {
+                    return;
+                }
+
                 ActivityCommon.EdiabasThread.JobPageInfo = newPageInfo;
+            }
+            finally
+            {
+                StoreActiveJobIndex();
             }
         }
 
@@ -4254,7 +3473,7 @@ namespace BmwDeepObd
                         }
                     }
 
-                    int gaugeCount = portrait ? pageInfo.GaugesPortrait : pageInfo.GaugesLandscape;
+                    int gaugeCount = portrait ? pageInfo.GaugesPortraitValue : pageInfo.GaugesLandscapeValue;
                     gaugeSize = (gridViewResult.Width / gaugeCount) - gridViewResult.HorizontalSpacing - 1;
                     if (gaugeSize < 10)
                     {
@@ -4632,7 +3851,7 @@ namespace BmwDeepObd
                         continue;
                     }
 
-                    if (ActivityCommon.IsCommunicationError(errorReport.ExecptionText))
+                    if (ActivityCommon.IsCommunicationError(errorReport.ExceptionText))
                     {
                         commError = true;
                     }
@@ -4885,386 +4104,47 @@ namespace BmwDeepObd
 
         private string GenerateErrorMessage(JobReader.PageInfo pageInfo, EdiabasThread.EdiabasErrorReport errorReport, int errorIndex, MethodInfo formatErrorResult, ref List<string> translationList, ref List<ActivityCommon.VagDtcEntry> dtcList)
         {
-            StringBuilder srMessage = new StringBuilder();
-            string language = ActivityCommon.GetCurrentLanguage();
-            bool shadow = errorReport is EdiabasThread.EdiabasErrorShadowReport;
-            string ecuTitle = GetPageString(pageInfo, errorReport.EcuName);
-            EcuFunctionStructs.EcuVariant ecuVariant = errorReport.EcuVariant;
-            if (ecuVariant != null)
+
+            EdiabasThread ediabasThread = ActivityCommon.EdiabasThread;
+            if (ediabasThread == null)
             {
-                string title = ecuVariant.Title?.GetTitle(language);
-                if (!string.IsNullOrEmpty(title))
-                {
-                    ecuTitle += " (" + title + ")";
-                }
+                return string.Empty;
             }
 
-            srMessage.Append(ecuTitle);
-            srMessage.Append(": ");
-
-            if (errorReport.ErrorDict == null)
-            {
-                srMessage.Append(GetString(Resource.String.error_no_response));
-            }
-            else
-            {
-                if (ActivityCommon.SelectedManufacturer != ActivityCommon.ManufacturerType.Bmw)
+            return ediabasThread.GenerateErrorMessage(this, _activityCommon, pageInfo, errorReport, errorIndex, formatErrorResult, ref translationList,
+                (Tuple<string, string> text, ref List<string> list) =>
                 {
-                    Int64 errorCode = 0;
-                    if (errorReport.ErrorDict.TryGetValue("FNR_WERT", out EdiabasNet.ResultData resultData))
-                    {
-                        if (resultData.OpData is Int64)
-                        {
-                            errorCode = (Int64)resultData.OpData;
-                        }
-                    }
+                    string text1 = text.Item1;
+                    string text2 = text.Item2;
 
-                    byte[] ecuResponse1 = null;
-                    List<byte[]> ecuResponseList = new List<byte[]>();
-                    foreach (string key in errorReport.ErrorDict.Keys)
+                    if (_activityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation)
                     {
-                        if (key.StartsWith("ECU_RESPONSE", StringComparison.OrdinalIgnoreCase))
+                        int index = list.Count;
+                        list.Add(text1);
+                        list.Add(text2);
+                        if (_translationList != null && _translatedList != null &&
+                            _translationList.Count == _translatedList.Count)
                         {
-                            if (errorReport.ErrorDict.TryGetValue(key, out resultData))
+                            if (index < _translatedList.Count)
                             {
-                                if (resultData.OpData.GetType() == typeof(byte[]))
+                                if (string.Compare(text1, _translationList[index], StringComparison.Ordinal) == 0)
                                 {
-                                    if (string.Compare(key, "ECU_RESPONSE1", StringComparison.OrdinalIgnoreCase) == 0)
-                                    {
-                                        ecuResponse1 = (byte[])resultData.OpData;
-                                    }
-                                    else
-                                    {
-                                        ecuResponseList.Add((byte[])resultData.OpData);
-                                    }
+                                    text1 = _translatedList[index];
+                                }
+                            }
+                            index++;
+                            if (index < _translatedList.Count)
+                            {
+                                if (string.Compare(text2, _translationList[index], StringComparison.Ordinal) == 0)
+                                {
+                                    text2 = _translatedList[index];
                                 }
                             }
                         }
                     }
 
-                    List<long> errorTypeList = new List<long>();
-                    for (int i = 0; i < 1000; i++)
-                    {
-                        if (!errorReport.ErrorDict.TryGetValue(string.Format(Culture, "FART{0}_WERT", i + 1), out resultData))
-                        {
-                            break;
-                        }
-                        if (!(resultData.OpData is Int64))
-                        {
-                            break;
-                        }
-                        Int64 errorType = (Int64)resultData.OpData;
-                        errorTypeList.Add(errorType);
-                    }
-                    bool kwp1281 = false;
-                    bool uds = false;
-                    bool saeMode = false;
-                    bool saeDetail = false;
-                    if (errorReport.ErrorDict.TryGetValue("OBJECT", out resultData))
-                    {
-                        // ReSharper disable once UsePatternMatching
-                        string objectName = resultData.OpData as string;
-                        if (objectName != null)
-                        {
-                            if (XmlToolActivity.Is1281EcuName(objectName))
-                            {
-                                kwp1281 = true;
-                            }
-                            else if (XmlToolActivity.IsUdsEcuName(objectName))
-                            {
-                                uds = true;
-                            }
-                        }
-                    }
-                    if (errorReport.ErrorDict.TryGetValue("SAE", out resultData))
-                    {
-                        if (resultData.OpData is Int64)
-                        {
-                            if ((Int64)resultData.OpData != 0)
-                            {
-                                saeMode = true;
-                                saeDetail = true;
-                                errorCode <<= 8;
-                            }
-                        }
-                    }
-
-                    ActivityCommon.VagDtcEntry dtcEntry = null;
-                    if (kwp1281)
-                    {
-                        dtcList = null;
-                        byte dtcDetail = 0;
-                        if (errorTypeList.Count >= 2)
-                        {
-                            dtcDetail = (byte)((errorTypeList[0] & 0x7F) | (errorTypeList[1] << 7));
-                        }
-
-                        dtcEntry = new ActivityCommon.VagDtcEntry((uint)errorCode, dtcDetail, UdsFileReader.DataReader.ErrorType.Iso9141);
-                    }
-                    else if (uds)
-                    {
-                        dtcList = null;
-                        byte dtcDetail = 0;
-                        if (errorTypeList.Count >= 8)
-                        {
-                            for (int idx = 0; idx < 8; idx++)
-                            {
-                                if (errorTypeList[idx] == 1)
-                                {
-                                    dtcDetail |= (byte)(1 << idx);
-                                }
-                            }
-                        }
-
-                        dtcEntry = new ActivityCommon.VagDtcEntry((uint)errorCode, dtcDetail, UdsFileReader.DataReader.ErrorType.Uds);
-                        saeMode = true;
-                        errorCode <<= 8;
-                    }
-                    else
-                    {
-                        if (ecuResponse1 != null)
-                        {
-                            errorIndex = 0;
-                            dtcList = ActivityCommon.ParseEcuDtcResponse(ecuResponse1, saeMode);
-                        }
-
-                        if (dtcList != null && errorIndex < dtcList.Count)
-                        {
-                            dtcEntry = dtcList[errorIndex];
-                        }
-                    }
-
-                    List<string> textList = null;
-                    if (ActivityCommon.VagUdsActive && dtcEntry != null)
-                    {
-                        if (dtcEntry.ErrorType != UdsFileReader.DataReader.ErrorType.Uds)
-                        {
-                            string dataFileName = null;
-                            if (!string.IsNullOrEmpty(errorReport.VagDataFileName))
-                            {
-                                dataFileName = Path.Combine(_instanceData.VagPath, errorReport.VagDataFileName);
-                            }
-                            UdsFileReader.UdsReader udsReader = ActivityCommon.GetUdsReader(dataFileName);
-                            if (udsReader != null)
-                            {
-                                textList = udsReader.DataReader.ErrorCodeToString(
-                                    dtcEntry.DtcCode, dtcEntry.DtcDetail, dtcEntry.ErrorType, udsReader);
-                                if (saeDetail && ecuResponseList.Count > 0)
-                                {
-                                    byte[] detailData = ActivityCommon.ParseSaeDetailDtcResponse(ecuResponseList[0]);
-                                    if (detailData != null)
-                                    {
-                                        List<string> saeDetailList = udsReader.DataReader.SaeErrorDetailHeadToString(detailData, udsReader);
-                                        if (saeDetailList != null)
-                                        {
-                                            textList.AddRange(saeDetailList);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            if (!string.IsNullOrEmpty(errorReport.VagUdsFileName))
-                            {
-                                string udsFileName = null;
-                                if (!string.IsNullOrEmpty(errorReport.VagUdsFileName))
-                                {
-                                    udsFileName = Path.Combine(_instanceData.VagPath, errorReport.VagUdsFileName);
-                                }
-                                UdsFileReader.UdsReader udsReader = ActivityCommon.GetUdsReader(udsFileName);
-                                if (udsReader != null)
-                                {
-                                    textList = udsReader.ErrorCodeToString(udsFileName, dtcEntry.DtcCode, dtcEntry.DtcDetail);
-                                    if (ecuResponseList.Count > 0)
-                                    {
-                                        byte[] response = ActivityCommon.ExtractUdsEcuResponses(ecuResponseList[0]);
-                                        if (response != null)
-                                        {
-                                            List<string> errorDetailList = udsReader.ErrorDetailBlockToString(udsFileName, response);
-                                            if (errorDetailList != null)
-                                            {
-                                                textList.AddRange(errorDetailList);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        srMessage.Append("\r\n");
-                        srMessage.Append(GetString(Resource.String.error_error_code));
-                        srMessage.Append(": ");
-                        srMessage.Append(string.Format("0x{0:X04} 0x{1:X02} {2}", dtcEntry.DtcCode, dtcEntry.DtcDetail, dtcEntry.ErrorType.ToString()));
-                    }
-                    if (textList == null)
-                    {
-                        textList = _activityCommon.ConvertVagDtcCode(_instanceData.EcuPath, errorCode, errorTypeList, kwp1281, saeMode);
-                        srMessage.Append("\r\n");
-                        srMessage.Append(GetString(Resource.String.error_error_code));
-                        srMessage.Append(": ");
-                        srMessage.Append(string.Format("0x{0:X}", errorCode));
-                        foreach (long errorType in errorTypeList)
-                        {
-                            srMessage.Append(string.Format(";{0}", errorType));
-                        }
-
-                        if (saeMode)
-                        {
-                            srMessage.Append("\r\n");
-                            srMessage.Append(string.Format("{0}-{1:X02}", ActivityCommon.SaeCode16ToString(errorCode >> 8), errorCode & 0xFF));
-                        }
-                    }
-                    if (textList != null)
-                    {
-                        // ReSharper disable once LoopCanBeConvertedToQuery
-                        foreach (string text in textList)
-                        {
-                            srMessage.Append("\r\n");
-                            srMessage.Append(text);
-                        }
-                    }
-                }
-                else
-                {
-                    // BMW
-                    string text1 = string.Empty;
-                    string text2 = string.Empty;
-                    Int64 errorCode = GetResultInt64(errorReport.ErrorDict, "F_ORT_NR", out bool errorCodeFound);
-                    if (!errorCodeFound)
-                    {
-                        errorCode = 0x0000;
-                    }
-
-                    bool showUnknown = !(ActivityCommon.EcuFunctionsActive && ActivityCommon.ShowOnlyRelevantErrors);
-                    List<EcuFunctionStructs.EcuEnvCondLabel> envCondLabelList = null;
-                    if (ecuVariant != null)
-                    {
-#if false   // test code for result states
-                        List<EcuFunctionStructs.EcuEnvCondLabel> envCondLabelResultList = ActivityCommon.EcuFunctionReader.GetEnvCondLabelListWithResultStates(ecuVariant);
-                        if (envCondLabelResultList != null && envCondLabelResultList.Count > 0)
-                        {
-                            string detailTestText = EdiabasThread.ConvertEnvCondErrorDetail(this, errorReport, envCondLabelResultList);
-                            if (!string.IsNullOrEmpty(detailTestText))
-                            {
-                                srMessage.Append("\r\n");
-                                srMessage.Append(detailTestText);
-                            }
-                        }
-#endif
-                        if (errorReport.IsValid)
-                        {
-                            if (errorCode != 0x0000)
-                            {
-                                envCondLabelList = ActivityCommon.EcuFunctionReader.GetEnvCondLabelList(errorCode, errorReport.ReadIs, ecuVariant);
-                                List<string> faultResultList = EdiabasThread.ConvertFaultCodeError(errorCode, errorReport.ReadIs, errorReport, ecuVariant);
-
-                                if (faultResultList != null && faultResultList.Count == 2)
-                                {
-                                    text1 = faultResultList[0];
-                                    text2 = faultResultList[1];
-                                }
-                            }
-                        }
-                        else
-                        {
-                            if (!showUnknown)
-                            {
-                                errorCode = 0x0000;
-                            }
-                        }
-                    }
-
-                    if (showUnknown && errorCode != 0x0000 && string.IsNullOrEmpty(text1))
-                    {
-                        text1 = FormatResultString(errorReport.ErrorDict, "F_ORT_TEXT", "{0}");
-                        text2 = FormatResultString(errorReport.ErrorDict, "F_VORHANDEN_TEXT", "{0}");
-                        if (ActivityCommon.IsTranslationRequired() && ActivityCommon.EnableTranslation)
-                        {
-                            int index = translationList.Count;
-                            translationList.Add(text1);
-                            translationList.Add(text2);
-                            if (_translationList != null && _translatedList != null &&
-                                _translationList.Count == _translatedList.Count)
-                            {
-                                if (index < _translatedList.Count)
-                                {
-                                    if (string.Compare(text1, _translationList[index], StringComparison.Ordinal) == 0)
-                                    {
-                                        text1 = _translatedList[index];
-                                    }
-                                }
-                                index++;
-                                if (index < _translatedList.Count)
-                                {
-                                    if (string.Compare(text2, _translationList[index], StringComparison.Ordinal) == 0)
-                                    {
-                                        text2 = _translatedList[index];
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    string textErrorCode = FormatResultInt64(errorReport.ErrorDict, "F_ORT_NR", "{0:X04}");
-                    if (errorCode == 0x0000 || (string.IsNullOrEmpty(text1) && string.IsNullOrEmpty(textErrorCode)))
-                    {
-                        srMessage.Clear();
-                    }
-                    else
-                    {
-                        srMessage.Append("\r\n");
-                        if (!string.IsNullOrEmpty(textErrorCode))
-                        {
-                            if (errorReport.ReadIs)
-                            {
-                                srMessage.Append(GetString(Resource.String.error_info_code));
-                            }
-                            else
-                            {
-                                srMessage.Append(GetString(Resource.String.error_error_code));
-                                if (shadow)
-                                {
-                                    srMessage.Append(" ");
-                                    srMessage.Append(GetString(Resource.String.error_shadow));
-                                }
-                            }
-                            srMessage.Append(": ");
-                            srMessage.Append(textErrorCode);
-                            srMessage.Append("\r\n");
-                        }
-
-                        srMessage.Append(text1);
-                        if (!string.IsNullOrEmpty(text2))
-                        {
-                            srMessage.Append(", ");
-                            srMessage.Append(text2);
-                        }
-
-                        string detailText = EdiabasThread.ConvertEnvCondErrorDetail(this, errorReport, envCondLabelList);
-                        if (!string.IsNullOrEmpty(detailText))
-                        {
-                            srMessage.Append("\r\n");
-                            srMessage.Append(detailText);
-                        }
-                    }
-                }
-            }
-
-            string message = srMessage.ToString();
-            if (formatErrorResult != null)
-            {
-                try
-                {
-                    object[] args = { pageInfo, errorReport, message };
-                    message = formatErrorResult.Invoke(pageInfo.ClassObject, args) as string;
-                }
-                catch (Exception)
-                {
-                    // ignored
-                }
-            }
-
-            return message;
+                    return new Tuple<string, string>(text1, text2);
+                }, ref dtcList);
         }
 
         private void UpdateButtonErrorReset(Button buttonErrorReset, List<TableResultItem> resultItems)
@@ -5454,7 +4334,7 @@ namespace BmwDeepObd
             return GetResultString(new MultiMap<string, EdiabasNet.ResultData>(resultDict), dataName, 0, out found);
         }
 
-        public static String GetResultString(MultiMap<string, EdiabasNet.ResultData> resultDict, string dataName, int index, out bool found)
+        public static string GetResultString(MultiMap<string, EdiabasNet.ResultData> resultDict, string dataName, int index, out bool found)
         {
             found = false;
             if (resultDict != null && resultDict.TryGetValue(dataName.ToUpperInvariant(), out IList<EdiabasNet.ResultData> resultDataList))
@@ -5473,10 +4353,10 @@ namespace BmwDeepObd
             return string.Empty;
         }
 
-        public static String GetPageString(JobReader.PageInfo pageInfo, string name)
+        public static string GetPageString(JobReader.PageInfo pageInfo, string name)
         {
-            string lang = Java.Util.Locale.Default.Language ?? string.Empty;
-            string langIso = Java.Util.Locale.Default.ISO3Language ?? string.Empty;
+            string lang = ActivityCommon.GetCurrentLanguageStatic();
+            string langIso = ActivityCommon.GetCurrentLanguageStatic(true);
             JobReader.StringInfo stringInfoDefault = null;
             JobReader.StringInfo stringInfoSel = null;
             foreach (JobReader.StringInfo stringInfo in pageInfo.StringList)
@@ -5491,12 +4371,19 @@ namespace BmwDeepObd
                     stringInfoSel = stringInfo;
                 }
             }
-            if (stringInfoSel == null) stringInfoSel = stringInfoDefault;
 
             string result = string.Empty;
             if (stringInfoSel != null)
             {
                 if (!stringInfoSel.StringDict.TryGetValue(name, out result))
+                {
+                    result = string.Empty;
+                }
+            }
+
+            if (string.IsNullOrEmpty(result) && stringInfoDefault != null)
+            {
+                if (!stringInfoDefault.StringDict.TryGetValue(name, out result))
                 {
                     result = string.Empty;
                 }
@@ -5560,7 +4447,7 @@ namespace BmwDeepObd
             bool failed = false;
             string lastFileName = ActivityCommon.JobReader.XmlFileName ?? string.Empty;
             ActivityCommon.JobReader.Clear();
-            if (_instanceData.LastAppState != LastAppState.Compile && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
+            if (_instanceData.LastAppState != ActivityCommon.LastAppState.Compile && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
             {
                 if (!ActivityCommon.JobReader.ReadXml(_instanceData.ConfigFileName, out string errorMessage))
                 {
@@ -5609,7 +4496,7 @@ namespace BmwDeepObd
 
             try
             {
-                if (ActivityCommon.IsTranslationAvailable() && ActivityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
+                if (ActivityCommon.IsTranslationAvailable() && _activityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
                 {
                     string xmlFileDir = Path.GetDirectoryName(_instanceData.ConfigFileName);
                     if (!string.IsNullOrEmpty(xmlFileDir))
@@ -5635,7 +4522,7 @@ namespace BmwDeepObd
 
             try
             {
-                if (ActivityCommon.IsTranslationAvailable() && ActivityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
+                if (ActivityCommon.IsTranslationAvailable() && _activityCommon.IsTranslationRequired() && !string.IsNullOrEmpty(_instanceData.ConfigFileName))
                 {
                     string xmlFileDir = Path.GetDirectoryName(_instanceData.ConfigFileName);
                     if (!string.IsNullOrEmpty(xmlFileDir))
@@ -5863,131 +4750,119 @@ namespace BmwDeepObd
                             _compileProgress.Progress = 0;
                         }
 
-                        StoreLastAppState(LastAppState.Compile);
+                        StoreLastAppState(ActivityCommon.LastAppState.Compile);
                     });
 
-                    bool progressUpdated = false;
-                    List<string> compileResultList = new List<string>();
-                    List<Thread> threadList = new List<Thread>();
-                    foreach (JobReader.PageInfo pageInfo in ActivityCommon.JobReader.PageList)
+                    if (ActivityCommon.JobReader.PageList.Any(pageInfo => pageInfo.ClassCode != null))
                     {
-                        if (pageInfo.ClassCode == null) continue;
-                        // limit number of active tasks
-                        for (; ; )
+                        if (!_activityCommon.ExtraktPackageAssemblies(_instanceData.PackageAssembliesDir))
                         {
-                            int activeThreads = threadList.Count(thread => thread.IsAlive);
-                            if (activeThreads < 3)
-                            {
-                                break;
-                            }
-                            Thread.Sleep(200);
+#if DEBUG
+                            Log.Info(Tag, "CompileCode ExtraktPackageAssemblies failed");
+#endif
                         }
 
-                        RunOnUiThread(() =>
+                        List<Microsoft.CodeAnalysis.MetadataReference> referencesList = ActivityCommon.GetLoadedMetadataReferences(_instanceData.PackageAssembliesDir, out bool hasErrors);
+                        if (hasErrors)
                         {
-                            if (_activityCommon == null)
+                            if (_activityCommon.ExtraktPackageAssemblies(_instanceData.PackageAssembliesDir, true))
                             {
-                                return;
+                                referencesList = ActivityCommon.GetLoadedMetadataReferences(_instanceData.PackageAssembliesDir, out hasErrors);
                             }
-                            // ReSharper disable once ConditionIsAlwaysTrueOrFalse
-                            if (_compileProgress != null)
+                            else
                             {
-                                if (cpuUsage >= 0 && Stopwatch.GetTimestamp() - startTime > 1000 * ActivityCommon.TickResolMs)
-                                {
-                                    progressUpdated = true;
-                                    _compileProgress.SetMessage(GetString(Resource.String.compile_start));
-                                    _compileProgress.Indeterminate = true;
-                                }
+#if DEBUG
+                                Log.Info(Tag, "CompileCode ExtraktPackageAssemblies failed");
+#endif
                             }
-                        });
+                        }
 
-                        JobReader.PageInfo infoLocal = pageInfo;
-                        Thread compileThread = new Thread(() =>
+                        if (hasErrors)
                         {
-                            string result = string.Empty;
-                            StringWriter reportWriter = new StringWriter();
-                            try
+#if DEBUG
+                            Log.Info(Tag, "CompileCode GetLoadedMetadataReferences failed");
+#endif
+                        }
+
+                        bool progressUpdated = false;
+                        List<string> compileResultList = new List<string>();
+                        List<Thread> threadList = new List<Thread>();
+                        foreach (JobReader.PageInfo pageInfo in ActivityCommon.JobReader.PageList)
+                        {
+                            if (pageInfo.ClassCode == null)
                             {
-                                Evaluator evaluator = new Evaluator(new CompilerContext(new CompilerSettings(), new ConsoleReportPrinter(reportWriter)));
-                                evaluator.ReferenceAssembly(Assembly.GetExecutingAssembly());
-                                evaluator.ReferenceAssembly(typeof(EdiabasNet).Assembly);
-                                evaluator.ReferenceAssembly(typeof(View).Assembly);
-                                string classCode = @"
-                                    using Android.Views;
-                                    using Android.Widget;
-                                    using Android.Content;
-                                    using EdiabasLib;
-                                    using BmwDeepObd;
-                                    using System;
-                                    using System.Collections.Generic;
-                                    using System.Diagnostics;
-                                    using System.Threading;"
-                                    + infoLocal.ClassCode;
-                                evaluator.Compile(classCode);
-                                object classObject = evaluator.Evaluate("new PageClass()");
-                                if (((infoLocal.JobsInfo == null) || (infoLocal.JobsInfo.JobList.Count == 0)) &&
-                                    ((infoLocal.ErrorsInfo == null) || (infoLocal.ErrorsInfo.EcuList.Count == 0)))
+                                continue;
+                            }
+
+                            // limit number of active tasks
+                            for (; ; )
+                            {
+                                int activeThreads = threadList.Count(thread => thread.IsAlive);
+                                if (activeThreads < 3)
                                 {
-                                    if (classObject == null)
+                                    break;
+                                }
+
+                                Thread.Sleep(200);
+                            }
+
+                            RunOnUiThread(() =>
+                            {
+                                if (_activityCommon == null)
+                                {
+                                    return;
+                                }
+                                // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+                                if (_compileProgress != null)
+                                {
+                                    if (cpuUsage >= 0 && Stopwatch.GetTimestamp() - startTime > 1000 * ActivityCommon.TickResolMs)
                                     {
-                                        throw new Exception("Compiling PageClass failed");
+                                        progressUpdated = true;
+                                        _compileProgress.SetMessage(GetString(Resource.String.compile_start));
+                                        _compileProgress.Indeterminate = true;
                                     }
-                                    Type pageType = classObject.GetType();
-                                    if (pageType.GetMethod("ExecuteJob") == null)
+                                }
+                            });
+
+                            JobReader.PageInfo infoLocal = pageInfo;
+                            Thread compileThread = new Thread(() =>
+                            {
+                                string result = _activityCommon.CompileCode(infoLocal, referencesList);
+                                if (!string.IsNullOrEmpty(result))
+                                {
+                                    result = GetPageString(infoLocal, infoLocal.Name) + ":\r\n" + result;
+                                    lock (compileResultList)
                                     {
-                                        throw new Exception("No ExecuteJob method");
+                                        compileResultList.Add(result);
                                     }
                                 }
-                                infoLocal.ClassObject = classObject;
-                            }
-                            catch (Exception ex)
-                            {
-                                infoLocal.ClassObject = null;
-                                result = reportWriter.ToString();
-                                if (string.IsNullOrEmpty(result))
-                                {
-                                    result = EdiabasNet.GetExceptionText(ex);
-                                }
-                                result = GetPageString(infoLocal, infoLocal.Name) + ":\r\n" + result;
-                            }
-                            if (infoLocal.CodeShowWarnings && string.IsNullOrEmpty(result))
-                            {
-                                result = reportWriter.ToString();
-                            }
+                            });
+                            compileThread.Start();
+                            threadList.Add(compileThread);
+                        }
 
-                            if (!string.IsNullOrEmpty(result))
-                            {
-                                lock (compileResultList)
-                                {
-                                    compileResultList.Add(result);
-                                }
-                            }
-                        });
-                        compileThread.Start();
-                        threadList.Add(compileThread);
-                    }
-
-                    foreach (Thread compileThread in threadList)
-                    {
-                        compileThread.Join();
-                    }
-
-                    if (cpuUsage >= 0 && !progressUpdated)
-                    {
-                        Thread.Sleep(1000);
-                    }
-
-                    foreach (string compileResult in compileResultList)
-                    {
-                        string result = compileResult;
-                        RunOnUiThread(() =>
+                        foreach (Thread compileThread in threadList)
                         {
-                            if (_activityCommon == null)
+                            compileThread.Join();
+                        }
+
+                        if (cpuUsage >= 0 && !progressUpdated)
+                        {
+                            Thread.Sleep(1000);
+                        }
+
+                        foreach (string compileResult in compileResultList)
+                        {
+                            string result = compileResult;
+                            RunOnUiThread(() =>
                             {
-                                return;
-                            }
-                            _activityCommon.ShowAlert(result, Resource.String.alert_title_error);
-                        });
+                                if (_activityCommon == null)
+                                {
+                                    return;
+                                }
+                                _activityCommon.ShowAlert(result, Resource.String.alert_title_error);
+                            });
+                        }
                     }
 
                     RunOnUiThread(() =>
@@ -5997,29 +4872,30 @@ namespace BmwDeepObd
                             return;
                         }
 
-                        StoreLastAppState(LastAppState.Compiled);
+                        StoreLastAppState(ActivityCommon.LastAppState.Compiled);
                         PostCreateActionBarTabs();
 
                         _compileProgress.Dismiss();
-                        _compileProgress.Dispose();
                         _compileProgress = null;
                         UpdateLockState();
+
                         if (cpuUsage >= CpuLoadCritical)
                         {
-                            _activityCommon.ShowAlert(string.Format(GetString(Resource.String.compile_cpu_usage_high), cpuUsage), Resource.String.alert_title_warning);
+                            string balloonMessage = string.Format(GetString(Resource.String.compile_cpu_usage_high), cpuUsage);
+                            ShowBallonMessage(balloonMessage);
                         }
                         else
                         {
                             if (ActivityCommon.JobReader.CompatIdsUsed)
                             {
-                                _activityCommon.ShowAlert(GetString(Resource.String.compile_compat_id_warn), Resource.String.alert_title_warning);
+                                ShowBallonMessage(GetString(Resource.String.compile_compat_id_warn));
                             }
                         }
                     });
                 }
                 catch (Exception e)
                 {
-                    exceptionMessage = EdiabasNet.GetExceptionText(e);
+                    exceptionMessage = EdiabasNet.GetExceptionText(e, false, false);
                 }
 
                 if (!string.IsNullOrEmpty(exceptionMessage))
@@ -6127,8 +5003,8 @@ namespace BmwDeepObd
                         MultipartFormDataContent formDownload = new MultipartFormDataContent
                         {
                             { new StringContent(ActivityCommon.AppId), "appid" },
-                            { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", _currentVersionCode)), "appver" },
-                            { new StringContent(ActivityCommon.GetCurrentLanguage()), "lang" },
+                            { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", _activityCommon.VersionCode)), "appver" },
+                            { new StringContent(_activityCommon.GetCurrentLanguage()), "lang" },
                             { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", (long) Build.VERSION.SdkInt)), "android_ver" },
                             { new StringContent(Build.Fingerprint), "fingerprint" },
                             { new StringContent(obbName), "obb_name" },
@@ -6177,7 +5053,6 @@ namespace BmwDeepObd
                         if (_downloadProgress != null)
                         {
                             _downloadProgress.Dismiss();
-                            _downloadProgress.Dispose();
                             _downloadProgress = null;
                             UpdateLockState();
                         }
@@ -6241,7 +5116,6 @@ namespace BmwDeepObd
                                         if (!yesSelected)
                                         {
                                             _downloadProgress.Dismiss();
-                                            _downloadProgress.Dispose();
                                             _downloadProgress = null;
                                             UpdateLockState();
                                         }
@@ -6258,7 +5132,6 @@ namespace BmwDeepObd
                     }
 
                     _downloadProgress.Dismiss();
-                    _downloadProgress.Dispose();
                     _downloadProgress = null;
                     UpdateLockState();
 
@@ -6278,6 +5151,11 @@ namespace BmwDeepObd
             }
 
             string message = GetString(Resource.String.download_failed);
+            if (ActivityCommon.HasValidProxyHost() != null)
+            {
+                message += "\n" + GetString(Resource.String.download_proxy_config);
+            }
+
             if (downloadInfo == null)
             {
                 _activityCommon.ShowAlert(message, Resource.String.alert_title_error);
@@ -6363,14 +5241,14 @@ namespace BmwDeepObd
                     return null;
                 }
 
-                using (AesCryptoServiceProvider crypto = new AesCryptoServiceProvider())
+                using (Aes crypto = Aes.Create())
                 {
                     crypto.Mode = CipherMode.CBC;
                     crypto.Padding = PaddingMode.PKCS7;
                     crypto.KeySize = 256;
 
                     byte[] appIdBytes = Encoding.ASCII.GetBytes(ActivityCommon.AppId.ToLowerInvariant());
-                    using (SHA256Managed sha256 = new SHA256Managed())
+                    using (SHA256 sha256 = SHA256.Create())
                     {
                         crypto.Key = sha256.ComputeHash(appIdBytes);
                     }
@@ -6710,7 +5588,7 @@ namespace BmwDeepObd
                 catch (Exception ex)
                 {
                     extractFailed = true;
-                    exceptionText = EdiabasNet.GetExceptionText(ex);
+                    exceptionText = EdiabasNet.GetExceptionText(ex, false, false);
                     if (ex is IOException)
                     {
                         ioError = true;
@@ -6740,7 +5618,6 @@ namespace BmwDeepObd
                     if (_downloadProgress != null)
                     {
                         _downloadProgress.Dismiss();
-                        _downloadProgress.Dispose();
                         _downloadProgress = null;
                         UpdateLockState();
                     }
@@ -6979,27 +5856,12 @@ namespace BmwDeepObd
                 _downloadEcuAlertDialog = new AlertDialog.Builder(this)
                     .SetPositiveButton(Resource.String.button_yes, (sender, args) =>
                     {
-                        if (ExpansionDownloaderActivity.IsFromGooglePlay(this))
+                        if (_activityCommon == null)
                         {
-                            try
-                            {
-                                StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"market://details?id=" + PackageName)));
-                                return;
-                            }
-                            catch (Exception)
-                            {
-                                // ignored
-                            }
+                            return;
                         }
 
-                        try
-                        {
-                            StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"https://play.google.com/store/apps/details?id=" + PackageName)));
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
+                        _activityCommon.OpenPlayStoreForPackage(PackageName);
                     })
                     .SetNegativeButton(Resource.String.button_no, (sender, args) =>
                     {
@@ -7237,6 +6099,7 @@ namespace BmwDeepObd
             StoreTranslation();
             ActivityCommon.JobReader.Clear();
             _instanceData.ConfigFileName = string.Empty;
+            StoreActiveJobIndex();
             StoreSettings();
 
             PostCreateActionBarTabs();
@@ -7275,7 +6138,13 @@ namespace BmwDeepObd
                 {
                     return;
                 }
+
                 SparseBooleanArray sparseArray = listView.CheckedItemPositions;
+                if (sparseArray == null)
+                {
+                    return;
+                }
+
                 for (int i = 0; i < sparseArray.Size(); i++)
                 {
                     bool value = sparseArray.ValueAt(i);
@@ -7315,18 +6184,30 @@ namespace BmwDeepObd
                 UpdateOptionsMenu();
             });
             builder.SetNegativeButton(Resource.String.button_abort, (sender, args) => { });
-            builder.Show();
+
+            AlertDialog alertDialog = builder.Create();
+            alertDialog.Show();
+
+            if (ActivityCommon.IsDocumentTreeSupported())
+            {
+                ActivityCommon.ShowAlertDialogBallon(this, alertDialog, Resource.String.menu_hint_copy_folder);
+            }
         }
 
         private void OpenDonateLink()
         {
-            try
+            _activityCommon.OpenWebUrl("https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=VUFSVNBRQQBPJ");
+        }
+
+        private void ShowBallonMessage(string message)
+        {
+            View rootView = _contentView?.RootView;
+            if (rootView != null)
             {
-                StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=VUFSVNBRQQBPJ")));
-            }
-            catch (Exception)
-            {
-                // ignored
+                Balloon.Builder balloonBuilder = ActivityCommon.GetBalloonBuilder(this);
+                balloonBuilder.Text = message;
+                Balloon balloon = balloonBuilder.Build();
+                balloon.Show(rootView);
             }
         }
 
@@ -7439,6 +6320,7 @@ namespace BmwDeepObd
                 }
                 StoreSettings();
                 UpdateOptionsMenu();
+                UpdateDisplay();
             });
         }
 
@@ -7488,6 +6370,7 @@ namespace BmwDeepObd
             }
             serverIntent.PutExtra(FilePickerActivity.ExtraInitDir, initDir);
             serverIntent.PutExtra(FilePickerActivity.ExtraFileExtensions, ".cccfg");
+            serverIntent.PutExtra(FilePickerActivity.ExtraInfoText, GetString(Resource.String.menu_hint_copy_folder));
             StartActivityForResult(serverIntent, (int)ActivityRequest.RequestSelectConfig);
         }
 
@@ -7508,7 +6391,7 @@ namespace BmwDeepObd
                 // ignored
             }
             serverIntent.PutExtra(FilePickerActivity.ExtraInitDir, initDir);
-            serverIntent.PutExtra(FilePickerActivity.ExtraFileExtensions, ".cccfg;.ccpages;.ccpage");
+            serverIntent.PutExtra(FilePickerActivity.ExtraFileExtensions, ".cccfg;.ccpages;.ccpage;.xml");
             StartActivityForResult(serverIntent, (int)ActivityRequest.RequestEditConfig);
         }
 
@@ -7741,7 +6624,7 @@ namespace BmwDeepObd
             }
             catch (Exception ex)
             {
-                string errorMessage = EdiabasNet.GetExceptionText(ex);
+                string errorMessage = EdiabasNet.GetExceptionText(ex, false, false);
 #if DEBUG
                 Log.Info(Tag, string.Format("StartEditXml Exception: {0}", errorMessage));
 #endif
@@ -7754,6 +6637,477 @@ namespace BmwDeepObd
                 _activityCommon.ShowAlert(message, Resource.String.alert_title_error);
                 return false;
             }
+        }
+
+        private bool EditFontSize(JobReader.PageInfo currentPage)
+        {
+            try
+            {
+                if (currentPage == null)
+                {
+                    return false;
+                }
+
+                string fileName = currentPage.XmlFileName;
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    return false;
+                }
+
+                string fileText = File.ReadAllText(fileName);
+                if (string.IsNullOrWhiteSpace(fileText))
+                {
+                    return false;
+                }
+
+                string startNodeName = "page";
+                Regex regexfontSize = new Regex($"(<\\s*{startNodeName}\\s+.*\\W{JobReader.PageFontSize}\\s*=\\s*)\"(\\w+)\"", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                MatchCollection matches = regexfontSize.Matches(fileText);
+                int validMatchCount = GetValidEditRegExMatches(matches, startNodeName);
+                if (validMatchCount == 0)
+                {
+                    _activityCommon.ShowAlert(GetString(Resource.String.file_editing_failed), Resource.String.alert_title_error);
+                    return false;
+                }
+
+                int currentFontIndex = 0;
+                if (currentPage.DisplayFontSize != null)
+                {
+                    switch (currentPage.DisplayFontSize.Value)
+                    {
+                        case XmlToolActivity.DisplayFontSize.Small:
+                            currentFontIndex = 0;
+                            break;
+
+                        case XmlToolActivity.DisplayFontSize.Medium:
+                            currentFontIndex = 1;
+                            break;
+
+                        case XmlToolActivity.DisplayFontSize.Large:
+                            currentFontIndex = 2;
+                            break;
+                    }
+                }
+
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.SetTitle(Resource.String.menu_cfg_page_edit_fontsize);
+                ListView listView = new ListView(this);
+
+                List<string> sizeNames = new List<string>
+                {
+                    GetString(Resource.String.xml_tool_ecu_font_size_small),
+                    GetString(Resource.String.xml_tool_ecu_font_size_medium),
+                    GetString(Resource.String.xml_tool_ecu_font_size_large),
+                };
+                ArrayAdapter<string> adapter = new ArrayAdapter<string>(this,
+                    Android.Resource.Layout.SimpleListItemSingleChoice, sizeNames.ToArray());
+                listView.Adapter = adapter;
+                listView.ChoiceMode = ChoiceMode.Single;
+                listView.SetItemChecked(0, currentFontIndex == 0);
+                listView.SetItemChecked(1, currentFontIndex == 1);
+                listView.SetItemChecked(2, currentFontIndex == 2);
+
+                builder.SetView(listView);
+                builder.SetPositiveButton(Resource.String.button_ok, (sender, args) =>
+                {
+                    if (_activityCommon == null)
+                    {
+                        return;
+                    }
+
+                    string selectedFont = XmlToolActivity.DisplayFontSize.Small.ToString().ToLowerInvariant();
+                    switch (listView.CheckedItemPosition)
+                    {
+                        case 1:
+                            selectedFont = XmlToolActivity.DisplayFontSize.Medium.ToString().ToLowerInvariant();
+                            break;
+
+                        case 2:
+                            selectedFont = XmlToolActivity.DisplayFontSize.Large.ToString().ToLowerInvariant();
+                            break;
+                    }
+
+                    string fileTextMod = regexfontSize.Replace(fileText, match =>
+                    {
+                        if (IsValidEditRegExMatch(match, startNodeName))
+                        {
+                            return string.Format(CultureInfo.InvariantCulture, "{0}\"{1}\"", match.Groups[1].Value, selectedFont);
+                        }
+
+                        return match.ToString();
+                    });
+
+                    if (fileTextMod != fileText)
+                    {
+                        WriteFileText(fileName, fileTextMod);
+                    }
+                });
+                builder.SetNegativeButton(Resource.String.button_abort, (sender, args) => { });
+                builder.Show();
+            }
+            catch (Exception ex)
+            {
+                string errorMessage = EdiabasNet.GetExceptionText(ex, false, false);
+#if DEBUG
+                Log.Info(Tag, string.Format("EditFontSize Exception: {0}", errorMessage));
+#endif
+                string message = GetString(Resource.String.file_access_denied);
+                if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    message += "\r\n" + errorMessage;
+                }
+
+                _activityCommon.ShowAlert(message, Resource.String.alert_title_error);
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool EditGaugesCount(JobReader.PageInfo currentPage, bool landscape)
+        {
+            try
+            {
+                if (currentPage == null)
+                {
+                    return false;
+                }
+
+                string fileName = currentPage.XmlFileName;
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    return false;
+                }
+
+                string fileText = File.ReadAllText(fileName);
+                if (string.IsNullOrWhiteSpace(fileText))
+                {
+                    return false;
+                }
+
+                string startNodeName = "page";
+                string keyWord = landscape ? JobReader.PageGaugesLandscape : JobReader.PageGaugesPortrait;
+                Regex regexGauges = new Regex($"(<\\s*{startNodeName}\\s+.*\\W{keyWord}\\s*=\\s*)\"(\\w+)\"", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                MatchCollection matches = regexGauges.Matches(fileText);
+                int validMatchCount = GetValidEditRegExMatches(matches, startNodeName);
+                if (validMatchCount == 0)
+                {
+                    _activityCommon.ShowAlert(GetString(Resource.String.file_editing_failed), Resource.String.alert_title_error);
+                    return false;
+                }
+
+                int currentGauges = landscape ? currentPage.GaugesLandscapeValue : currentPage.GaugesPortraitValue;
+                int titleId = landscape ? Resource.String.menu_cfg_page_edit_gauges_landscape : Resource.String.menu_cfg_page_edit_gauges_portrait;
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.SetTitle(titleId);
+                ListView listView = new ListView(this);
+
+                const int minGauges = 1;
+                const int maxGauges = 20;
+                int selectedPosition = 0;
+                List<string> gaugeNames = new List<string>();
+                for (int gauges = minGauges; gauges <= maxGauges; gauges++)
+                {
+                    gaugeNames.Add(string.Format(CultureInfo.InvariantCulture, "{0}", gauges));
+                    if (gauges == currentGauges)
+                    {
+                        selectedPosition = gaugeNames.Count - 1;
+                    }
+                }
+
+                if (selectedPosition >= gaugeNames.Count)
+                {
+                    selectedPosition = gaugeNames.Count - 1;
+                }
+
+                ArrayAdapter<string> adapter = new ArrayAdapter<string>(this,
+                    Android.Resource.Layout.SimpleListItemSingleChoice, gaugeNames.ToArray());
+                listView.Adapter = adapter;
+                listView.ChoiceMode = ChoiceMode.Single;
+                listView.SetItemChecked(selectedPosition, true);
+
+                builder.SetView(listView);
+                builder.SetPositiveButton(Resource.String.button_ok, (sender, args) =>
+                {
+                    if (_activityCommon == null)
+                    {
+                        return;
+                    }
+
+                    int pos = listView.CheckedItemPosition;
+                    if (pos < 0)
+                    {
+                        return;
+                    }
+
+                    int selectedGauges = pos + minGauges;
+                    string fileTextMod = regexGauges.Replace(fileText, match =>
+                    {
+                        if (IsValidEditRegExMatch(match, startNodeName))
+                        {
+                            return string.Format(CultureInfo.InvariantCulture, "{0}\"{1}\"", match.Groups[1].Value, selectedGauges);
+                        }
+
+                        return match.ToString();
+                    });
+
+                    if (fileTextMod != fileText)
+                    {
+                        WriteFileText(fileName, fileTextMod);
+                    }
+                });
+                builder.SetNegativeButton(Resource.String.button_abort, (sender, args) => { });
+                builder.Show();
+            }
+            catch (Exception ex)
+            {
+                string errorMessage = EdiabasNet.GetExceptionText(ex, false, false);
+#if DEBUG
+                Log.Info(Tag, string.Format("EditGaugesCount Exception: {0}", errorMessage));
+#endif
+                string message = GetString(Resource.String.file_access_denied);
+                if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    message += "\r\n" + errorMessage;
+                }
+
+                _activityCommon.ShowAlert(message, Resource.String.alert_title_error);
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool EditDisplayOrder(JobReader.PageInfo currentPage)
+        {
+            try
+            {
+                if (currentPage == null)
+                {
+                    return false;
+                }
+
+                string fileName = currentPage.XmlFileName;
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    return false;
+                }
+
+                string fileText = File.ReadAllText(fileName);
+                if (string.IsNullOrWhiteSpace(fileText))
+                {
+                    return false;
+                }
+
+                if (currentPage.DisplayList.Count < 1)
+                {
+                    return false;
+                }
+
+                string startNodeName = "display";
+                Regex regexDisplayOrder = new Regex($"(<\\s*{startNodeName}\\s+.*\\W{JobReader.DisplayNodeOrder}\\s*=\\s*)\"(\\d+)\"", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                MatchCollection matches = regexDisplayOrder.Matches(fileText);
+                int validMatchCount = GetValidEditRegExMatches(matches, startNodeName);
+                if (validMatchCount != currentPage.DisplayList.Count)
+                {
+                    _activityCommon.ShowAlert(GetString(Resource.String.file_editing_failed), Resource.String.alert_title_error);
+                    return false;
+                }
+
+                List<TextListReorderDialog.StringObjInfo> itemList = new List<TextListReorderDialog.StringObjInfo>();
+                foreach (JobReader.DisplayInfo info in currentPage.DisplayList)
+                {
+                    string description = string.Format(GetString(Resource.String.display_line_original_position), info.OriginalPosition + 1);
+                    itemList.Add(new TextListReorderDialog.StringObjInfo(GetPageString(currentPage, info.Name), description, info, info.OriginalPosition));
+                }
+
+                TextListReorderDialog dialog = new TextListReorderDialog(this, itemList);
+                dialog.SetTitle(Resource.String.menu_cfg_page_edit_display_order);
+                dialog.Message = string.Empty;
+                dialog.MessageDetail = string.Empty;
+
+                AlertDialog alertDialog = dialog.Create();
+
+                dialog.ButtonExtra.SetText(Resource.String.button_reset);
+                dialog.ButtonExtra.Visibility = ViewStates.Visible;
+                dialog.ButtonExtra.Click += (sender, args) =>
+                {
+                    if (_activityCommon == null)
+                    {
+                        return;
+                    }
+
+                    List<TextListReorderDialog.StringObjInfo> itemListSort = itemList.OrderBy(x => x.ItemId).ToList();
+                    dialog.UpdateItemList(itemListSort);
+                };
+
+                dialog.ButtonAbort.Click += (sender, args) =>
+                {
+                    if (_activityCommon == null)
+                    {
+                        return;
+                    }
+
+                    alertDialog.Cancel();
+                };
+
+                dialog.ButtonOk.Click += (sender, args) =>
+                {
+                    if (_activityCommon == null)
+                    {
+                        return;
+                    }
+
+                    DialogFinished(dialog, regexDisplayOrder, fileName, fileText, startNodeName);
+                    alertDialog.Cancel();
+                };
+
+                alertDialog.Show();
+            }
+            catch (Exception ex)
+            {
+                string errorMessage = EdiabasNet.GetExceptionText(ex, false, false);
+#if DEBUG
+                Log.Info(Tag, string.Format("EditDisplayOrder Exception: {0}", errorMessage));
+#endif
+                string message = GetString(Resource.String.file_access_denied);
+                if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    message += "\r\n" + errorMessage;
+                }
+
+                _activityCommon.ShowAlert(message, Resource.String.alert_title_error);
+                return false;
+            }
+
+            return true;
+
+            void DialogFinished(TextListReorderDialog dialog, Regex regexDisplayOrder, string fileName, string fileText, string startNodeName, bool reset = false)
+            {
+                if (_activityCommon == null)
+                {
+                    return;
+                }
+
+                List<TextListReorderDialog.StringObjInfo> itemListMod = dialog.ItemList;
+                int itemCount = itemListMod.Count;
+                int replaceIndex = 0;
+                string fileTextMod = regexDisplayOrder.Replace(fileText, match =>
+                {
+                    if (IsValidEditRegExMatch(match, startNodeName))
+                    {
+                        int orderIndex = -1;
+                        if (reset)
+                        {
+                            orderIndex = 0;
+                        }
+                        else
+                        {
+                            int index = 0;
+                            foreach (TextListReorderDialog.StringObjInfo info in itemListMod)
+                            {
+                                if (info.Data is JobReader.DisplayInfo displayInfo)
+                                {
+                                    if (displayInfo.OriginalPosition == replaceIndex)
+                                    {
+                                        orderIndex = index;
+                                        break;
+                                    }
+                                }
+
+                                index++;
+                            }
+                        }
+
+                        if (orderIndex >= 0)
+                        {
+                            replaceIndex++;
+                            return string.Format(CultureInfo.InvariantCulture, "{0}\"{1}\"", match.Groups[1].Value, orderIndex);
+                        }
+                    }
+
+                    return match.ToString();
+                });
+
+                if (replaceIndex != itemCount)
+                {
+                    _activityCommon.ShowAlert(GetString(Resource.String.file_editing_failed), Resource.String.alert_title_error);
+                    return;
+                }
+
+                if (fileTextMod != fileText)
+                {
+                    WriteFileText(fileName, fileTextMod);
+                }
+            }
+        }
+
+        public bool WriteFileText(string fileName, string fileText)
+        {
+            try
+            {
+                File.WriteAllText(fileName, fileText);
+                ReadConfigFile();
+            }
+            catch (Exception ex)
+            {
+                string errorMessage = EdiabasNet.GetExceptionText(ex, false, false);
+#if DEBUG
+                Log.Info(Tag, string.Format("WriteFileText Exception: {0}", errorMessage));
+#endif
+                string message = GetString(Resource.String.file_access_denied);
+                if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    message += "\r\n" + errorMessage;
+                }
+
+                _activityCommon.ShowAlert(message, Resource.String.alert_title_error);
+
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool IsValidEditRegExMatch(Match match, string startNodeName)
+        {
+            if (match.Groups.Count != 3)
+            {
+                return false;
+            }
+
+            if (!match.Groups[0].Success)
+            {
+                return false;
+            }
+
+            string matchText = match.Groups[0].Value;
+            if (matchText.Contains("/>", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string matchNodeEnd = "</" + (startNodeName ?? string.Empty);
+            if (matchText.Contains(matchNodeEnd, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public int GetValidEditRegExMatches(MatchCollection matches, string startNodeName)
+        {
+            int matchCount = 0;
+            foreach (Match regexMatch in matches)
+            {
+                if (IsValidEditRegExMatch(regexMatch, startNodeName))
+                {
+                    matchCount++;
+                }
+            }
+
+            return matchCount;
         }
 
         public class TabsFragmentStateAdapter : FragmentStateAdapter
@@ -7967,6 +7321,16 @@ namespace BmwDeepObd
                 }
 
                 _view = null;
+            }
+        }
+
+        private class EventArgsConnect : EventArgs
+        {
+            public bool AutoConnect { get; set; }
+
+            public EventArgsConnect(bool autoConnect)
+            {
+                AutoConnect = autoConnect;
             }
         }
 

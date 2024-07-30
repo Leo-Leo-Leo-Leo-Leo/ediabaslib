@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient.Utility
 {
@@ -53,8 +54,8 @@ namespace PsdzClient.Utility
 			return list.ToArray();
 		}
 
-		public static string Ascii2UTF8(object textObj)
-		{
+        public static string Ascii2UTF8(object textObj)
+        {
             try
             {
                 if (textObj == null)
@@ -114,6 +115,10 @@ namespace PsdzClient.Utility
                         if (array[i] >= '\uff00')
                         {
                             byte[] bytes = new UnicodeEncoding().GetBytes(array, i, 1);
+                            if (CoreFramework.DebugLevel > 1)
+                            {
+                                Log.Warning("FormatConverter.Ascii2UTF8()", "for char(hex): {0} in text: {1}", ByteArray2String(bytes, 1u), text);
+                            }
                             byte b = (byte)array[i];
                             array[i] = (char)b;
                         }
@@ -125,12 +130,12 @@ namespace PsdzClient.Utility
                 }
                 return new string(array);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                //Log.Warning("FormatConverter.Ascii2UTF8()", "failed with exception: {0}", ex.ToString());
+                Log.Warning("FormatConverter.Ascii2UTF8()", "failed with exception: {0}", ex.ToString());
                 return null;
             }
-		}
+        }
 
         public static string ByteArray2String(byte[] param, uint paramlen)
         {

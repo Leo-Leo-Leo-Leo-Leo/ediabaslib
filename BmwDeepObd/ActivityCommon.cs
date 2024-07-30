@@ -36,7 +36,6 @@ using Android.Content.PM;
 using Android.Content.Res;
 using Android.Locations;
 using Android.OS.Storage;
-using Android.Provider;
 using Android.Views;
 using AndroidX.Core.App;
 using BmwFileReader;
@@ -45,6 +44,10 @@ using AndroidX.AppCompat.App;
 using AndroidX.Core.Content;
 using AndroidX.Core.Content.PM;
 using AndroidX.DocumentFile.Provider;
+using BmwDeepObd.Dialogs;
+using Skydoves.BalloonLib;
+using AndroidX.Lifecycle;
+using Android.App.Backup;
 
 // ReSharper disable StringLiteralTypo
 // ReSharper disable IdentifierTypo
@@ -83,6 +86,55 @@ namespace BmwDeepObd
             /// Total free size of the file system at the given path
             /// </summary>
             public double FreeSizeBytes { get; set; }
+        }
+
+        public class YandexCloudIamTokenRequest
+        {
+            public YandexCloudIamTokenRequest(string oAuthToken)
+            {
+                OAuthToken = oAuthToken;
+            }
+
+            [JsonPropertyName("yandexPassportOauthToken")]
+            public string OAuthToken { get; }
+        }
+
+        public class YandexCloudListLanguagesRequest
+        {
+            public YandexCloudListLanguagesRequest(string folderId = null)
+            {
+                FolderId = folderId;
+            }
+
+            [JsonPropertyName("folderId")]
+            public string FolderId { get; }
+        }
+
+        public class YandexCloudTranslateRequest
+        {
+            public YandexCloudTranslateRequest(string[] textArray, string source, string target, string folderId = null)
+            {
+                TextArray = textArray;
+                Source = source;
+                Target = target;
+                Format = "PLAIN_TEXT";
+                FolderId = folderId;
+            }
+
+            [JsonPropertyName("texts")]
+            public string[] TextArray { get; }
+
+            [JsonPropertyName("sourceLanguageCode")]
+            public string Source { get; }
+
+            [JsonPropertyName("targetLanguageCode")]
+            public string Target { get; }
+
+            [JsonPropertyName("format")]
+            public string Format { get; }
+
+            [JsonPropertyName("folderId")]
+            public string FolderId { get; }
         }
 
         public class DeeplTranslateRequest
@@ -233,6 +285,211 @@ namespace BmwDeepObd
             }
         }
 
+        [XmlInclude(typeof(SerialInfoEntry))]
+        [XmlType("Settings")]
+        public class StorageData
+        {
+            public StorageData()
+            {
+                InitCommonData();
+                if (BaseActivity.GetActivityFromStack(typeof(ActivityMain)) is ActivityMain activityMain)
+                {
+                    InitData(activityMain.InstanceDataMain, activityMain.ActivityCommonMain);
+                }
+            }
+
+            public StorageData(InstanceDataCommon instanceData, ActivityCommon activityCommon, bool storage = false)
+            {
+                InitCommonData();
+                InitData(instanceData, activityCommon, storage);
+            }
+
+            public void InitCommonData()
+            {
+                LastAppState = LastAppState.Init;
+                SelectedLocale = ActivityCommon.SelectedLocale ?? string.Empty;
+                SelectedTheme = ActivityCommon.SelectedTheme ?? ThemeDefault;
+                DeviceName = string.Empty;
+                DeviceAddress = string.Empty;
+                ConfigFileName = string.Empty;
+                UpdateCheckTime = DateTime.MinValue.Ticks;
+                UpdateSkipVersion = -1;
+                LastVersionCode = -1;
+                StorageRequirementsAccepted = false;
+                XmlEditorPackageName = string.Empty;
+                XmlEditorClassName = string.Empty;
+
+                RecentConfigFiles = new List<string>();
+                CustomStorageMedia = ActivityCommon.CustomStorageMedia;
+                CopyToAppSrc = ActivityCommon.CopyToAppSrc;
+                CopyToAppDst = ActivityCommon.CopyToAppDst;
+                CopyFromAppSrc = ActivityCommon.CopyFromAppSrc;
+                CopyFromAppDst = ActivityCommon.CopyFromAppDst;
+                UsbFirmwareFileName = ActivityCommon.UsbFirmwareFileName;
+                EnableTranslation = ActivityCommon.EnableTranslation;
+                YandexApiKey = ActivityCommon.YandexApiKey;
+                IbmTranslatorApiKey = ActivityCommon.IbmTranslatorApiKey;
+                IbmTranslatorUrl = ActivityCommon.IbmTranslatorUrl;
+                DeeplApiKey = ActivityCommon.DeeplApiKey;
+                YandexCloudApiKey = ActivityCommon.YandexCloudApiKey;
+                YandexCloudFolderId = ActivityCommon.YandexCloudFolderId;
+                Translator = SelectedTranslator;
+                ShowBatteryVoltageWarning = ActivityCommon.ShowBatteryVoltageWarning;
+                BatteryWarnings = ActivityCommon.BatteryWarnings;
+                BatteryWarningVoltage = ActivityCommon.BatteryWarningVoltage;
+                SerialInfo = new List<SerialInfoEntry>();
+                AdapterBlacklist = ActivityCommon.AdapterBlacklist;
+                LastAdapterSerial = ActivityCommon.LastAdapterSerial;
+                EmailAddress = ActivityCommon.EmailAddress;
+                TraceInfo = ActivityCommon.TraceInfo;
+                AppId = ActivityCommon.AppId;
+                AutoHideTitleBar = ActivityCommon.AutoHideTitleBar;
+                SuppressTitleBar = ActivityCommon.SuppressTitleBar;
+                FullScreenMode = ActivityCommon.FullScreenMode;
+                SwapMultiWindowOrientation = ActivityCommon.SwapMultiWindowOrientation;
+                SelectedInternetConnection = ActivityCommon.SelectedInternetConnection;
+                SelectedManufacturer = ActivityCommon.SelectedManufacturer;
+                BtEnbaleHandling = ActivityCommon.BtEnbaleHandling;
+                BtDisableHandling = ActivityCommon.BtDisableHandling;
+                LockTypeCommunication = ActivityCommon.LockTypeCommunication;
+                LockTypeLogging = ActivityCommon.LockTypeLogging;
+                StoreDataLogSettings = ActivityCommon.StoreDataLogSettings;
+                AutoConnectHandling = ActivityCommon.AutoConnectHandling;
+                UpdateCheckDelay = ActivityCommon.UpdateCheckDelay;
+                DoubleClickForAppExit = ActivityCommon.DoubleClickForAppExit;
+                SendDataBroadcast = ActivityCommon.SendDataBroadcast;
+                CheckCpuUsage = ActivityCommon.CheckCpuUsage;
+                CheckEcuFiles = ActivityCommon.CheckEcuFiles;
+                OldVagMode = ActivityCommon.OldVagMode;
+                UseBmwDatabase = ActivityCommon.UseBmwDatabase;
+                ShowOnlyRelevantErrors = ActivityCommon.ShowOnlyRelevantErrors;
+                ScanAllEcus = ActivityCommon.ScanAllEcus;
+                CollectDebugInfo = ActivityCommon.CollectDebugInfo;
+                CompressTrace = ActivityCommon.CompressTrace;
+                DisableNetworkCheck = ActivityCommon.DisableNetworkCheck;
+            }
+
+            public void InitData(InstanceDataCommon instanceData, ActivityCommon activityCommon, bool storage = false)
+            {
+                if (instanceData == null || activityCommon == null)
+                {
+                    return;
+                }
+
+                LastAppState = instanceData.LastAppState;
+                LastSelectedJobIndex = instanceData.LastSelectedJobIndex;
+                SelectedEnetIp = activityCommon.SelectedEnetIp;
+                SelectedElmWifiIp = activityCommon.SelectedElmWifiIp;
+                SelectedDeepObdWifiIp = activityCommon.SelectedDeepObdWifiIp;
+                MtcBtDisconnectWarnShown = activityCommon.MtcBtDisconnectWarnShown;
+                DeviceName = instanceData.DeviceName;
+                DeviceAddress = instanceData.DeviceAddress;
+                ConfigFileName = instanceData.ConfigFileName;
+                UpdateCheckTime = instanceData.UpdateCheckTime;
+                UpdateSkipVersion = instanceData.UpdateSkipVersion;
+                LastVersionCode = activityCommon.VersionCode;
+                StorageRequirementsAccepted = instanceData.StorageRequirementsAccepted;
+                XmlEditorPackageName = instanceData.XmlEditorPackageName ?? string.Empty;
+                XmlEditorClassName = instanceData.XmlEditorClassName ?? string.Empty;
+                DataLogActive = instanceData.DataLogActive;
+                DataLogAppend = instanceData.DataLogAppend;
+                if (storage)
+                {
+                    RecentConfigFiles = GetRecentConfigList();
+                    SerialInfo = GetSerialInfoList();
+                }
+            }
+
+            public string CalcualeHash()
+            {
+                StringBuilder sb = new StringBuilder();
+                PropertyInfo[] properties = GetType().GetProperties();
+                foreach (PropertyInfo property in properties)
+                {
+                    object value = property.GetValue(this);
+                    if (value != null)
+                    {
+                        sb.Append(value);
+                    }
+                }
+
+                using (SHA256 sha256 = SHA256.Create())
+                {
+                    return BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()))).Replace("-", "");
+                }
+            }
+
+            [XmlElement("LastAppState")] public LastAppState LastAppState { get; set; }
+            [XmlElement("LastSelectedJobIndex")] public int LastSelectedJobIndex { get; set; }
+            [XmlElement("Locale")] public string SelectedLocale { get; set; }
+            [XmlElement("Theme")] public ThemeType SelectedTheme { get; set; }
+            [XmlElement("EnetIp")] public string SelectedEnetIp { get; set; }
+            [XmlElement("ElmWifiIp")] public string SelectedElmWifiIp { get; set; }
+            [XmlElement("DeepObdWifiIp")] public string SelectedDeepObdWifiIp { get; set; }
+            [XmlElement("MtcBtDisconnectWarnShown")] public bool MtcBtDisconnectWarnShown { get; set; }
+            [XmlElement("DeviceName")] public string DeviceName { get; set; }
+            [XmlElement("DeviceAddress")] public string DeviceAddress { get; set; }
+            [XmlElement("ConfigFile")] public string ConfigFileName { get; set; }
+            [XmlElement("UpdateCheckTime")] public long UpdateCheckTime { get; set; }
+            [XmlElement("UpdateSkipVersion")] public int UpdateSkipVersion { get; set; }
+            [XmlElement("VersionCode")] public long LastVersionCode { get; set; }
+            [XmlElement("StorageAccepted")] public bool StorageRequirementsAccepted { get; set; }
+            [XmlElement("XmlEditorPackageName")] public string XmlEditorPackageName { get; set; }
+            [XmlElement("XmlEditorClassName")] public string XmlEditorClassName { get; set; }
+            [XmlElement("DataLogActive")] public bool DataLogActive { get; set; }
+            [XmlElement("DataLogAppend")] public bool DataLogAppend { get; set; }
+
+            [XmlElement("RecentConfigFiles")] public List<string> RecentConfigFiles { get; set; }
+            [XmlElement("StorageMedia")] public string CustomStorageMedia { get; set; }
+            [XmlElement("CopyToAppSrc")] public string CopyToAppSrc { get; set; }
+            [XmlElement("CopyToAppDst")] public string CopyToAppDst { get; set; }
+            [XmlElement("CopyFromAppSrc")] public string CopyFromAppSrc { get; set; }
+            [XmlElement("CopyFromAppDst")] public string CopyFromAppDst { get; set; }
+            [XmlElement("UsbFirmwareFile")] public string UsbFirmwareFileName { get; set; }
+            [XmlElement("EnableTranslation")] public bool EnableTranslation { get; set; }
+            [XmlElement("YandexApiKey")] public string YandexApiKey { get; set; }
+            [XmlElement("IbmTranslatorApiKey")] public string IbmTranslatorApiKey { get; set; }
+            [XmlElement("IbmTranslatorUrl")] public string IbmTranslatorUrl { get; set; }
+            [XmlElement("DeeplApiKey")] public string DeeplApiKey { get; set; }
+            [XmlElement("YandexCloudApiKey")] public string YandexCloudApiKey { get; set; }
+            [XmlElement("YandexCloudFolderId")] public string YandexCloudFolderId { get; set; }
+            [XmlElement("Translator")] public TranslatorType Translator { get; set; }
+            [XmlElement("ShowBatteryVoltageWarning")] public bool ShowBatteryVoltageWarning { get; set; }
+            [XmlElement("BatteryWarnings")] public long BatteryWarnings { get; set; }
+            [XmlElement("BatteryWarningVoltage")] public double BatteryWarningVoltage { get; set; }
+            [XmlElement("SerialInfo")] public List<SerialInfoEntry> SerialInfo { get; set; }
+            [XmlElement("AdapterBlacklist")] public string AdapterBlacklist { get; set; }
+            [XmlElement("LastAdapterSerial")] public string LastAdapterSerial { get; set; }
+            [XmlElement("EmailAddress")] public string EmailAddress { get; set; }
+            [XmlElement("TraceInfo")] public string TraceInfo { get; set; }
+            [XmlElement("AppId")] public string AppId { get; set; }
+            [XmlElement("AutoHideTitleBar")] public bool AutoHideTitleBar { get; set; }
+            [XmlElement("SuppressTitleBar")] public bool SuppressTitleBar { get; set; }
+            [XmlElement("FullScreenMode")] public bool FullScreenMode { get; set; }
+            [XmlElement("SwapMultiWindowOrientation")] public bool SwapMultiWindowOrientation { get; set; }
+            [XmlElement("InternetConnection")] public InternetConnectionType SelectedInternetConnection { get; set; }
+            [XmlElement("Manufacturer")] public ManufacturerType SelectedManufacturer { get; set; }
+            [XmlElement("BtEnbale")] public BtEnableType BtEnbaleHandling { get; set; }
+            [XmlElement("BtDisable")] public BtDisableType BtDisableHandling { get; set; }
+            [XmlElement("LockComm")] public LockType LockTypeCommunication { get; set; }
+            [XmlElement("LockLog")] public LockType LockTypeLogging { get; set; }
+            [XmlElement("StoreDataLogSettings")] public bool StoreDataLogSettings { get; set; }
+            [XmlElement("AutoConnect")] public AutoConnectType AutoConnectHandling { get; set; }
+            [XmlElement("UpdateCheckDelay")] public long UpdateCheckDelay { get; set; }
+            [XmlElement("DoubleClickForAppExit")] public bool DoubleClickForAppExit { get; set; }
+            [XmlElement("SendDataBroadcast")] public bool SendDataBroadcast { get; set; }
+            [XmlElement("CheckCpuUsage")] public bool CheckCpuUsage { get; set; }
+            [XmlElement("CheckEcuFiles")] public bool CheckEcuFiles { get; set; }
+            [XmlElement("OldVagMode")] public bool OldVagMode { get; set; }
+            [XmlElement("UseBmwDatabase")] public bool UseBmwDatabase { get; set; }
+            [XmlElement("ShowOnlyRelevantErrors")] public bool ShowOnlyRelevantErrors { get; set; }
+            [XmlElement("ScanAllEcus")] public bool ScanAllEcus { get; set; }
+            [XmlElement("CollectDebugInfo")] public bool CollectDebugInfo { get; set; }
+            [XmlElement("CompressTrace")] public bool CompressTrace { get; set; }
+            // hidden settings
+            [XmlElement("DisableNetworkCheck")] public bool DisableNetworkCheck { get; set; }
+        }
+
         public class VagEcuEntry
         {
             public VagEcuEntry(string sysName, int address)
@@ -331,6 +588,78 @@ namespace BmwDeepObd
             }
         }
 
+        public class InstanceDataCommon
+        {
+            public InstanceDataCommon()
+            {
+                LastLocale = string.Empty;
+                LastAppState = LastAppState.Init;
+                LastSelectedJobIndex = -1;
+                LastSettingsHash = string.Empty;
+                AppDataPath = string.Empty;
+                EcuPath = string.Empty;
+                VagPath = string.Empty;
+                TraceActive = true;
+                DeviceName = string.Empty;
+                DeviceAddress = string.Empty;
+                ConfigFileName = string.Empty;
+                CheckCpuUsage = true;
+                VerifyEcuFiles = true;
+                SelectedEnetIp = string.Empty;
+                SelectedElmWifiIp = string.Empty;
+                SelectedDeepObdWifiIp = string.Empty;
+            }
+
+            public string LastLocale { get; set; }
+            public ThemeType? LastThemeType { get; set; }
+            public LastAppState LastAppState { get; set; }
+            public int LastSelectedJobIndex { get; set; }
+            public string LastSettingsHash { get; set; }
+            public bool GetSettingsCalled { get; set; }
+            public string AppDataPath { get; set; }
+            public string EcuPath { get; set; }
+            public string VagPath { get; set; }
+            public string BmwPath { get; set; }
+            public bool UserEcuFiles { get; set; }
+            public bool TraceActive { get; set; }
+            public bool TraceAppend { get; set; }
+            public bool DataLogActive { get; set; }
+            public bool DataLogAppend { get; set; }
+            public string DeviceName { get; set; }
+            public string DeviceAddress { get; set; }
+            public string ConfigFileName { get; set; }
+            public long LastVersionCode { get; set; }
+            public bool VersionInfoShown { get; set; }
+            public bool StorageRequirementsAccepted { get; set; }
+            public bool LocationProviderShown { get; set; }
+            public bool BatteryWarningShown { get; set; }
+            public bool ConfigMatchVehicleShown { get; set; }
+            public bool DataLogTemporaryShown { get; set; }
+            public bool CheckCpuUsage { get; set; }
+            public bool VerifyEcuFiles { get; set; }
+            public bool VerifyEcuMd5 { get; set; }
+            public int CommErrorsCount { get; set; }
+            public bool AutoStart { get; set; }
+            public bool AdapterCheckOk { get; set; }
+            public bool VagInfoShown { get; set; }
+            public string DataLogDir { get; set; }
+            public string TraceDir { get; set; }
+            public string TraceBackupDir { get; set; }
+            public string PackageAssembliesDir { get; set; }
+            public bool UpdateAvailable { get; set; }
+            public int UpdateVersionCode { get; set; }
+            public string UpdateMessage { get; set; }
+            public long UpdateCheckTime { get; set; }
+            public int UpdateSkipVersion { get; set; }
+            public string XmlEditorPackageName { get; set; }
+            public string XmlEditorClassName { get; set; }
+
+            public InterfaceType SelectedInterface { get; set; }
+            public string SelectedEnetIp { get; set; }
+            public string SelectedElmWifiIp { get; set; }
+            public string SelectedDeepObdWifiIp { get; set; }
+        }
+
         public enum ThemeType
         {
             [XmlEnum(Name = "Dark")] Dark,
@@ -389,6 +718,7 @@ namespace BmwDeepObd
             [XmlEnum(Name = "Offline")] Offline,                // no auto connect
             [XmlEnum(Name = "Connect")] Connect,                // auto connect
             [XmlEnum(Name = "ConnectClose")] ConnectClose,      // auto connect and close app
+            [XmlEnum(Name = "StartBoot")] StartBoot,            // auto start at boot
         }
 
         public enum TranslatorType
@@ -396,6 +726,23 @@ namespace BmwDeepObd
             [XmlEnum(Name = "YandexTranslate")] YandexTranslate,    // Yandex.translate
             [XmlEnum(Name = "IbmWatson")] IbmWatson,                // IBM Watson Translator
             [XmlEnum(Name = "DeepL")] Deepl,                        // DeepL
+            [XmlEnum(Name = "YandexCloud")] YandexCloud,            // Yandex cloud
+        }
+
+        public enum LastAppState
+        {
+            [XmlEnum(Name = "Init")] Init,
+            [XmlEnum(Name = "Compile")] Compile,
+            [XmlEnum(Name = "Compiled")] Compiled,
+            [XmlEnum(Name = "TabsCreated")] TabsCreated,
+            [XmlEnum(Name = "Stopped")] Stopped,
+        }
+
+        public enum SettingsMode
+        {
+            All,
+            Private,
+            Public,
         }
 
         public enum SsidWarnAction
@@ -416,8 +763,10 @@ namespace BmwDeepObd
         public delegate void EnetSsidWarnDelegate(SsidWarnAction action);
         public delegate void WifiConnectedWarnDelegate();
         public delegate void InitThreadFinishDelegate(bool result);
+        public delegate bool InitThreadProgressDelegate(long progress);
         public delegate void CopyDocumentsThreadFinishDelegate(bool result, bool aborted);
         public delegate void DestroyDelegate();
+        public delegate void EdiabasEventDelegate(bool connect);
         public const int UdsDtcStatusOverride = 0x2C;
         public const BuildVersionCodes MinEthernetSettingsVersion = BuildVersionCodes.M;
         public const long UpdateCheckDelayDefault = TimeSpan.TicksPerDay;
@@ -429,9 +778,16 @@ namespace BmwDeepObd
         public const SslProtocols DefaultSslProtocols = SslProtocols.None;
         public const string PrimaryVolumeName = "primary";
         public const string MtcBtAppName = @"com.microntek.bluetooth";
+        public const string FreeflaxAutosetAppName = @"freeflax.autoset";
+        public const string AutomationAppName = @"com.jens.automation2";
+        public const string MacrodroidAppName = @"com.arlosoft.macrodroid";
         public const string DefaultLang = "en";
-        public const string TraceFileName = "ifh.trc.zip";
+        public const string BackupExt = ".bak";
+        public const string ZipExt = ".zip";
+        public const string TraceFileNameStd = "ifh.trc";
+        public const string TraceFileNameZip = TraceFileNameStd + ZipExt;
         public const string TraceBackupDir = "TraceBackup";
+        public const string PackageAssembliesDir = "PackageAssemblies";
         public const string EnetSsidEmpty = "***";
         public const string AdapterSsidDeepObd = "Deep OBD BMW";
         public const string AdapterSsidEnetLink = "ENET-LINK_";
@@ -445,6 +801,7 @@ namespace BmwDeepObd
         public const string DefaultPwdModBmw = "admin";
         public const string SettingsFile = "Settings.xml";
         public const string DownloadDir = "Download";
+        public const string LogDir = "Log";
         public const string EcuBaseDir = "Ecu";
         public const string VagBaseDir = "Vag";
         public const string BmwBaseDir = "Bmw";
@@ -455,6 +812,7 @@ namespace BmwDeepObd
         public const string VagEndDate = "2017-08";
         public const string MimeTypeAppAny = @"application/*";
         public const string WifiApStateChangedAction = "android.net.wifi.WIFI_AP_STATE_CHANGED";
+        public const string AppFolderName = AppNameSpace;
         public const string UsbPermissionAction = AppNameSpace + ".USB_PERMISSION";
         public const string PackageNameAction = AppNameSpace + ".Action.PackageName";
         public const string BroadcastXmlEditorPackageName = "XmlEditorPackageName";
@@ -479,10 +837,19 @@ namespace BmwDeepObd
         public static Regex Ipv4RegEx = new Regex(@"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
         public static readonly long TickResolMs = Stopwatch.Frequency / 1000;
 
-        public const int RequestPermissionExternalStorage = 0;
-        public const int RequestPermissionNotifications = 1;
-        public const int RequestPermissionBluetooth = 2;
-        public const int RequestPermissionLocation = 3;
+        public enum PermissionRequestCodes
+        {
+            RequestPermissionExternalStorage,
+            RequestPermissionNotifications,
+            RequestPermissionBluetooth,
+            RequestPermissionLocation,
+        }
+
+        public const int RequestPermissionExternalStorage = (int) PermissionRequestCodes.RequestPermissionExternalStorage;
+        public const int RequestPermissionNotifications = (int)PermissionRequestCodes.RequestPermissionNotifications;
+        public const int RequestPermissionBluetooth = (int)PermissionRequestCodes.RequestPermissionBluetooth;
+        public const int RequestPermissionLocation = (int)PermissionRequestCodes.RequestPermissionLocation;
+
         public static readonly string[] PermissionsBluetooth =
         {
             Android.Manifest.Permission.BluetoothScan,
@@ -668,6 +1035,7 @@ namespace BmwDeepObd
         private static Context _packageContext;
         private readonly BcReceiverUpdateDisplayDelegate _bcReceiverUpdateDisplayHandler;
         private readonly BcReceiverReceivedDelegate _bcReceiverReceivedHandler;
+        private long? _versionCode;
         private bool? _usbSupport;
         private bool? _mtcBtService;
         private bool? _mtcBtManager;
@@ -677,6 +1045,7 @@ namespace BmwDeepObd
         private static readonly object RecentConfigLockObject = new object();
         private static readonly object LastSerialLockObject = new object();
         private static readonly object SerialInfoLockObject = new object();
+        private static readonly object CompileLock = new object();
         private static int _instanceCount;
         private static string _externalPath;
         private static string _externalWritePath;
@@ -703,6 +1072,7 @@ namespace BmwDeepObd
         private readonly NotificationManagerCompat _notificationManagerCompat;
         private readonly PowerManager _powerManager;
         private readonly PackageManager _packageManager;
+        private readonly BackupManager _backupManager;
         private readonly Android.App.ActivityManager _activityManager;
         private readonly MtcServiceConnection _mtcServiceConnection;
         private PowerManager.WakeLock _wakeLockScreenBright;
@@ -714,7 +1084,7 @@ namespace BmwDeepObd
         private EthernetCallback _ethernetCallback;
         private readonly TcpClientWithTimeout.NetworkData _networkData;
         private Handler _btUpdateHandler;
-        private Java.Lang.Runnable _btUpdateRunnable;
+        private readonly Java.Lang.Runnable _btUpdateRunnable;
         private Timer _usbCheckTimer;
         private int _usbDeviceDetectCount;
         private GlobalBroadcastReceiver _gbcReceiver;
@@ -730,9 +1100,11 @@ namespace BmwDeepObd
         private HttpClient _translateHttpClient;
         private HttpClient _sendHttpClient;
         private HttpClient _updateHttpClient;
-        private HttpClient _transLoginHttpClient;
         private bool _updateCheckActive;
         private bool _translateLockAquired;
+        private string _yandexCloudIamToken;
+        private string _yandexCloudIamTokenExpires;
+        private DateTime _yandexCloudIamTokenTime = DateTime.MinValue;
         private List<string> _transLangList;
         private List<string> _transList;
         private List<string> _transReducedStringList;
@@ -744,7 +1116,37 @@ namespace BmwDeepObd
         private bool _usbPermissionRequested;
         private bool _usbPermissionRequestDisabled;
 
+        public static string TraceFileName => CompressTrace ? TraceFileNameZip : TraceFileNameStd;
+
+        public static bool IfhTraceBuffering => !CompressTrace;
+
         public bool Emulator { get; }
+
+        public long VersionCode
+        {
+            get
+            {
+                if (_versionCode == null)
+                {
+                    _versionCode = GetVersionCode();
+                }
+
+                return _versionCode.Value;
+            }
+        }
+
+        public string ManufacturerEcuDirName
+        {
+            get
+            {
+                switch (SelectedManufacturer)
+                {
+                    case ManufacturerType.Bmw:
+                        return Path.Combine(EcuBaseDir, EcuDirNameBmw);
+                }
+                return Path.Combine(EcuBaseDir, EcuDirNameVag);
+            }
+        }
 
         public bool UsbSupport
         {
@@ -765,31 +1167,38 @@ namespace BmwDeepObd
             }
         }
 
+        public static bool IsMtcService(Context context)
+        {
+            try
+            {
+                PackageManager packageManager = context?.PackageManager;
+                IList<ApplicationInfo> appList = GetInstalledApplications(packageManager, PackageInfoFlags.MatchAll);
+                if (appList != null)
+                {
+                    foreach (ApplicationInfo appInfo in appList)
+                    {
+                        if (string.Compare(appInfo.PackageName, "android.microntek.mtcser", StringComparison.OrdinalIgnoreCase) == 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return false;
+        }
+
         public bool MtcBtService
         {
             get
             {
                 if (_mtcBtService == null)
                 {
-                    try
-                    {
-                        IList<ApplicationInfo> appList = GetInstalledApplications(PackageInfoFlags.MatchAll);
-                        if (appList != null)
-                        {
-                            foreach (ApplicationInfo appInfo in appList)
-                            {
-                                if (string.Compare(appInfo.PackageName, "android.microntek.mtcser", StringComparison.OrdinalIgnoreCase) == 0)
-                                {
-                                    _mtcBtService = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        _mtcBtService = false;
-                    }
+                    _mtcBtService = IsMtcService(_context);
                 }
                 return _mtcBtService ?? false;
             }
@@ -882,8 +1291,6 @@ namespace BmwDeepObd
         public bool MtcServiceStarted { get; private set; }
 
         public long MtcServiceStartTime { get; private set; }
-
-        public bool MtcBtDisconnectWarnShown { get; set; }
 
         public static object GlobalLockObject => LockObject;
 
@@ -1012,6 +1419,10 @@ namespace BmwDeepObd
 
         public static bool CollectDebugInfo { get; set; }
 
+        public static bool CompressTrace { get; set; }
+
+        public static bool DisableNetworkCheck { get; set; }
+
         public static TranslatorType SelectedTranslator => _translatorType;
 
         public TranslatorType Translator
@@ -1036,6 +1447,10 @@ namespace BmwDeepObd
         public static string IbmTranslatorUrl { get; set; }
 
         public static string DeeplApiKey { get; set; }
+
+        public static string YandexCloudApiKey { get; set; }
+
+        public static string YandexCloudFolderId { get; set; }
 
         public static bool EnableTranslation { get; set; }
 
@@ -1183,6 +1598,8 @@ namespace BmwDeepObd
 
         public string SelectedDeepObdWifiIp { get; set; }
 
+        public bool MtcBtDisconnectWarnShown { get; set; }
+
         public bool AdapterCheckRequired => _selectedInterface == InterfaceType.ElmWifi || _selectedInterface == InterfaceType.DeepObdWifi;
 
         public Context Context => _context;
@@ -1210,6 +1627,8 @@ namespace BmwDeepObd
         public PowerManager PowerManager => _powerManager;
 
         public PackageManager PackageManager => _packageManager;
+
+        public BackupManager BackupManager => _backupManager;
 
         // ReSharper disable once ConvertToAutoProperty
         public Android.App.ActivityManager ActivityManager => _activityManager;
@@ -1242,6 +1661,7 @@ namespace BmwDeepObd
             _bcReceiverUpdateDisplayHandler = bcReceiverUpdateDisplayHandler;
             _bcReceiverReceivedHandler = bcReceiverReceivedHandler;
             Emulator = IsEmulator();
+            ResetYandexIamToken();
             _clipboardManager = context?.GetSystemService(Context.ClipboardService);
             if (Build.VERSION.SdkInt >= BuildVersionCodes.JellyBeanMr2)
             {
@@ -1251,7 +1671,9 @@ namespace BmwDeepObd
             else
             {
 #pragma warning disable 618
+#pragma warning disable CA1422
                 _btAdapter = BluetoothAdapter.DefaultAdapter;
+#pragma warning restore CA1422
 #pragma warning restore 618
             }
             _btUpdateHandler = new Handler(Looper.MainLooper);
@@ -1295,6 +1717,7 @@ namespace BmwDeepObd
                     };
             }
             _packageManager = context?.PackageManager;
+            _backupManager = context != null ? new BackupManager(context) : null;
             _activityManager = context?.GetSystemService(Context.ActivityService) as Android.App.ActivityManager;
             _selectedInterface = InterfaceType.None;
             _transDict = new Dictionary<string, Dictionary<string, string>>();
@@ -1308,22 +1731,24 @@ namespace BmwDeepObd
                 {
                     // android 8 rejects global receivers, so we register it locally
                     _gbcReceiver = new GlobalBroadcastReceiver();
-                    context.RegisterReceiver(_gbcReceiver, new IntentFilter(GlobalBroadcastReceiver.MtcBtSmallon));
-                    context.RegisterReceiver(_gbcReceiver, new IntentFilter(GlobalBroadcastReceiver.MtcBtSmalloff));
-                    context.RegisterReceiver(_gbcReceiver, new IntentFilter(GlobalBroadcastReceiver.MicBtReport));
+                    ContextCompat.RegisterReceiver(context, _gbcReceiver, new IntentFilter(GlobalBroadcastReceiver.MtcBtSmallon), ContextCompat.ReceiverExported);
+                    ContextCompat.RegisterReceiver(context, _gbcReceiver, new IntentFilter(GlobalBroadcastReceiver.MtcBtSmallon), ContextCompat.ReceiverExported);
+                    ContextCompat.RegisterReceiver(context, _gbcReceiver, new IntentFilter(GlobalBroadcastReceiver.MtcBtSmalloff), ContextCompat.ReceiverExported);
+                    ContextCompat.RegisterReceiver(context, _gbcReceiver, new IntentFilter(GlobalBroadcastReceiver.MicBtReport), ContextCompat.ReceiverExported);
 
                     _bcReceiver = new Receiver(this);
+                    ContextCompat.RegisterReceiver(context, _bcReceiver, new IntentFilter(ForegroundService.ActionBroadcastCommand), ContextCompat.ReceiverExported);
+                    ContextCompat.RegisterReceiver(context, _bcReceiver, new IntentFilter(GlobalBroadcastReceiver.NotificationBroadcastAction), ContextCompat.ReceiverExported);
+                    ContextCompat.RegisterReceiver(context, _bcReceiver, new IntentFilter(WifiApStateChangedAction), ContextCompat.ReceiverExported);   // hidden system broadcasts
+                    context.RegisterReceiver(_bcReceiver, new IntentFilter(BluetoothAdapter.ActionStateChanged));   // system broadcasts
+
                     InternalBroadcastManager.InternalBroadcastManager.GetInstance(context).RegisterReceiver(_bcReceiver, new IntentFilter(ForegroundService.NotificationBroadcastAction));
                     InternalBroadcastManager.InternalBroadcastManager.GetInstance(context).RegisterReceiver(_bcReceiver, new IntentFilter(PackageNameAction));
-                    context.RegisterReceiver(_bcReceiver, new IntentFilter(ForegroundService.ActionBroadcastCommand));
-                    context.RegisterReceiver(_bcReceiver, new IntentFilter(BluetoothAdapter.ActionStateChanged));
-                    context.RegisterReceiver(_bcReceiver, new IntentFilter(GlobalBroadcastReceiver.NotificationBroadcastAction));
-                    context.RegisterReceiver(_bcReceiver, new IntentFilter(WifiApStateChangedAction));
                     if (UsbSupport)
                     {   // usb handling
-                        context.RegisterReceiver(_bcReceiver, new IntentFilter(UsbManager.ActionUsbDeviceDetached));
-                        context.RegisterReceiver(_bcReceiver, new IntentFilter(UsbManager.ActionUsbDeviceAttached));
-                        context.RegisterReceiver(_bcReceiver, new IntentFilter(UsbPermissionAction));
+                        context.RegisterReceiver(_bcReceiver, new IntentFilter(UsbManager.ActionUsbDeviceDetached));   // system broadcasts
+                        context.RegisterReceiver(_bcReceiver, new IntentFilter(UsbManager.ActionUsbDeviceAttached));   // system broadcasts
+                        ContextCompat.RegisterReceiver(context, _bcReceiver, new IntentFilter(UsbPermissionAction),ContextCompat.ReceiverExported);
                         if (Build.VERSION.SdkInt < BuildVersionCodes.Kitkat)
                         {   // attached event fails
                             _usbCheckTimer = new Timer(UsbCheckEvent, null, 1000, 1000);
@@ -1399,7 +1824,6 @@ namespace BmwDeepObd
                         try
                         {
                             _btUpdateHandler.RemoveCallbacksAndMessages(null);
-                            _btUpdateHandler.Dispose();
                         }
                         catch (Exception)
                         {
@@ -1417,6 +1841,7 @@ namespace BmwDeepObd
                     {
                         try
                         {
+                            _translateHttpClient.CancelPendingRequests();
                             _translateHttpClient.Dispose();
                         }
                         catch (Exception)
@@ -1430,6 +1855,7 @@ namespace BmwDeepObd
                     {
                         try
                         {
+                            _sendHttpClient.CancelPendingRequests();
                             _sendHttpClient.Dispose();
                         }
                         catch (Exception)
@@ -1443,6 +1869,7 @@ namespace BmwDeepObd
                     {
                         try
                         {
+                            _updateHttpClient.CancelPendingRequests();
                             _updateHttpClient.Dispose();
                         }
                         catch (Exception)
@@ -1450,19 +1877,6 @@ namespace BmwDeepObd
                             // ignored
                         }
                         _updateHttpClient = null;
-                    }
-
-                    if (_transLoginHttpClient != null)
-                    {
-                        try
-                        {
-                            _transLoginHttpClient.Dispose();
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
-                        _transLoginHttpClient = null;
                     }
 
                     UnRegisterInternetCellularCallback();
@@ -1487,7 +1901,6 @@ namespace BmwDeepObd
                         try
                         {
                             _wakeLockScreenBright.Release();
-                            _wakeLockScreenBright.Dispose();
                         }
                         catch (Exception)
                         {
@@ -1500,7 +1913,6 @@ namespace BmwDeepObd
                         try
                         {
                             _wakeLockScreenDim.Release();
-                            _wakeLockScreenDim.Dispose();
                         }
                         catch (Exception)
                         {
@@ -1513,7 +1925,6 @@ namespace BmwDeepObd
                         try
                         {
                             _wakeLockCpu.Release();
-                            _wakeLockCpu.Dispose();
                         }
                         catch (Exception)
                         {
@@ -1526,12 +1937,7 @@ namespace BmwDeepObd
                         _instanceCount--;
                         if (_instanceCount == 0)
                         {
-                            if (EdiabasThread != null)
-                            {
-                                EdiabasThread.StopThread(true);
-                                EdiabasThread.Dispose();
-                                EdiabasThread = null;
-                            }
+                            StopEdiabasThread(true);
                             BluetoothDisableAtExit();
                             MemoryStreamReader.CleanUp();
                         }
@@ -1639,6 +2045,9 @@ namespace BmwDeepObd
 
                 case TranslatorType.Deepl:
                     return _context.GetString(Resource.String.select_translator_deepl);
+
+                case TranslatorType.YandexCloud:
+                    return _context.GetString(Resource.String.select_translator_yandex_cloud);
             }
             return string.Empty;
         }
@@ -1723,6 +2132,10 @@ namespace BmwDeepObd
                     case InterfaceType.Enet:
                     case InterfaceType.ElmWifi:
                     case InterfaceType.DeepObdWifi:
+                        if (DisableNetworkCheck)
+                        {
+                            return true;
+                        }
                         if (IsEmulator())
                         {
                             return true;
@@ -1744,7 +2157,7 @@ namespace BmwDeepObd
             }
         }
 
-        public bool IsInterfaceAvailable()
+        public bool IsInterfaceAvailable(bool ignoreIp = false)
         {
             try
             {
@@ -1760,6 +2173,11 @@ namespace BmwDeepObd
                     case InterfaceType.Enet:
                     case InterfaceType.ElmWifi:
                     case InterfaceType.DeepObdWifi:
+                        if (DisableNetworkCheck)
+                        {
+                            return true;
+                        }
+
                         if (IsEmulator())
                         {
                             return true;
@@ -1770,10 +2188,24 @@ namespace BmwDeepObd
                             return true;
                         }
 
-                        if (_selectedInterface == InterfaceType.Enet && IsValidEthernetConnection())
+                        switch (_selectedInterface)
                         {
-                            return true;
+                            case InterfaceType.Enet:
+                                return IsValidEthernetConnection();
+
+                            case InterfaceType.DeepObdWifi:
+                                if (ignoreIp)
+                                {
+                                    return IsValidEthernetConnection();
+                                }
+
+                                if (!string.IsNullOrEmpty(SelectedDeepObdWifiIp))
+                                {
+                                    return IsValidEthernetConnection(SelectedDeepObdWifiIp);
+                                }
+                                break;
                         }
+
                         return false;
 
                     case InterfaceType.Ftdi:
@@ -1798,13 +2230,14 @@ namespace BmwDeepObd
             }
         }
 
-        public bool StartForegroundService()
+        public static bool StartForegroundService(Context context, bool startComm = false)
         {
             try
             {
-                Intent startServiceIntent = new Intent(_context, typeof(ForegroundService));
+                Intent startServiceIntent = new Intent(context, typeof(ForegroundService));
                 startServiceIntent.SetAction(ForegroundService.ActionStartService);
-                _context.StartService(startServiceIntent);
+                startServiceIntent.PutExtra(ForegroundService.ExtraStartComm, startComm);
+                ContextCompat.StartForegroundService(context, startServiceIntent);
             }
             catch (Exception)
             {
@@ -1813,13 +2246,14 @@ namespace BmwDeepObd
             return true;
         }
 
-        public bool StopForegroundService()
+        public static bool StopForegroundService(Context context, bool abortThread = false)
         {
             try
             {
-                Intent stopServiceIntent = new Intent(_context, typeof(ForegroundService));
+                Intent stopServiceIntent = new Intent(context, typeof(ForegroundService));
                 stopServiceIntent.SetAction(ForegroundService.ActionStopService);
-                _context.StopService(stopServiceIntent);
+                stopServiceIntent.PutExtra(ForegroundService.ExtraAbortThread, abortThread);
+                context.StopService(stopServiceIntent);
             }
             catch (Exception)
             {
@@ -1841,11 +2275,17 @@ namespace BmwDeepObd
             try
             {
                 Intent startServiceIntent = new Intent();
+                Bind bindFlags = Bind.AutoCreate;
+                if (Build.VERSION.SdkInt > BuildVersionCodes.Tiramisu)
+                {
+                    bindFlags |= Bind.AllowActivityStarts;
+                }
+
                 startServiceIntent.SetComponent(new ComponentName(MtcServiceConnection.ServicePkg, MtcServiceConnection.ServiceClsV1));
-                if (!_context.BindService(startServiceIntent, _mtcServiceConnection, Bind.AutoCreate))
+                if (!_context.BindService(startServiceIntent, _mtcServiceConnection, bindFlags))
                 {
                     startServiceIntent.SetComponent(new ComponentName(MtcServiceConnection.ServicePkg, MtcServiceConnection.ServiceClsV2));
-                    if (!_context.BindService(startServiceIntent, _mtcServiceConnection, Bind.AutoCreate))
+                    if (!_context.BindService(startServiceIntent, _mtcServiceConnection, bindFlags))
                     {
                         return false;
                     }
@@ -2046,8 +2486,37 @@ namespace BmwDeepObd
             return true;
         }
 
+        public bool IsAppInstalled(string packageName)
+        {
+            if (string.IsNullOrEmpty(packageName))
+            {
+                return false;
+            }
+
+            try
+            {
+                Intent intent = _packageManager?.GetLaunchIntentForPackage(packageName);
+                if (intent == null)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+            return false;
+        }
+
         public bool StartApp(string packageName, bool marketRedirect = false)
         {
+            if (string.IsNullOrEmpty(packageName))
+            {
+                return false;
+            }
+
             try
             {
                 Intent intent = _packageManager?.GetLaunchIntentForPackage(packageName);
@@ -2058,8 +2527,7 @@ namespace BmwDeepObd
                         return false;
                     }
 
-                    intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"market://details?id=" + packageName));
-                    _context.StartActivity(intent);
+                    OpenPlayStoreForPackage(packageName);
                     return true;
                 }
 
@@ -2073,6 +2541,29 @@ namespace BmwDeepObd
                 // ignored
             }
             return false;
+        }
+
+        public bool OpenPlayStoreForPackage(string packageName)
+        {
+            if (string.IsNullOrEmpty(packageName))
+            {
+                return false;
+            }
+
+            try
+            {
+                Intent intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"market://details?id=" + packageName));
+                intent.SetPackage("com.android.vending");
+                intent.SetFlags(ActivityFlags.NewTask);
+                _context.StartActivity(intent);
+                return true;
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            return OpenWebUrl("https://play.google.com/store/apps/details?id=" + packageName);
         }
 
         public bool RestartAppHard(DestroyDelegate destroyDelegate)
@@ -2152,6 +2643,46 @@ namespace BmwDeepObd
             {
                 return null;
             }
+        }
+
+        public static Android.Graphics.Color GetStyleColor(Context context, int attribute)
+        {
+            TypedArray typedArray = context.Theme.ObtainStyledAttributes([attribute]);
+            return typedArray.GetColor(0, 0xFFFFFF);
+        }
+
+        public static Balloon.Builder GetBalloonBuilder(Context context)
+        {
+            Balloon.Builder balloonBuilder = new Balloon.Builder(context);
+            balloonBuilder.DismissWhenClicked = true;
+            balloonBuilder.DismissWhenTouchOutside = true;
+            balloonBuilder.BackgroundColor = GetStyleColor(context, Resource.Attribute.balloonBackgroundColor);
+            balloonBuilder.TextColor = GetStyleColor(context, Resource.Attribute.balloonTextColor);
+            balloonBuilder.TextSize = 14.0f;
+            balloonBuilder.TextTypeface = (int)Android.Graphics.TypefaceStyle.Italic;
+            balloonBuilder.BalloonAnimation = BalloonAnimation.Elastic;
+            balloonBuilder.AutoDismissDuration = 4000;
+            balloonBuilder.SetPadding(10);
+            balloonBuilder.ArrowOrientation = ArrowOrientation.Bottom;
+            balloonBuilder.ArrowPosition = 0.5f;
+            balloonBuilder.LifecycleOwner = ProcessLifecycleOwner.Get();
+
+            return balloonBuilder;
+        }
+
+        public static bool ShowAlertDialogBallon(Context context, AlertDialog alertDialog, int resId)
+        {
+            View rootView = alertDialog.Window?.DecorView?.RootView;
+            if (rootView != null)
+            {
+                Balloon.Builder balloonBuilder = GetBalloonBuilder(context);
+                balloonBuilder.Text = context.GetString(resId);
+                Balloon balloon = balloonBuilder.Build();
+                balloon.ShowAlignTop(rootView);
+                return true;
+            }
+
+            return false;
         }
 
         public static bool IsBtReliable()
@@ -2398,6 +2929,11 @@ namespace BmwDeepObd
                 {
                     foreach (SerialInfoEntry serialInfo in serialList)
                     {
+                        if (string.IsNullOrEmpty(serialInfo.Serial))
+                        {
+                            continue;
+                        }
+
                         if (_serialInfoList.Contains(serialInfo))
                         {
                             continue;
@@ -2421,6 +2957,11 @@ namespace BmwDeepObd
         {
             try
             {
+                if (string.IsNullOrEmpty(serialInfo.Serial))
+                {
+                    return false;
+                }
+
                 lock (SerialInfoLockObject)
                 {
                     if (_serialInfoList.Contains(serialInfo))
@@ -2643,7 +3184,9 @@ namespace BmwDeepObd
                 try
                 {
 #pragma warning disable CS0618 // Typ oder Element ist veraltet
-                    _context?.RegisterReceiver(_bcReceiver, new IntentFilter(ConnectivityManager.ConnectivityAction));
+#pragma warning disable CA1422
+                    _context?.RegisterReceiver(_bcReceiver, new IntentFilter(ConnectivityManager.ConnectivityAction));   // system broadcasts
+#pragma warning restore CA1422
 #pragma warning restore CS0618 // Typ oder Element ist veraltet
                 }
                 catch (Exception)
@@ -2780,7 +3323,9 @@ namespace BmwDeepObd
                 if (Build.VERSION.SdkInt < BuildVersionCodes.M)
                 {
 #pragma warning disable 618
+#pragma warning disable CA1422
                     ConnectivityManager.SetProcessDefaultNetwork(defaultNetwork);
+#pragma warning restore CA1422
 #pragma warning restore 618
                 }
                 else
@@ -3304,9 +3849,19 @@ namespace BmwDeepObd
 
         public bool StartEnetAdapterConfig(string adapterIp)
         {
+            return OpenWebUrl("http://" + adapterIp);
+        }
+
+        public bool OpenWebUrl(string url)
+        {
             try
             {
-                _context.StartActivity(new Intent(Intent.ActionView, Android.Net.Uri.Parse(@"http://" + adapterIp)));
+                Intent intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(url));
+                if (intent.ResolveActivity(PackageManager) == null)
+                {
+                    return false;
+                }
+                _context.StartActivity(intent);
             }
             catch (Exception)
             {
@@ -3499,6 +4054,7 @@ namespace BmwDeepObd
                 if (Build.VERSION.SdkInt < BuildVersionCodes.S)
                 {
 #pragma warning disable 618
+#pragma warning disable CA1422
                     WifiInfo wifiInfo = _maWifi.ConnectionInfo;
                     if (wifiInfo != null && _maWifi.DhcpInfo != null && wifiInfo.IpAddress != 0)
                     {
@@ -3508,6 +4064,7 @@ namespace BmwDeepObd
                         ssid = GetWifiSsid(wifiInfo);
                         return !string.IsNullOrEmpty(dhcpServerAddress);
                     }
+#pragma warning restore CA1422
 #pragma warning restore 618
                     return false;
                 }
@@ -3598,7 +4155,9 @@ namespace BmwDeepObd
                         else
                         {
 #pragma warning disable CS0618
+#pragma warning disable CA1422
                             tempSsid = scanResult.Ssid;
+#pragma warning restore CA1422
 #pragma warning restore CS0618
                         }
 
@@ -3625,13 +4184,38 @@ namespace BmwDeepObd
             return string.Empty;
         }
 
-        public bool IsValidEthernetConnection()
+        public bool IsValidEthernetConnection(string ipAddrMatch = null)
         {
+            return IsValidEthernetConnection(ipAddrMatch, out _, out _);
+        }
+
+        public bool IsValidEthernetConnection(string ipAddrMatch, out string localAddress, out string localMask)
+        {
+            localAddress = null;
+            localMask = null;
+
             try
             {
                 if (Build.VERSION.SdkInt < BuildVersionCodes.Lollipop)
                 {
                     return false;
+                }
+
+                Java.Net.Inet4Address inet4AddrCheck = null;
+                if (!string.IsNullOrEmpty(ipAddrMatch))
+                {
+                    try
+                    {
+                        Java.Net.InetAddress inetAddrMatch = Java.Net.InetAddress.GetByName(ipAddrMatch);
+                        if (inetAddrMatch is Java.Net.Inet4Address inet4AddrMatch)
+                        {
+                            inet4AddrCheck = inet4AddrMatch;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        inet4AddrCheck = null;
+                    }
                 }
 
                 bool result = false;
@@ -3648,8 +4232,24 @@ namespace BmwDeepObd
                                 {
                                     if (inet4Address.IsSiteLocalAddress || inet4Address.IsLinkLocalAddress)
                                     {
-                                        result = true;
-                                        break;
+                                        if (inet4AddrCheck != null)
+                                        {
+                                            if (TcpClientWithTimeout.IsIpMatchingSubnet(inet4AddrCheck, inet4Address, linkAddress.PrefixLength))
+                                            {
+                                                result = true;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            result = true;
+                                        }
+
+                                        if (result)
+                                        {
+                                            localAddress = TcpClientWithTimeout.ConvertIpAddress(linkAddress.Address);
+                                            localMask = TcpClientWithTimeout.PrefixLenToMask(linkAddress.PrefixLength).ToString();
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -3682,7 +4282,9 @@ namespace BmwDeepObd
                     if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
                     {
 #pragma warning disable 618
+#pragma warning disable CA1422
                         _maWifi?.SetWifiEnabled(false);
+#pragma warning restore CA1422
 #pragma warning restore 618
                     }
                     else
@@ -3743,6 +4345,10 @@ namespace BmwDeepObd
                     .SetTitle(Resource.String.alert_title_warning)
                     .SetPositiveButton(Resource.String.button_yes, (s, e) =>
                     {
+                        if (bound)
+                        {
+                            MtcBtDisconnectWarnShown = true;
+                        }
                     })
                     .SetNegativeButton(Resource.String.button_no, (s, e) =>
                     {
@@ -3764,10 +4370,6 @@ namespace BmwDeepObd
                     };
                 }
 
-                if (bound)
-                {
-                    MtcBtDisconnectWarnShown = true;
-                }
                 return true;
             }
             if (_selectedInterface == InterfaceType.ElmWifi || _selectedInterface == InterfaceType.DeepObdWifi)
@@ -3810,6 +4412,14 @@ namespace BmwDeepObd
                 if (IsWifiAdapterValid())
                 {
                     return false;
+                }
+
+                if (_selectedInterface == InterfaceType.DeepObdWifi)
+                {
+                    if (!string.IsNullOrEmpty(SelectedInterfaceIp))
+                    {
+                        return false;
+                    }
                 }
 
                 bool ignoreDismiss = false;
@@ -3976,7 +4586,9 @@ namespace BmwDeepObd
                             if (_maWifi != null && !_maWifi.IsWifiEnabled)
                             {
 #pragma warning disable 618
+#pragma warning disable CA1422
                                 _maWifi.SetWifiEnabled(true);
+#pragma warning restore CA1422
 #pragma warning restore 618
                             }
                         }
@@ -4008,7 +4620,9 @@ namespace BmwDeepObd
                     if (_maWifi != null && !_maWifi.IsWifiEnabled)
                     {
 #pragma warning disable 618
+#pragma warning disable CA1422
                         _maWifi.SetWifiEnabled(true);
+#pragma warning restore CA1422
 #pragma warning restore 618
                     }
                 }
@@ -4380,7 +4994,7 @@ namespace BmwDeepObd
         {
             try
             {
-                Intent intent = new Intent(Settings.ActionApplicationDetailsSettings,
+                Intent intent = new Intent(Android.Provider.Settings.ActionApplicationDetailsSettings,
                     Android.Net.Uri.Parse("package:" + Android.App.Application.Context.PackageName));
                 activity.StartActivityForResult(intent, requestCode);
                 return true;
@@ -4400,7 +5014,7 @@ namespace BmwDeepObd
                     return false;
                 }
 
-                Intent intent = new Intent(Settings.ActionLocationSourceSettings);
+                Intent intent = new Intent(Android.Provider.Settings.ActionLocationSourceSettings);
                     activity.StartActivityForResult(intent, requestCode);
                     return true;
             }
@@ -4421,13 +5035,13 @@ namespace BmwDeepObd
 
                 try
                 {
-                    Intent intent = new Intent(Settings.ActionManageAppAllFilesAccessPermission,
+                    Intent intent = new Intent(Android.Provider.Settings.ActionManageAppAllFilesAccessPermission,
                         Android.Net.Uri.Parse("package:" + Android.App.Application.Context.PackageName));
                     activity.StartActivityForResult(intent, requestCode);
                 }
                 catch (Exception)
                 {
-                    Intent intent = new Intent(Settings.ActionManageAllFilesAccessPermission);
+                    Intent intent = new Intent(Android.Provider.Settings.ActionManageAllFilesAccessPermission);
                     activity.StartActivityForResult(intent, requestCode);
                 }
                 return true;
@@ -4454,9 +5068,9 @@ namespace BmwDeepObd
             {
                 try
                 {
-                    Intent intent = new Intent(Settings.ActionChannelNotificationSettings);
-                    intent.PutExtra(Settings.ExtraChannelId, channelId);
-                    intent.PutExtra(Settings.ExtraAppPackage, _activity.PackageName);
+                    Intent intent = new Intent(Android.Provider.Settings.ActionChannelNotificationSettings);
+                    intent.PutExtra(Android.Provider.Settings.ExtraChannelId, channelId);
+                    intent.PutExtra(Android.Provider.Settings.ExtraAppPackage, _activity.PackageName);
                     _activity.StartActivityForResult(intent, requestCodeChannel.Value);
                     return true;
                 }
@@ -4468,8 +5082,8 @@ namespace BmwDeepObd
 
             try
             {
-                Intent intent = new Intent(Settings.ActionAppNotificationSettings);
-                intent.PutExtra(Settings.ExtraAppPackage, _activity.PackageName);
+                Intent intent = new Intent(Android.Provider.Settings.ActionAppNotificationSettings);
+                intent.PutExtra(Android.Provider.Settings.ExtraAppPackage, _activity.PackageName);
                 _activity.StartActivityForResult(intent, requestCodeApp);
                 return true;
             }
@@ -4513,7 +5127,9 @@ namespace BmwDeepObd
                             if (directEnable)
                             {
 #pragma warning disable 0618
+#pragma warning disable CA1422
                                 if (_btAdapter.Enable())
+#pragma warning restore CA1422
 #pragma warning restore 0618
                                 {
                                     _btEnableCounter = 2;
@@ -4553,7 +5169,9 @@ namespace BmwDeepObd
                             if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
                             {
 #pragma warning disable 618
+#pragma warning disable CA1422
                                 _maWifi.SetWifiEnabled(true);
+#pragma warning restore CA1422
 #pragma warning restore 618
                             }
                             else
@@ -4711,6 +5329,14 @@ namespace BmwDeepObd
                 return false;
             }
 
+            if (Build.VERSION.SdkInt > BuildVersionCodes.Tiramisu)
+            {
+                if (PermissionsBluetooth.All(permission => ContextCompat.CheckSelfPermission(_activity, permission) != Permission.Granted))
+                {
+                    return false;
+                }
+            }
+
             bool result = false;
             if (Build.VERSION.SdkInt >= BuildVersionCodes.IceCreamSandwich)
             {
@@ -4748,7 +5374,9 @@ namespace BmwDeepObd
             try
             {
 #pragma warning disable CS0618
+#pragma warning disable CA1422
                 return _btAdapter.Disable();
+#pragma warning restore CA1422
 #pragma warning restore CS0618
             }
             catch (Exception)
@@ -4759,6 +5387,11 @@ namespace BmwDeepObd
 
         public bool BluetoothDisableAtExit()
         {
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu)
+            {   // BluetoothDisable not supported
+                return false;
+            }
+
             bool isEmpty = BaseActivity.IsActivityListEmpty(new List<Type> { typeof(ActivityMain) });
             if (isEmpty && !BtInitiallyEnabled && BtDisableHandling == BtDisableType.DisableIfByApp &&
                 IsBluetoothEnabledByApp() && !IsBluetoothConnected() && !MtcBtService &&
@@ -4851,7 +5484,6 @@ namespace BmwDeepObd
                     if (progress != null)
                     {
                         progress.Dismiss();
-                        progress.Dispose();
                         progress = null;
                         SetLock(LockType.None);
                     }
@@ -4940,7 +5572,12 @@ namespace BmwDeepObd
                 string ipPort = string.Empty;
                 StringBuilder sbInfo = new StringBuilder();
 
-                IsValidWifiConnection(out string localAddress, out string localMask, out string dhcpServerAddress, out _);
+                if (!IsValidWifiConnection(out string localAddress, out string localMask, out string dhcpServerAddress, out _))
+                {
+                    dhcpServerAddress = null;
+                    IsValidEthernetConnection(null, out localAddress, out localMask);
+                }
+
                 if (!string.IsNullOrEmpty(dhcpServerAddress))
                 {
                     ipAddr = dhcpServerAddress;
@@ -5150,14 +5787,15 @@ namespace BmwDeepObd
 
                     if (!_usbPermissionRequestDisabled)
                     {
-                        Android.App.PendingIntentFlags intentFlags = 0;
-                        if (Build.VERSION.SdkInt >= BuildVersionCodes.S)
-                        {
-                            intentFlags |= Android.App.PendingIntentFlags.Mutable;
-                        }
-                        Android.App.PendingIntent intent = Android.App.PendingIntent.GetBroadcast(_context, 0, new Intent(UsbPermissionAction), intentFlags);
                         try
                         {
+                            Android.App.PendingIntentFlags intentFlags = 0;
+                            if (Build.VERSION.SdkInt >= BuildVersionCodes.S)
+                            {
+                                intentFlags |= Android.App.PendingIntentFlags.Mutable;
+                            }
+                            Android.App.PendingIntent intent = Android.App.PendingIntent.GetBroadcast(_context, 0, new Intent(UsbPermissionAction), intentFlags);
+
                             _usbManager.RequestPermission(usbDevice, intent);
                             _usbPermissionRequested = true;
                         }
@@ -5390,8 +6028,156 @@ namespace BmwDeepObd
             return new EdInterfaceObd();
         }
 
+        public bool StartEdiabasThread(InstanceDataCommon instanceData, JobReader.PageInfo pageInfo, EdiabasEventDelegate ediabasEvent)
+        {
+            if (instanceData == null)
+            {
+                return false;
+            }
+
+            if (pageInfo == null)
+            {
+                return false;
+            }
+
+            if (CommActive)
+            {
+                return true;
+            }
+
+            if (EdiabasThread != null)
+            {
+                StopEdiabasThread(true, ediabasEvent);
+            }
+
+            lock (GlobalLockObject)
+            {
+                if (EdiabasThread == null)
+                {
+                    string ecuPath = string.IsNullOrEmpty(JobReader.EcuPath) ? instanceData.EcuPath : JobReader.EcuPath;
+                    EdiabasThread = new EdiabasThread(ecuPath, this, _context);
+                    ediabasEvent?.Invoke(true);
+                }
+            }
+
+            string logDir = string.Empty;
+            if (instanceData.DataLogActive && !string.IsNullOrEmpty(JobReader.LogPath))
+            {
+                logDir = Path.IsPathRooted(JobReader.LogPath) ? JobReader.LogPath : Path.Combine(instanceData.AppDataPath, JobReader.LogPath);
+                try
+                {
+                    Directory.CreateDirectory(logDir);
+                }
+                catch (Exception)
+                {
+                    logDir = string.Empty;
+                }
+            }
+            instanceData.DataLogDir = logDir;
+
+            instanceData.TraceDir = null;
+            if (instanceData.TraceActive && !string.IsNullOrEmpty(instanceData.ConfigFileName))
+            {
+                instanceData.TraceDir = Path.Combine(instanceData.AppDataPath, LogDir);
+            }
+
+            string portName = string.Empty;
+            object connectParameter = null;
+            switch (SelectedInterface)
+            {
+                case InterfaceType.Bluetooth:
+                    portName = EdBluetoothInterface.PortId + ":" + instanceData.DeviceAddress;
+                    connectParameter = new EdBluetoothInterface.ConnectParameterType(NetworkData, MtcBtService, MtcBtEscapeMode,
+                        () => EdiabasThread.ActiveContext);
+                    ConnectMtcBtDevice(instanceData.DeviceAddress);
+                    break;
+
+                case InterfaceType.Enet:
+                    connectParameter = new EdInterfaceEnet.ConnectParameterType(NetworkData);
+                    if (Emulator && !string.IsNullOrEmpty(EmulatorEnetIp))
+                    {
+                        // broadcast is not working with emulator
+                        portName = EmulatorEnetIp;
+                        break;
+                    }
+                    portName = string.IsNullOrEmpty(SelectedEnetIp) ? "auto:all" : SelectedEnetIp;
+                    break;
+
+                case InterfaceType.ElmWifi:
+                    portName = EdElmWifiInterface.PortId;
+                    if (!string.IsNullOrEmpty(SelectedElmWifiIp))
+                    {
+                        portName += ":" + SelectedElmWifiIp;
+                    }
+                    connectParameter = new EdElmWifiInterface.ConnectParameterType(NetworkData);
+                    break;
+
+                case InterfaceType.DeepObdWifi:
+                    portName = EdCustomWiFiInterface.PortId;
+                    if (!string.IsNullOrEmpty(SelectedDeepObdWifiIp))
+                    {
+                        portName += ":" + SelectedDeepObdWifiIp;
+                    }
+                    connectParameter = new EdCustomWiFiInterface.ConnectParameterType(NetworkData, MaWifi);
+                    break;
+
+                case InterfaceType.Ftdi:
+                    portName = EdFtdiInterface.PortId + "0";
+                    connectParameter = new EdFtdiInterface.ConnectParameterType(UsbManager);
+                    break;
+            }
+
+            EdiabasThread.StartThread(portName, connectParameter, pageInfo, true, instanceData);
+
+            return true;
+        }
+
+        public bool StopEdiabasThread(bool wait, EdiabasEventDelegate ediabasEvent = null)
+        {
+            if (EdiabasThread != null)
+            {
+                try
+                {
+                    lock (GlobalLockObject)
+                    {
+                        if (EdiabasThread != null)
+                        {
+                            EdiabasThread.StopThread(wait);
+                        }
+                    }
+                    if (wait)
+                    {
+                        StopForegroundService(_context);
+                        lock (GlobalLockObject)
+                        {
+                            ediabasEvent?.Invoke(false);
+                            if (EdiabasThread != null)
+                            {
+                                EdiabasThread.Dispose();
+                                EdiabasThread = null;
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public void SetEdiabasInterface(EdiabasNet ediabas, string btDeviceAddress)
         {
+            PackageInfo packageInfo = GetPackageInfo();
+            if (packageInfo != null)
+            {
+                string versionName = packageInfo.VersionName ?? string.Empty;
+                long versionCode = PackageInfoCompat.GetLongVersionCode(packageInfo);
+                ediabas.LogInfo = string.Format(CultureInfo.InvariantCulture, "App version code: {0}\nApp version name: {1}", versionCode, versionName);
+            }
+
             object connectParameter = null;
             if (ediabas.EdInterfaceClass is EdInterfaceObd edInterfaceObd)
             {
@@ -5480,6 +6266,36 @@ namespace BmwDeepObd
             }
 
             return false;
+        }
+
+        public static bool SetEdiabasConfigProperties(EdiabasNet ediabas, string tracePath, bool appendTrace = false)
+        {
+            if (ediabas == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(tracePath))
+                {
+                    ediabas.SetConfigProperty("TracePath", tracePath);
+                    ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
+                    ediabas.SetConfigProperty("AppendTrace", appendTrace ? "1" : "0");
+                    ediabas.SetConfigProperty("IfhTraceBuffering", ActivityCommon.IfhTraceBuffering ? "1" : "0");
+                    ediabas.SetConfigProperty("CompressTrace", ActivityCommon.CompressTrace ? "1" : "0");
+                }
+                else
+                {
+                    ediabas.SetConfigProperty("IfhTrace", "0");
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public static void ResolveSgbdFile(EdiabasNet ediabas, string fileName)
@@ -5778,6 +6594,39 @@ namespace BmwDeepObd
             return GetPackageInfo(_packageManager, _context?.PackageName, infoFlags);
         }
 
+        public long GetVersionCode()
+        {
+            PackageInfo packageInfo = GetPackageInfo();
+            return packageInfo != null ? PackageInfoCompat.GetLongVersionCode(packageInfo) : 0;
+        }
+
+        public ApplicationInfo GetApplicationInfo()
+        {
+            PackageInfo packageInfo = GetPackageInfo();
+            return packageInfo?.ApplicationInfo;
+        }
+
+        public bool IsAppStorageLocationInternal()
+        {
+            if (Build.VERSION.SdkInt < BuildVersionCodes.O)
+            {
+                return true;
+            }
+
+            ApplicationInfo applicationInfo = GetApplicationInfo();
+            if (applicationInfo?.StorageUuid == null)
+            {
+                return false;
+            }
+
+            if (!applicationInfo.StorageUuid.Equals(StorageManager.UuidDefault))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public static string GetInstallerPackageName(PackageManager packageManager, string packageName)
         {
             try
@@ -5795,7 +6644,9 @@ namespace BmwDeepObd
                 if (Build.VERSION.SdkInt < BuildVersionCodes.R)
                 {
 #pragma warning disable CS0618
+#pragma warning disable CA1422
                     return packageManager.GetInstallerPackageName(packageName);
+#pragma warning restore CA1422
 #pragma warning restore CS0618
                 }
 
@@ -5970,7 +6821,9 @@ namespace BmwDeepObd
                 {
                     PackageInfo packageInfo = GetPackageInfo(PackageInfoFlags.Signatures);
 #pragma warning disable 618
+#pragma warning disable CA1422
                     signatures = packageInfo?.Signatures?.ToArray();
+#pragma warning restore CA1422
 #pragma warning restore 618
                 }
                 if (signatures != null)
@@ -6150,15 +7003,25 @@ namespace BmwDeepObd
                 {
                     using (MemoryStream ms = new MemoryStream())
                     {
-                        using (StreamWriter streamWriter = new StreamWriter(ms, Encoding.UTF8, 1024, true))
+                        using (StreamWriter streamWriter = new StreamWriter(ms, new UTF8Encoding(true), 1024, true))
                         {
                             streamWriter.Write(message);
                         }
 
                         ms.Position = 0;
-                        if (!CreateZipFile(ms, TraceFileName, traceBackupFile))
+                        if (CompressTrace)
                         {
-                            return false;
+                            if (!CreateZipFile(ms, TraceFileName, traceBackupFile))
+                            {
+                                return false;
+                            }
+                        }
+                        else
+                        {
+                            using (FileStream fileStream = new FileStream(traceBackupFile, FileMode.Create, FileAccess.Write))
+                            {
+                                ms.CopyTo(fileStream);
+                            }
                         }
                     }
                 }
@@ -6218,6 +7081,42 @@ namespace BmwDeepObd
             return true;
         }
 
+        public string CompressTraceFile(string traceFile, out bool compressFailure)
+        {
+            compressFailure = false;
+            try
+            {
+                if (!File.Exists(traceFile))
+                {
+                    return null;
+                }
+
+                string fileExt = Path.GetExtension(traceFile);
+                if (!string.IsNullOrEmpty(fileExt))
+                {
+                    if (string.Compare(fileExt, ZipExt, StringComparison.OrdinalIgnoreCase) == 0)
+                    {
+                        return null;
+                    }
+                }
+
+                string compressedTraceFile = traceFile + ZipExt;
+                if (!CreateZipFile(new[] { traceFile }, compressedTraceFile, null))
+                {
+                    compressFailure = true;
+                    return null;
+                }
+
+                return compressedTraceFile;
+            }
+            catch (Exception)
+            {
+                compressFailure = true;
+            }
+
+            return null;
+        }
+
         public bool SendTraceFileInfoDlg(string appDataDir, string traceFile, string message, Type classType, EventHandler<EventArgs> handler, bool deleteFile = false)
         {
             try
@@ -6240,7 +7139,10 @@ namespace BmwDeepObd
                 {
                     handler?.Invoke(this, new EventArgs());
                 });
-                traceInfoInputDialog.Show();
+
+                AlertDialog alertDialog = traceInfoInputDialog.Create();
+                alertDialog.Show();
+                alertDialog.Window?.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             }
             catch (Exception)
             {
@@ -6267,7 +7169,8 @@ namespace BmwDeepObd
                 _sendHttpClient = new HttpClient(new HttpClientHandler()
                 {
                     SslProtocols = DefaultSslProtocols,
-                    ServerCertificateCustomValidationCallback = (msg, certificate2, arg3, arg4) => true
+                    ServerCertificateCustomValidationCallback = (msg, certificate2, arg3, arg4) => true,
+                    Proxy = GetProxySettings()
                 });
             }
 
@@ -6293,8 +7196,7 @@ namespace BmwDeepObd
                     if (string.Compare(Path.GetExtension(MailInfoDownloadUrl), ".php", StringComparison.OrdinalIgnoreCase) == 0)
                     {
                         formDownload.Add(new StringContent(AppId), "appid");
-                        formDownload.Add(new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}",
-                            packageInfo != null ? PackageInfoCompat.GetLongVersionCode(packageInfo) : 0)), "appver");
+                        formDownload.Add(new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", VersionCode)), "appver");
                         formDownload.Add(new StringContent(GetCurrentLanguage()), "lang");
                         formDownload.Add(new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", (long) Build.VERSION.SdkInt )), "android_ver");
                         formDownload.Add(new StringContent(Build.Fingerprint), "fingerprint");
@@ -6382,6 +7284,16 @@ namespace BmwDeepObd
                       // ignored
                     }
 
+                    string soArch = string.Empty;
+                    try
+                    {
+                        soArch = Java.Lang.JavaSystem.GetProperty("os.arch");
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+
                     StringBuilder sb = new StringBuilder();
                     sb.Append("Deep OBD Trace info");
                     sb.Append(string.Format("\nDate: {0:u}", DateTime.Now));
@@ -6399,16 +7311,29 @@ namespace BmwDeepObd
                     sb.Append(string.Format("\nAndroid board: {0}", Build.Board ?? string.Empty));
                     sb.Append(string.Format("\nAndroid brand: {0}", Build.Brand ?? string.Empty));
                     sb.Append(string.Format("\nAndroid hardware: {0}", Build.Hardware ?? string.Empty));
+
+                    if (Build.VERSION.SdkInt >= BuildVersionCodes.Lollipop)
+                    {
+                        sb.Append(string.Format("\nAndroid abi: {0}", Build.SupportedAbis.Count > 0 ? Build.SupportedAbis[0] : string.Empty));
+                    }
+
+                    sb.Append(string.Format("\nOS arch: {0}", soArch ?? string.Empty));
                     sb.Append(string.Format("\nAndroid user: {0}", Build.User ?? string.Empty));
                     sb.Append(string.Format("\nApp version name: {0}", packageInfo?.VersionName ?? string.Empty));
-                    sb.Append(string.Format("\nApp version code: {0}",
-                        packageInfo != null ? PackageInfoCompat.GetLongVersionCode(packageInfo) : 0));
+                    sb.Append(string.Format("\nApp version code: {0}", VersionCode));
                     sb.Append(string.Format("\nApp id: {0}", AppId));
                     sb.Append(string.Format("\nOBB: {0}", obbName));
                     sb.Append(string.Format("\nInstaller: {0}", installer ?? string.Empty));
                     sb.Append(string.Format("\nEnable translation: {0}", EnableTranslation));
                     sb.Append(string.Format("\nManufacturer: {0}", ManufacturerName()));
                     sb.Append(string.Format("\nClass name: {0}", classType.FullName));
+
+                    bool? validProxyHost = HasValidProxyHost();
+                    if (validProxyHost != null)
+                    {
+                        sb.Append(string.Format("\nValid proxy: {0}", validProxyHost.Value));
+                    }
+
                     if (optionalInfo)
                     {
                         if (!string.IsNullOrWhiteSpace(EmailAddress))
@@ -6598,9 +7523,22 @@ namespace BmwDeepObd
                         // ignored
                     }
 
-                    if (!string.IsNullOrEmpty(traceFile))
+                    string sendTraceFile = traceFile;
+                    string compressedTraceFile = CompressTraceFile(traceFile, out bool compressFailure);
+                    if (compressFailure)
                     {
-                        Dictionary<string, int> wordDict = ExtractKeyWords(traceFile, wordRegEx, maxWords, linesRegEx, null);
+                        sb.Append("\nCompressing trace file failed!");
+                        sendTraceFile = string.Empty;
+                    }
+                    else if (!string.IsNullOrEmpty(compressedTraceFile))
+                    {
+                        sb.Append("\nTrace file compressed");
+                        sendTraceFile = compressedTraceFile;
+                    }
+
+                    if (!string.IsNullOrEmpty(sendTraceFile))
+                    {
+                        Dictionary<string, int> wordDict = ExtractKeyWords(sendTraceFile, wordRegEx, maxWords, linesRegEx, null);
                         if (wordDict != null)
                         {
                             sb.Append("\nKeywords:");
@@ -6637,10 +7575,10 @@ namespace BmwDeepObd
                             { new StringContent(sb.ToString()), "info_text" }
                         };
 
-                        if (!string.IsNullOrEmpty(traceFile) && File.Exists(traceFile))
+                        if (!string.IsNullOrEmpty(sendTraceFile) && File.Exists(sendTraceFile))
                         {
-                            FileStream fileStream = new FileStream(traceFile, FileMode.Open);
-                            formUpload.Add(new StreamContent(fileStream), "file", Path.GetFileName(traceFile));
+                            FileStream fileStream = new FileStream(sendTraceFile, FileMode.Open);
+                            formUpload.Add(new StreamContent(fileStream), "file", Path.GetFileName(sendTraceFile));
                         }
 
                         System.Threading.Tasks.Task<HttpResponseMessage> taskUpload = _sendHttpClient.PostAsync(MailInfoDownloadUrl, formUpload);
@@ -6684,7 +7622,6 @@ namespace BmwDeepObd
                         if (progress != null)
                         {
                             progress.Dismiss();
-                            progress.Dispose();
                             progress = null;
                             SetLock(LockType.None);
                         }
@@ -6770,7 +7707,6 @@ namespace BmwDeepObd
                                         if (progress != null)
                                         {
                                             progress.Dismiss();
-                                            progress.Dispose();
                                             progress = null;
                                             SetLock(LockType.None);
                                         }
@@ -6859,7 +7795,6 @@ namespace BmwDeepObd
                         if (progress != null)
                         {
                             progress.Dismiss();
-                            progress.Dispose();
                             progress = null;
                             SetLock(LockType.None);
                         }
@@ -7128,19 +8063,18 @@ namespace BmwDeepObd
                     _updateHttpClient = new HttpClient(new HttpClientHandler()
                     {
                         SslProtocols = DefaultSslProtocols,
-                        ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
+                        ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true,
+                        Proxy = GetProxySettings()
                     });
                 }
 
-                PackageInfo packageInfo = GetPackageInfo();
                 string certInfo = GetCertificateInfo();
                 string installer = GetInstallerPackageName();
 
                 MultipartFormDataContent formUpdate = new MultipartFormDataContent
                 {
                     { new StringContent(_activity?.PackageName), "package_name" },
-                    { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}",
-                        packageInfo != null ? PackageInfoCompat.GetLongVersionCode(packageInfo) : 0)), "app_ver" },
+                    { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", VersionCode)), "app_ver" },
                     { new StringContent(AppId), "app_id" },
                     { new StringContent(GetCurrentLanguage()), "lang" },
                     { new StringContent(string.Format(CultureInfo.InvariantCulture, "{0}", (long) Build.VERSION.SdkInt)), "android_ver" },
@@ -7368,12 +8302,136 @@ namespace BmwDeepObd
             ShowOnlyRelevantErrors = true;
             ScanAllEcus = false;
             CollectDebugInfo = false;
+            CompressTrace = true;
             Translator = TranslatorType.IbmWatson;
         }
 
-        public static string GetCurrentLanguage()
+        public string GetCurrentLanguage(bool iso3 = false)
         {
-            return Java.Util.Locale.Default.Language ?? DefaultLang;
+            return GetCurrentLanguageStatic(iso3, _context);
+        }
+
+        public static string GetCurrentLanguageStatic(bool iso3 = false, Context context = null)
+        {
+            try
+            {
+                Java.Util.Locale locale = Java.Util.Locale.Default;
+                Configuration configuration = context?.Resources?.Configuration;
+
+                if (configuration != null)
+                {
+                    AndroidX.Core.OS.LocaleListCompat localeList =
+                        AndroidX.Core.OS.ConfigurationCompat.GetLocales(configuration);
+                    if (localeList.Size() > 0)
+                    {
+                        locale = localeList.Get(0);
+                    }
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(SelectedLocale))
+                    {
+                        locale = new Java.Util.Locale(SelectedLocale);
+                    }
+                }
+
+                string language = locale?.Language;
+                if (iso3)
+                {
+                    string iso3Language = locale?.ISO3Language;
+                    if (!string.IsNullOrEmpty(iso3Language))
+                    {
+                        language = iso3Language;
+                    }
+                }
+
+                return language ?? DefaultLang;
+            }
+            catch (Exception)
+            {
+                return DefaultLang;
+            }
+        }
+
+        public static WebProxy GetProxySettings()
+        {
+            try
+            {
+                string proxyHost = Java.Lang.JavaSystem.GetProperty("http.proxyHost");
+                string proxyPort = Java.Lang.JavaSystem.GetProperty("http.proxyPort");
+                string nonProxyHosts = Java.Lang.JavaSystem.GetProperty("http.nonProxyHosts");
+
+                if (!string.IsNullOrEmpty(proxyHost))
+                {
+                    IPHostEntry hostEntry = Dns.GetHostEntry(proxyHost.TrimEnd('/'));
+                    string address = string.Empty;
+                    foreach (IPAddress ipAddress in hostEntry.AddressList)
+                    {
+                        if (ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        {
+                            address = ipAddress.ToString();
+                            break;
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(address))
+                    {
+                        return null;
+                    }
+
+                    int portNum = 0;
+                    if (!string.IsNullOrEmpty(proxyPort))
+                    {
+                        if (!int.TryParse(proxyPort, NumberStyles.Integer, CultureInfo.InvariantCulture, out portNum))
+                        {
+                            portNum = 0;
+                        }
+                    }
+
+                    if (portNum < 1 || portNum > 0xFFFF)
+                    {
+                        return null;
+                    }
+
+                    address += string.Format(CultureInfo.InvariantCulture, ":{0}", portNum);
+                    string[] bypassList = Array.Empty<string>();
+                    if (!string.IsNullOrEmpty(nonProxyHosts))
+                    {
+                        bypassList = nonProxyHosts.Split('|');
+                    }
+
+                    return new WebProxy(address, true, bypassList);
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        public static bool? HasValidProxyHost()
+        {
+            try
+            {
+                string proxyHost = Java.Lang.JavaSystem.GetProperty("http.proxyHost");
+                if (string.IsNullOrEmpty(proxyHost))
+                {
+                    return null;
+                }
+
+                if (GetProxySettings() == null)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         public static bool ReadBatteryVoltage(EdiabasNet ediabas, out double? batteryVoltage, out byte[] adapterSerial)
@@ -7602,7 +8660,7 @@ namespace BmwDeepObd
 
         public static string GetVagDatUkdDir(string ecuPath, bool ignoreManufacturer = false)
         {
-            string lang = GetCurrentLanguage();
+            string lang = GetCurrentLanguageStatic();
             string dirName = Path.Combine(ecuPath, "dat.ukd", lang);
             if (!Directory.Exists(dirName))
             {
@@ -8254,12 +9312,15 @@ namespace BmwDeepObd
 
                 case TranslatorType.Deepl:
                     return !string.IsNullOrWhiteSpace(DeeplApiKey);
+
+                case TranslatorType.YandexCloud:
+                    return !string.IsNullOrWhiteSpace(YandexCloudApiKey);
             }
 
             return false;
         }
 
-        public static bool IsTranslationRequired()
+        public bool IsTranslationRequired()
         {
 #if true
             if (SelectedManufacturer != ManufacturerType.Bmw)
@@ -8271,6 +9332,22 @@ namespace BmwDeepObd
 #else
             return false;
 #endif
+        }
+
+        public static bool IsYandexCloudOauthToken(string apiKey)
+        {
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                return false;
+            }
+
+            string keyTrim = apiKey.Trim();
+            if (keyTrim.Length > 40 && keyTrim[2] == '_')
+            {
+                return true;
+            }
+
+            return false;
         }
 
         public static bool VagFilesRequired()
@@ -8442,7 +9519,8 @@ namespace BmwDeepObd
                 _translateHttpClient = new HttpClient(new HttpClientHandler()
                 {
                     SslProtocols = DefaultSslProtocols,
-                    ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
+                    ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true,
+                    Proxy = GetProxySettings()
                 });
             }
 
@@ -8511,7 +9589,93 @@ namespace BmwDeepObd
                     int stringCount = 0;
                     HttpContent httpContent = null;
                     StringBuilder sbUrl = new StringBuilder();
-                    if (SelectedTranslator == TranslatorType.Deepl)
+
+                    if (SelectedTranslator == TranslatorType.YandexCloud)
+                    {
+                        JsonSerializerOptions jsonOptions = new()
+                        {
+                            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                        };
+                        bool oauthToken = IsYandexCloudOauthToken(YandexCloudApiKey);
+                        string folderId = oauthToken ? YandexCloudFolderId : null;
+                        if (string.IsNullOrWhiteSpace(folderId))
+                        {
+                            folderId = null;
+                        }
+
+                        TimeSpan tokenAge = DateTime.Now - _yandexCloudIamTokenTime;
+                        if (tokenAge.TotalHours > 1)
+                        {
+                            ResetYandexIamToken();
+                        }
+
+                        if (oauthToken && string.IsNullOrEmpty(_yandexCloudIamToken))
+                        {
+                            ResetYandexIamToken();
+                            // no IAM Token present
+                            sbUrl.Append("https://iam.api.cloud.yandex.net/iam/v1/tokens");
+                            YandexCloudIamTokenRequest languagesRequest = new YandexCloudIamTokenRequest(YandexCloudApiKey);
+                            string jsonString = JsonSerializer.Serialize(languagesRequest, jsonOptions);
+                            httpContent = new StringContent(jsonString);
+                        }
+                        else if (_transLangList == null)
+                        {
+                            // no language list present, get it first
+                            sbUrl.Append("https://translate.api.cloud.yandex.net/translate/v2/languages");
+                            YandexCloudListLanguagesRequest languagesRequest = new YandexCloudListLanguagesRequest(folderId);
+                            string jsonString = JsonSerializer.Serialize(languagesRequest, jsonOptions);
+                            httpContent = new StringContent(jsonString);
+                        }
+                        else
+                        {
+                            sbUrl.Append("https://translate.api.cloud.yandex.net/translate/v2/translate");
+
+                            List<string> transList = new List<string>();
+                            int offset = _transList?.Count ?? 0;
+                            int sumLength = 0;
+                            for (int i = offset; i < _transReducedStringList.Count; i++)
+                            {
+                                string testString = "\"" + JsonEncodedText.Encode(_transReducedStringList[i]) + "\",";
+                                sumLength += testString.Length;
+                                if (sumLength > 9000)
+                                {
+                                    break;
+                                }
+
+                                transList.Add(_transReducedStringList[i]);
+                                stringCount++;
+                            }
+
+                            string targetLang = _transCurrentLang;
+                            if (_transLangList.All(lang => string.Compare(lang, _transCurrentLang, StringComparison.OrdinalIgnoreCase) != 0))
+                            {
+                                // language not found
+                                targetLang = "en";
+                            }
+
+                            YandexCloudTranslateRequest translateRequest = new YandexCloudTranslateRequest(transList.ToArray(), "de", targetLang, folderId);
+                            string jsonString = JsonSerializer.Serialize(translateRequest, jsonOptions);
+
+                            httpContent = new StringContent(jsonString);
+                        }
+
+                        httpContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+                        if (oauthToken)
+                        {
+                            if (!string.IsNullOrEmpty(_yandexCloudIamToken))
+                            {
+                                _translateHttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _yandexCloudIamToken);
+                            }
+                        }
+                        else
+                        {
+                            _translateHttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Api-Key", YandexCloudApiKey);
+                        }
+
+                        taskTranslate = _translateHttpClient.PostAsync(sbUrl.ToString(), httpContent);
+                    }
+                    else if (SelectedTranslator == TranslatorType.Deepl)
                     {
                         string deeplApiUrl = DeeplProUrl;
                         if (!string.IsNullOrEmpty(DeeplApiKey))
@@ -8711,65 +9875,58 @@ namespace BmwDeepObd
 
                     if (success)
                     {
-                        if (_transLangList == null)
+                        bool responseEvaluated = false;
+                        switch (SelectedTranslator)
                         {
-                            switch (SelectedTranslator)
-                            {
-                                case TranslatorType.YandexTranslate:
-                                    _transLangList = GetYandexLanguages(responseTranslateResult);
-                                    break;
-
-                                case TranslatorType.IbmWatson:
-                                    _transLangList = GetIbmLanguages(responseTranslateResult);
-                                    break;
-
-                                case TranslatorType.Deepl:
-                                    _transLangList = GetDeeplLanguages(responseTranslateResult);
-                                    break;
-                            }
-
-                            if (_transLangList != null)
-                            {
-                                _activity?.RunOnUiThread(() =>
+                            case TranslatorType.YandexCloud:
+                                if (IsYandexCloudOauthToken(YandexCloudApiKey) && string.IsNullOrEmpty(_yandexCloudIamToken))
                                 {
-                                    if (_disposed)
+                                    _yandexCloudIamToken = GetYandexCloudIamToken(responseTranslateResult, out _yandexCloudIamTokenExpires);
+                                    if (!string.IsNullOrEmpty(_yandexCloudIamToken))
                                     {
+                                        _yandexCloudIamTokenTime = DateTime.Now;
+                                        _activity?.RunOnUiThread(() =>
+                                        {
+                                            if (_disposed)
+                                            {
+                                                return;
+                                            }
+                                            TranslateStrings(stringList, handler, disableCache);
+                                        });
                                         return;
                                     }
-                                    TranslateStrings(stringList, handler, disableCache);
-                                });
-                                return;
-                            }
+
+                                    responseEvaluated = true;
+                                    // error
+                                    _transList = null;
+                                }
+                                break;
                         }
-                        else
+
+                        if (!responseEvaluated)
                         {
-                            List<string> transList = null;
-                            switch (SelectedTranslator)
+                            if (_transLangList == null)
                             {
-                                case TranslatorType.YandexTranslate:
-                                    transList = GetYandexTranslations(responseTranslateResult);
-                                    break;
-
-                                case TranslatorType.IbmWatson:
-                                    transList = GetIbmTranslations(responseTranslateResult);
-                                    break;
-
-                                case TranslatorType.Deepl:
-                                    transList = GetDeeplTranslations(responseTranslateResult);
-                                    break;
-                            }
-
-                            if (transList != null && transList.Count == stringCount)
-                            {
-                                if (_transList == null)
+                                switch (SelectedTranslator)
                                 {
-                                    _transList = transList;
+                                    case TranslatorType.YandexTranslate:
+                                        _transLangList = GetYandexLanguages(responseTranslateResult);
+                                        break;
+
+                                    case TranslatorType.IbmWatson:
+                                        _transLangList = GetIbmLanguages(responseTranslateResult);
+                                        break;
+
+                                    case TranslatorType.Deepl:
+                                        _transLangList = GetDeeplLanguages(responseTranslateResult);
+                                        break;
+
+                                    case TranslatorType.YandexCloud:
+                                        _transLangList = GetYandexCloudLanguages(responseTranslateResult);
+                                        break;
                                 }
-                                else
-                                {
-                                    _transList.AddRange(transList);
-                                }
-                                if (_transList.Count < _transReducedStringList.Count)
+
+                                if (_transLangList != null)
                                 {
                                     _activity?.RunOnUiThread(() =>
                                     {
@@ -8784,8 +9941,54 @@ namespace BmwDeepObd
                             }
                             else
                             {
-                                // error
-                                _transList = null;
+                                List<string> transList = null;
+                                switch (SelectedTranslator)
+                                {
+                                    case TranslatorType.YandexTranslate:
+                                        transList = GetYandexTranslations(responseTranslateResult);
+                                        break;
+
+                                    case TranslatorType.IbmWatson:
+                                        transList = GetIbmTranslations(responseTranslateResult);
+                                        break;
+
+                                    case TranslatorType.Deepl:
+                                        transList = GetDeeplTranslations(responseTranslateResult);
+                                        break;
+
+                                    case TranslatorType.YandexCloud:
+                                        transList = GetYandexCloudTranslations(responseTranslateResult);
+                                        break;
+                                }
+
+                                if (transList != null && transList.Count == stringCount)
+                                {
+                                    if (_transList == null)
+                                    {
+                                        _transList = transList;
+                                    }
+                                    else
+                                    {
+                                        _transList.AddRange(transList);
+                                    }
+                                    if (_transList.Count < _transReducedStringList.Count)
+                                    {
+                                        _activity?.RunOnUiThread(() =>
+                                        {
+                                            if (_disposed)
+                                            {
+                                                return;
+                                            }
+                                            TranslateStrings(stringList, handler, disableCache);
+                                        });
+                                        return;
+                                    }
+                                }
+                                else
+                                {
+                                    // error
+                                    _transList = null;
+                                }
                             }
                         }
                     }
@@ -8793,6 +9996,7 @@ namespace BmwDeepObd
                     {
                         // error
                         _transList = null;
+                        ResetYandexIamToken();
                     }
                     _activity?.RunOnUiThread(() =>
                     {
@@ -8828,6 +10032,10 @@ namespace BmwDeepObd
 
                                     case TranslatorType.Deepl:
                                         errorMessage = GetDeeplTranslationError(responseTranslateResult);
+                                        break;
+
+                                    case TranslatorType.YandexCloud:
+                                        errorMessage = GetYandexCloudTranslationError(responseTranslateResult, out int _);
                                         break;
                                 }
                             }
@@ -8977,22 +10185,38 @@ namespace BmwDeepObd
             return true;
         }
 
-        private string GetDeeplTranslationError(string jsonResult)
+        private void ResetYandexIamToken()
         {
+            _yandexCloudIamToken = null;
+            _yandexCloudIamTokenExpires = null;
+            _yandexCloudIamTokenTime = DateTime.MinValue;
+        }
+
+        private string GetYandexTranslationError(string xmlResult, out int errorCode)
+        {
+            errorCode = -1;
             string message = string.Empty;
             try
             {
-                if (string.IsNullOrEmpty(jsonResult))
+                if (string.IsNullOrEmpty(xmlResult))
                 {
                     return message;
                 }
-
-                JsonDocument jsonDocument = JsonDocument.Parse(jsonResult);
-                if (jsonDocument.RootElement.TryGetProperty("message", out JsonElement jsonErrorText))
+                XDocument xmlDoc = XDocument.Parse(xmlResult);
+                if (xmlDoc.Root == null)
                 {
-                    message = jsonErrorText.GetString();
+                    return message;
                 }
-
+                XAttribute attrCode = xmlDoc.Root.Attribute("code");
+                if (attrCode != null)
+                {
+                    errorCode = XmlConvert.ToInt32(attrCode.Value);
+                }
+                XAttribute attrMessage = xmlDoc.Root.Attribute("message");
+                if (attrMessage != null)
+                {
+                    message = attrMessage.Value;
+                }
                 return message;
             }
             catch (Exception)
@@ -9031,36 +10255,90 @@ namespace BmwDeepObd
             }
         }
 
-        private string GetYandexTranslationError(string xmlResult, out int errorCode)
+        private string GetDeeplTranslationError(string jsonResult)
         {
-            errorCode = -1;
             string message = string.Empty;
             try
             {
-                if (string.IsNullOrEmpty(xmlResult))
+                if (string.IsNullOrEmpty(jsonResult))
                 {
                     return message;
                 }
-                XDocument xmlDoc = XDocument.Parse(xmlResult);
-                if (xmlDoc.Root == null)
+
+                JsonDocument jsonDocument = JsonDocument.Parse(jsonResult);
+                if (jsonDocument.RootElement.TryGetProperty("message", out JsonElement jsonErrorText))
                 {
-                    return message;
+                    message = jsonErrorText.GetString();
                 }
-                XAttribute attrCode = xmlDoc.Root.Attribute("code");
-                if (attrCode != null)
-                {
-                    errorCode = XmlConvert.ToInt32(attrCode.Value);
-                }
-                XAttribute attrMessage = xmlDoc.Root.Attribute("message");
-                if (attrMessage != null)
-                {
-                    message = attrMessage.Value;
-                }
+
                 return message;
             }
             catch (Exception)
             {
                 return message;
+            }
+        }
+
+        private string GetYandexCloudTranslationError(string jsonResult, out int errorCode)
+        {
+            errorCode = -1;
+            string message = string.Empty;
+            try
+            {
+                if (string.IsNullOrEmpty(jsonResult))
+                {
+                    return message;
+                }
+
+                JsonDocument jsonDocument = JsonDocument.Parse(jsonResult);
+                if (jsonDocument.RootElement.TryGetProperty("code", out JsonElement jsonErrorCode))
+                {
+                    errorCode = jsonErrorCode.GetInt32();
+                }
+
+                if (jsonDocument.RootElement.TryGetProperty("message", out JsonElement jsonErrorText))
+                {
+                    message = jsonErrorText.GetString();
+                }
+
+                return message;
+            }
+            catch (Exception)
+            {
+                return message;
+            }
+        }
+
+        private string GetYandexCloudIamToken(string jsonResult, out string tokenExpires)
+        {
+            tokenExpires = null;
+            try
+            {
+                if (string.IsNullOrEmpty(jsonResult))
+                {
+                    return null;
+                }
+
+                JsonDocument jsonDocument = JsonDocument.Parse(jsonResult);
+                string iamTokenString = null;
+                if (jsonDocument.RootElement.TryGetProperty("iamToken", out JsonElement iamToken))
+                {
+                    iamTokenString = iamToken.GetString();
+                }
+
+                if (!string.IsNullOrEmpty(iamTokenString))
+                {
+                    if (jsonDocument.RootElement.TryGetProperty("expiresAt", out JsonElement expiresAt))
+                    {
+                        tokenExpires = expiresAt.GetString();
+                    }
+                }
+
+                return iamTokenString;
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
 
@@ -9141,6 +10419,38 @@ namespace BmwDeepObd
                 foreach (JsonElement translation in jsonDocument.RootElement.EnumerateArray())
                 {
                     if (translation.TryGetProperty("language", out JsonElement transElem))
+                    {
+                        transList.Add(transElem.GetString());
+                    }
+                }
+
+                return transList;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private List<string> GetYandexCloudLanguages(string jsonResult)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(jsonResult))
+                {
+                    return null;
+                }
+
+                JsonDocument jsonDocument = JsonDocument.Parse(jsonResult);
+                List<string> transList = new List<string>();
+                if (!jsonDocument.RootElement.TryGetProperty("languages", out JsonElement languages))
+                {
+                    return null;
+                }
+
+                foreach (JsonElement language in languages.EnumerateArray())
+                {
+                    if (language.TryGetProperty("code", out JsonElement transElem))
                     {
                         transList.Add(transElem.GetString());
                     }
@@ -9248,6 +10558,38 @@ namespace BmwDeepObd
             }
         }
 
+        private List<string> GetYandexCloudTranslations(string jsonResult)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(jsonResult))
+                {
+                    return null;
+                }
+
+                JsonDocument jsonDocument = JsonDocument.Parse(jsonResult);
+                List<string> transList = new List<string>();
+                if (!jsonDocument.RootElement.TryGetProperty("translations", out JsonElement translations))
+                {
+                    return null;
+                }
+
+                foreach (JsonElement translation in translations.EnumerateArray())
+                {
+                    if (translation.TryGetProperty("text", out JsonElement transElem))
+                    {
+                        transList.Add(transElem.GetString());
+                    }
+                }
+
+                return transList;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         public static Java.Lang.ICharSequence FromHtml(string source)
         {
             if (Build.VERSION.SdkInt >= BuildVersionCodes.N)
@@ -9255,7 +10597,9 @@ namespace BmwDeepObd
                 return Android.Text.Html.FromHtml(source, Android.Text.FromHtmlOptions.ModeLegacy);
             }
 #pragma warning disable 618
+#pragma warning disable CA1422
             return Android.Text.Html.FromHtml(source);
+#pragma warning restore CA1422
 #pragma warning restore 618
         }
 
@@ -9375,13 +10719,13 @@ namespace BmwDeepObd
             {
                 if (!string.IsNullOrEmpty(key))
                 {
-                    using (AesCryptoServiceProvider crypto = new AesCryptoServiceProvider())
+                    using (Aes crypto = Aes.Create())
                     {
                         crypto.Mode = CipherMode.CBC;
                         crypto.Padding = PaddingMode.PKCS7;
                         crypto.KeySize = 256;
 
-                        using (SHA256Managed sha256 = new SHA256Managed())
+                        using (SHA256 sha256 = SHA256.Create())
                         {
                             crypto.Key = sha256.ComputeHash(Encoding.ASCII.GetBytes(key));
                         }
@@ -9450,7 +10794,7 @@ namespace BmwDeepObd
                                 finally
                                 {
                                     fsRead?.Dispose();
-                                    assetFile?.Dispose();
+                                    assetFile?.Close();
                                 }
 
                                 break;
@@ -9916,6 +11260,298 @@ namespace BmwDeepObd
             return true;
         }
 
+        public bool ExtraktPackageAssemblies(string outputPath, bool forceUpdate = false)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(outputPath))
+                {
+                    return false;
+                }
+
+                PackageInfo packageInfo = GetPackageInfo();
+                string packageFilePath = packageInfo.ApplicationInfo?.SourceDir;
+                if (string.IsNullOrEmpty(packageFilePath))
+                {
+                    return false;
+                }
+
+                if (!File.Exists(packageFilePath))
+                {
+                    return false;
+                }
+
+                string packageInfoFile = Path.Combine(outputPath, "PackageInfo.xml");
+                DateTime packageFileTime = File.GetLastWriteTimeUtc(packageFilePath);
+                string packageTimeStamp = packageFileTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                string oldTimeStamp = null;
+
+                if (File.Exists(packageInfoFile))
+                {
+                    XDocument xmlInfo = XDocument.Load(packageInfoFile);
+                    XAttribute dateAttr = xmlInfo.Root?.Attribute("Date");
+                    if (dateAttr != null)
+                    {
+                        oldTimeStamp = dateAttr.Value;
+                    }
+                }
+
+                if (!forceUpdate && !string.IsNullOrEmpty(oldTimeStamp))
+                {
+                    if (string.Compare(oldTimeStamp, packageTimeStamp, StringComparison.OrdinalIgnoreCase) == 0)
+                    {
+                        return true;
+                    }
+                }
+
+                if (Directory.Exists(outputPath))
+                {
+                    Directory.Delete(outputPath, true);
+                }
+
+                string ext = Path.GetExtension(packageFilePath);
+                bool result = false;
+                ApkUncompress.ApkUncompressCommon apkUncompress = new ApkUncompress.ApkUncompressCommon();
+                if (string.Compare(".apk", ext, StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    if (apkUncompress.UncompressFromAPK(packageFilePath, ApkUncompress.ApkUncompressCommon.AssembliesPathApk, null, outputPath))
+                    {
+                        result = true;
+                    }
+                }
+
+                if (string.Compare(".aab", ext, StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    if (apkUncompress.UncompressFromAPK(packageFilePath, ApkUncompress.ApkUncompressCommon.AssembliesPathAab, null, outputPath))
+                    {
+                        result = true;
+                    }
+                }
+
+                if (result && Directory.Exists(outputPath))
+                {
+                    XElement xmlInfo = new XElement("PackageInfo");
+                    xmlInfo.Add(new XAttribute("Name", packageFilePath));
+                    xmlInfo.Add(new XAttribute("Date", packageTimeStamp));
+                    xmlInfo.Save(packageInfoFile);
+                }
+
+                return result;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public static List<string> GetCurrentAbiDirs()
+        {
+            bool isArm = false;
+            string abi = null;
+
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.Lollipop)
+            {
+                if (Build.SupportedAbis != null && Build.SupportedAbis.Count > 0)
+                {
+                    abi = Build.SupportedAbis[0];
+                }
+            }
+            else
+            {
+#pragma warning disable CS0618 // Type or member is obsolete
+                abi = Build.CpuAbi;
+#pragma warning restore CS0618 // Type or member is obsolete
+            }
+
+            if (!string.IsNullOrEmpty(abi))
+            {
+#if DEBUG
+                Android.Util.Log.Info(Tag, string.Format("GetCurrentAbiDirs ABI={0}", abi));
+#endif
+                if (abi.Contains("arm", StringComparison.OrdinalIgnoreCase))
+                {
+                    isArm = true;
+                }
+            }
+
+            try
+            {
+                string soArch = Java.Lang.JavaSystem.GetProperty("os.arch");
+                if (!string.IsNullOrEmpty(soArch))
+                {
+#if DEBUG
+                    Android.Util.Log.Info(Tag, string.Format("GetCurrentAbiDirs Arch={0}", soArch));
+#endif
+                    if (soArch.Contains("arm", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isArm = true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            bool is64Bit = IntPtr.Size == 8;
+#if DEBUG
+            Android.Util.Log.Info(Tag, string.Format("GetCurrentAbiDirs ARM={0}, 64Bit={1}", isArm, is64Bit));
+#endif
+            if (isArm)
+            {
+                // the release version uses _ and debug uses -
+                return is64Bit ? ["arm64_v8a", "arm64-v8a"] : ["armeabi_v7a", "armeabi-v7a"];
+            }
+
+            // only the _ variant is used for release and debug
+            return is64Bit ? ["x86_64", "x86-64"] : ["x86"];
+        }
+
+
+        public static List<Microsoft.CodeAnalysis.MetadataReference> GetLoadedMetadataReferences(string packageAssembiesDir, out bool hasErrors)
+        {
+            string assembliesDir = packageAssembiesDir;
+            Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+            List<Microsoft.CodeAnalysis.MetadataReference> referencesList = new List<Microsoft.CodeAnalysis.MetadataReference>();
+            hasErrors = false;
+
+            List<string> abiDirs = GetCurrentAbiDirs();
+#if DEBUG
+            Android.Util.Log.Info(Tag, string.Format("GetLoadedMetadataReferences ABI dirs={0}", string.Join(", ", abiDirs)));
+#endif
+            foreach (Assembly assembly in loadedAssemblies)
+            {
+                string location = assembly.Location;
+                if (string.IsNullOrEmpty(location))
+                {
+                    continue;
+                }
+
+                if (!File.Exists(location))
+                {
+                    string fileName = Path.GetFileName(location);
+                    location = Path.Combine(assembliesDir, fileName);
+                    if (!File.Exists(location))
+                    {
+                        foreach (string abi in abiDirs)
+                        {
+                            location = Path.Combine(assembliesDir, abi, fileName);
+#if DEBUG
+                            Android.Util.Log.Info(Tag, string.Format("GetLoadedMetadataReferences ABI={0}, Location={1}", abi, location));
+#endif
+                            if (File.Exists(location))
+                            {
+#if DEBUG
+                                Android.Util.Log.Info(Tag, string.Format("GetLoadedMetadataReferences File found: {0}", fileName));
+#endif
+                                break;
+                            }
+#if DEBUG
+                            Android.Util.Log.Info(Tag, string.Format("GetLoadedMetadataReferences File not found: {0}", fileName));
+#endif
+                            location = null;
+                        }
+                    }
+                }
+
+                if (location != null)
+                {
+                    referencesList.Add(Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(location));
+                }
+                else
+                {
+                    hasErrors = true;
+                }
+            }
+
+#if DEBUG
+            Android.Util.Log.Info(Tag, string.Format("GetLoadedMetadataReferences Has errors: {0}", hasErrors));
+#endif
+            return referencesList;
+        }
+
+        public string CompileCode(JobReader.PageInfo pageInfo, List<Microsoft.CodeAnalysis.MetadataReference> referencesList)
+        {
+            string classCode = @"
+using Android.Views;
+using Android.Widget;
+using Android.Content;
+using EdiabasLib;
+using BmwDeepObd;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;"
+        + pageInfo.ClassCode;
+
+            string result = string.Empty;
+            try
+            {
+                // ToDo: Mono init bug, limit to one thread: https://github.com/dotnet/runtime/issues/96804
+                lock (CompileLock)
+                {
+                    Microsoft.CodeAnalysis.SyntaxTree syntaxTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(classCode);
+                    Microsoft.CodeAnalysis.CSharp.CSharpCompilation compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+                        "UserCode",
+                        new[] { syntaxTree },
+                        referencesList,
+                        new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
+
+                    using (MemoryStream ms = new MemoryStream())
+                    {
+                        Microsoft.CodeAnalysis.Emit.EmitResult emitResult = compilation.Emit(ms);
+                        if (!emitResult.Success)
+                        {
+                            StringBuilder sb = new StringBuilder();
+                            foreach (Microsoft.CodeAnalysis.Diagnostic diagnostic in emitResult.Diagnostics)
+                            {
+                                sb.AppendLine(diagnostic.ToString());
+                            }
+
+                            result = sb.ToString();
+                        }
+                        else
+                        {
+                            ms.Seek(0, SeekOrigin.Begin);
+                            Assembly assembly = Assembly.Load(ms.ToArray());
+                            Type pageClassType = assembly.GetType("PageClass");
+                            if (pageClassType == null)
+                            {
+                                throw new Exception("Compiling PageClass failed");
+                            }
+
+                            if (((pageInfo.JobsInfo == null) || (pageInfo.JobsInfo.JobList.Count == 0)) &&
+                                ((pageInfo.ErrorsInfo == null) || (pageInfo.ErrorsInfo.EcuList.Count == 0)))
+                            {
+                                if (pageClassType.GetMethod("ExecuteJob") == null)
+                                {
+                                    throw new Exception("No ExecuteJob method");
+                                }
+                            }
+
+                            object pageClassInstance = Activator.CreateInstance(pageClassType);
+                            if (pageClassInstance == null)
+                            {
+                                throw new Exception("Compiling PageClass failed");
+                            }
+
+                            pageInfo.ClassObject = pageClassInstance;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                pageInfo.ClassObject = null;
+                if (string.IsNullOrEmpty(result))
+                {
+                    result = EdiabasNet.GetExceptionText(ex, false, false);
+                }
+            }
+
+            return result;
+        }
+
         public static Dictionary<string, int> ExtractKeyWords(string archiveFilename, string wordRegEx, int maxWords, string lineRegEx, ProgressZipDelegate progressHandler)
         {
             Dictionary<string, int> wordDict = new Dictionary<string, int>();
@@ -9940,70 +11576,73 @@ namespace BmwDeepObd
                     {
                         continue;           // Ignore directories
                     }
-                    Stream zipStream = zf.GetInputStream(zipEntry);
-                    using (StreamReader sr = new StreamReader(zipStream))
-                    {
-                        bool exit = false;
-                        for (; ; )
-                        {
-                            string line = sr.ReadLine();
-                            if (line == null)
-                            {
-                                break;
-                            }
 
-                            if (regExLine != null)
+                    using (Stream zipStream = zf.GetInputStream(zipEntry))
+                    {
+                        using (StreamReader sr = new StreamReader(zipStream))
+                        {
+                            bool exit = false;
+                            for (; ; )
                             {
-                                MatchCollection matchesLine = regExLine.Matches(line);
-                                if ((matchesLine.Count == 1) && (matchesLine[0].Groups.Count > 1))
+                                string line = sr.ReadLine();
+                                if (line == null)
                                 {
-                                    for (int match = 1; match < matchesLine[0].Groups.Count; match++)
+                                    break;
+                                }
+
+                                if (regExLine != null)
+                                {
+                                    MatchCollection matchesLine = regExLine.Matches(line);
+                                    if ((matchesLine.Count == 1) && (matchesLine[0].Groups.Count > 1))
                                     {
-                                        if (matchesLine[0].Groups[match].Success)
+                                        for (int match = 1; match < matchesLine[0].Groups.Count; match++)
                                         {
-                                            string key = matchesLine[0].Groups[match].Value;
-                                            if (!string.IsNullOrWhiteSpace(key))
+                                            if (matchesLine[0].Groups[match].Success)
                                             {
-                                                if (wordDict.ContainsKey(key))
+                                                string key = matchesLine[0].Groups[match].Value;
+                                                if (!string.IsNullOrWhiteSpace(key))
                                                 {
-                                                    wordDict[key] += 1;
-                                                }
-                                                else
-                                                {
-                                                    wordDict[key] = 1;
+                                                    if (wordDict.ContainsKey(key))
+                                                    {
+                                                        wordDict[key] += 1;
+                                                    }
+                                                    else
+                                                    {
+                                                        wordDict[key] = 1;
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            string[] words = line.Split(' ', '\t', '\n', '\r');
-                            foreach (string word in words)
-                            {
-                                if (string.IsNullOrEmpty(word))
+                                string[] words = line.Split(' ', '\t', '\n', '\r');
+                                foreach (string word in words)
                                 {
-                                    continue;
-                                }
-                                if (regExWord.IsMatch(word))
-                                {
-                                    if (wordDict.ContainsKey(word))
+                                    if (string.IsNullOrEmpty(word))
                                     {
-                                        wordDict[word] += 1;
+                                        continue;
                                     }
-                                    else
+                                    if (regExWord.IsMatch(word))
                                     {
-                                        if (maxWords > 0 && wordDict.Count > maxWords)
+                                        if (wordDict.ContainsKey(word))
                                         {
-                                            exit = true;
+                                            wordDict[word] += 1;
                                         }
-                                        wordDict[word] = 1;
+                                        else
+                                        {
+                                            if (maxWords > 0 && wordDict.Count > maxWords)
+                                            {
+                                                exit = true;
+                                            }
+                                            wordDict[word] = 1;
+                                        }
                                     }
                                 }
-                            }
-                            if (exit)
-                            {
-                                break;
+                                if (exit)
+                                {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -10039,9 +11678,19 @@ namespace BmwDeepObd
             return InitUdsReaderThread(vagPath, handler);
         }
 
-        public bool InitUdsReaderThread(string vagPath, InitThreadFinishDelegate handler)
+        public bool IsInitUdsReaderRequired()
         {
             if (OldVagMode || VagUdsChecked || SelectedManufacturer == ManufacturerType.Bmw)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool InitUdsReaderThread(string vagPath, InitThreadFinishDelegate handler)
+        {
+            if (!IsInitUdsReaderRequired())
             {
                 return false;
             }
@@ -10068,15 +11717,54 @@ namespace BmwDeepObd
                 return true;
             }
 
+            bool abortInit = false;
             CustomProgressDialog progress = new CustomProgressDialog(_activity);
             progress.SetMessage(_activity.GetString(Resource.String.vag_uds_init));
             progress.Indeterminate = true;
-            progress.ButtonAbort.Visibility = ViewStates.Gone;
+            progress.ButtonAbort.Visibility = ViewStates.Visible;
+            progress.ButtonAbort.Enabled = true;
+            progress.AbortClick = sender =>
+            {
+                _activity.RunOnUiThread(() =>
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    abortInit = true;
+                    progress.ButtonAbort.Enabled = false;
+                });
+            };
             progress.Show();
             SetLock(LockTypeCommunication);
             Thread initThread = new Thread(() =>
             {
-                bool result = InitUdsReader(vagPath, out string errorMessage);
+                long lastPercent = -1;
+                bool result = InitUdsReader(vagPath, out string errorMessage, percent =>
+                {
+                    if (lastPercent == percent)
+                    {
+                        return abortInit;
+                    }
+
+                    lastPercent = percent;
+                    _activity?.RunOnUiThread(() =>
+                    {
+                        if (_disposed)
+                        {
+                            return;
+                        }
+
+                        if (progress.Indeterminate)
+                        {
+                            progress.Indeterminate = false;
+                        }
+                        progress.Progress = (int)percent;
+                    });
+                    return abortInit;
+                });
+
                 _activity?.RunOnUiThread(() =>
                 {
                     if (_disposed)
@@ -10084,7 +11772,6 @@ namespace BmwDeepObd
                         return;
                     }
                     progress.Dismiss();
-                    progress.Dispose();
                     progress = null;
                     SetLock(LockType.None);
                     if (!result)
@@ -10130,7 +11817,7 @@ namespace BmwDeepObd
             _udsReaderDict = null;
         }
 
-        public static bool InitUdsReader(string vagDir, out string errorMessage)
+        public static bool InitUdsReader(string vagDir, out string errorMessage, InitThreadProgressDelegate progressHandler = null)
         {
             errorMessage = null;
             if (OldVagMode)
@@ -10149,6 +11836,8 @@ namespace BmwDeepObd
                 {
                     _udsReaderDict = new Dictionary<string, UdsReader>();
                     string[] subdirs = Directory.GetDirectories(vagDir, "*", SearchOption.TopDirectoryOnly);
+                    long maxProgress = subdirs.Length * 5;
+                    long progressCount = 0;
                     foreach (string subdir in subdirs)
                     {
                         string langDir = Path.GetFileName(subdir) ?? string.Empty;
@@ -10164,7 +11853,16 @@ namespace BmwDeepObd
                                         UdsReader.SegmentType.Adp,
                                         UdsReader.SegmentType.Mwb,
                                         UdsReader.SegmentType.Dtc
-                                    }, out errorMessage))
+                                    }, out errorMessage, increment =>
+                                    {
+                                        progressCount += increment;
+                                        if (progressHandler != null)
+                                        {
+                                            return progressHandler.Invoke(progressCount * 100 / maxProgress);
+                                        }
+
+                                        return false;
+                                    }))
                                 {
                                     return false;
                                 }
@@ -10216,7 +11914,7 @@ namespace BmwDeepObd
                     }
                 }
 
-                string lang = GetCurrentLanguage();
+                string lang = GetCurrentLanguageStatic();
                 if (_udsReaderDict.TryGetValue(lang, out udsReader))
                 {
                     return udsReader;
@@ -10234,7 +11932,7 @@ namespace BmwDeepObd
             return null;
         }
 
-        public bool InitEcuFunctionReaderThread(string bmwPath, InitThreadFinishDelegate handler)
+        public bool IsInitEcuFunctionsRequired()
         {
             if (!UseBmwDatabase || SelectedManufacturer != ManufacturerType.Bmw)
             {
@@ -10250,6 +11948,16 @@ namespace BmwDeepObd
             }
 
             if (EcuFunctionsChecked)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool InitEcuFunctionReaderThread(string bmwPath, InitThreadFinishDelegate handler)
+        {
+            if (!IsInitEcuFunctionsRequired())
             {
                 return false;
             }
@@ -10275,15 +11983,56 @@ namespace BmwDeepObd
                 return true;
             }
 
+            bool abortInit = false;
             CustomProgressDialog progress = new CustomProgressDialog(_activity);
             progress.SetMessage(_activity.GetString(Resource.String.bmw_ecu_func_init));
             progress.Indeterminate = true;
-            progress.ButtonAbort.Visibility = ViewStates.Gone;
+            progress.Progress = 0;
+            progress.Max = 100;
+            progress.ButtonAbort.Visibility = ViewStates.Visible;
+            progress.ButtonAbort.Enabled = true;
+            progress.AbortClick = sender =>
+            {
+                _activity.RunOnUiThread(() =>
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    abortInit = true;
+                    progress.ButtonAbort.Enabled = false;
+                });
+            };
             progress.Show();
             SetLock(LockTypeCommunication);
             Thread initThread = new Thread(() =>
             {
-                bool result = InitEcuFunctionReader(bmwPath, out string errorMessage);
+                long lastPercent = -1;
+                bool result = InitEcuFunctionReader(bmwPath, out string errorMessage, percent =>
+                {
+                    if (lastPercent == percent)
+                    {
+                        return abortInit;
+                    }
+
+                    lastPercent = percent;
+                    _activity?.RunOnUiThread(() =>
+                    {
+                        if (_disposed)
+                        {
+                            return;
+                        }
+
+                        if (progress.Indeterminate)
+                        {
+                            progress.Indeterminate = false;
+                        }
+                        progress.Progress = (int)percent;
+                    });
+                    return abortInit;
+                });
+
                 _activity?.RunOnUiThread(() =>
                 {
                     if (_disposed)
@@ -10291,7 +12040,6 @@ namespace BmwDeepObd
                         return;
                     }
                     progress.Dismiss();
-                    progress.Dispose();
                     progress = null;
                     SetLock(LockType.None);
                     if (!result)
@@ -10336,7 +12084,7 @@ namespace BmwDeepObd
             EcuFunctionsActive = false;
         }
 
-        public static bool InitEcuFunctionReader(string bmwPath, out string errorMessage)
+        public static bool InitEcuFunctionReader(string bmwPath, out string errorMessage, InitThreadProgressDelegate progressHandler = null)
         {
             errorMessage = null;
 
@@ -10358,7 +12106,15 @@ namespace BmwDeepObd
                     _ecuFunctionReader = new EcuFunctionReader(bmwPath);
                 }
 
-                if (!_ecuFunctionReader.Init(GetCurrentLanguage(), out errorMessage))
+                if (!_ecuFunctionReader.Init(GetCurrentLanguageStatic(), out errorMessage, progress =>
+                    {
+                        if (progressHandler != null)
+                        {
+                            return progressHandler.Invoke(progress);
+                        }
+
+                        return false;
+                    }))
                 {
                     return false;
                 }
@@ -10441,15 +12197,561 @@ namespace BmwDeepObd
             return true;
         }
 
-        public static string GetSettingsFileName()
+        public static string GetSettingsFileName(bool secondLocation = false)
         {
-            Java.IO.File filesDir = Android.App.Application.Context.FilesDir;
+            Java.IO.File filesDir = secondLocation ?
+                Android.App.Application.Context.NoBackupFilesDir : Android.App.Application.Context.FilesDir;
+
             if (filesDir == null)
             {
                 return string.Empty;
             }
 
             return Path.Combine(filesDir.AbsolutePath, SettingsFile);
+        }
+
+        public static StorageData GetStorageData(SettingsMode settingsMode = SettingsMode.All)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                string settingsFile = GetSettingsFileName(i > 0);
+                if (string.IsNullOrEmpty(settingsFile))
+                {
+                    continue;
+                }
+
+                StorageData storageData = GetStorageDataFromFile(settingsFile, settingsMode);
+                if (storageData != null)
+                {
+                    return storageData;
+                }
+
+                string backupFileName = settingsFile + BackupExt;
+                if (File.Exists(backupFileName))
+                {
+                    storageData = GetStorageDataFromFile(backupFileName, settingsMode);
+                    if (storageData != null)
+                    {
+                        try
+                        {
+                            File.Copy(backupFileName, settingsFile, true);
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+
+                        return storageData;
+                    }
+                }
+
+            }
+            return new StorageData();
+        }
+
+        public static StorageData GetStorageDataFromFile(string fileName, SettingsMode settingsMode = SettingsMode.All)
+        {
+            StorageData storageData = null;
+            try
+            {
+                if (!string.IsNullOrEmpty(fileName) && File.Exists(fileName))
+                {
+                    try
+                    {
+                        lock (GlobalSettingLockObject)
+                        {
+                            XmlAttributeOverrides storageClassAttributes = GetStoreXmlAttributeOverrides(settingsMode);
+                            XmlSerializer xmlSerializer = new XmlSerializer(typeof(StorageData), storageClassAttributes);
+                            using (StreamReader sr = new StreamReader(fileName))
+                            {
+                                storageData = xmlSerializer.Deserialize(sr) as StorageData;
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        storageData = null;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+
+            return storageData;
+        }
+
+        public static XmlAttributeOverrides GetStoreXmlAttributeOverrides(SettingsMode settingsMode)
+        {
+            if (settingsMode == SettingsMode.All)
+            {
+                return null;
+            }
+
+            StorageData storageData = new StorageData();
+            Type storageType = storageData.GetType();
+            XmlAttributes ignoreXmlAttributes = new XmlAttributes
+            {
+                XmlIgnore = true
+            };
+
+            XmlAttributeOverrides storageClassAttributes = new XmlAttributeOverrides();
+            storageClassAttributes.Add(storageType, nameof(storageData.LastAppState), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.UpdateCheckTime), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.UpdateSkipVersion), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.LastVersionCode), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.StorageRequirementsAccepted), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.BatteryWarnings), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.BatteryWarningVoltage), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.SerialInfo), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.AdapterBlacklist), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.LastAdapterSerial), ignoreXmlAttributes);
+            storageClassAttributes.Add(storageType, nameof(storageData.AppId), ignoreXmlAttributes);
+            if (settingsMode == SettingsMode.Public)
+            {
+                storageClassAttributes.Add(storageType, nameof(storageData.SelectedEnetIp), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.SelectedElmWifiIp), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.SelectedDeepObdWifiIp), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.MtcBtDisconnectWarnShown), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.DeviceName), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.DeviceAddress), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.ConfigFileName), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.XmlEditorPackageName), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.XmlEditorClassName), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.RecentConfigFiles), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.CustomStorageMedia), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.UsbFirmwareFileName), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.YandexApiKey), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.IbmTranslatorApiKey), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.IbmTranslatorUrl), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.EmailAddress), ignoreXmlAttributes);
+                storageClassAttributes.Add(storageType, nameof(storageData.TraceInfo), ignoreXmlAttributes);
+            }
+
+            return storageClassAttributes;
+        }
+
+        public static string GetLocaleSetting(InstanceDataCommon instanceData = null)
+        {
+            try
+            {
+                if (instanceData == null)
+                {
+                    if (SelectedLocale == null)
+                    {
+                        GetLocaleThemeSettings(true, false);
+                    }
+
+                    if (SelectedLocale != null)
+                    {
+                        return SelectedLocale;
+                    }
+                }
+
+                if (instanceData != null)
+                {
+                    instanceData.LastLocale = SelectedLocale;
+                }
+                return SelectedLocale;
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
+        public static bool GetLocaleThemeSettings(bool updateLocale, bool updateTheme)
+        {
+            StorageData storageData = GetStorageData();
+
+            if (updateLocale)
+            {
+                SelectedLocale = storageData.SelectedLocale;
+            }
+
+            if (updateTheme)
+            {
+                SelectedTheme = storageData.SelectedTheme;
+            }
+
+            return true;
+        }
+
+        public static void GetThemeSettings(InstanceDataCommon instanceData = null)
+        {
+            try
+            {
+                if (instanceData == null)
+                {
+                    if (SelectedTheme == null)
+                    {
+                        GetLocaleThemeSettings(false, true);
+                    }
+
+                    return;
+                }
+
+                instanceData.LastThemeType = SelectedTheme;
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+        }
+
+        public void CheckSettingsVersionChange(InstanceDataCommon instanceData)
+        {
+            if (instanceData.LastVersionCode != VersionCode)
+            {
+                instanceData.StorageRequirementsAccepted = false;
+                instanceData.UpdateCheckTime = DateTime.MinValue.Ticks;
+                instanceData.UpdateSkipVersion = -1;
+                BatteryWarnings = 0;
+                BatteryWarningVoltage = 0;
+            }
+        }
+
+        public bool GetSettings(InstanceDataCommon instanceData, SettingsMode settingsMode, bool forceInit)
+        {
+            return GetSettingsFromFile(instanceData, null, settingsMode, forceInit);
+        }
+
+        public bool GetSettingsFromFile(InstanceDataCommon instanceData, string fileName, SettingsMode settingsMode, bool forceInit)
+        {
+            if (instanceData == null)
+            {
+                return false;
+            }
+
+            bool import = settingsMode != SettingsMode.All;
+            string hash = string.Empty;
+            try
+            {
+                bool init = false;
+                if (!StaticDataInitialized || forceInit)
+                {
+                    init = true;
+                    SetDefaultSettings();
+                }
+
+                StorageData storageData;
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    storageData = GetStorageData(settingsMode);
+                }
+                else
+                {
+                    storageData = GetStorageDataFromFile(fileName, settingsMode);
+                }
+
+                if (storageData == null)
+                {
+                    return false;
+                }
+
+                hash = storageData.CalcualeHash();
+
+                if (init || import)
+                {
+                    instanceData.LastAppState = storageData.LastAppState;
+                    instanceData.LastSelectedJobIndex = storageData.LastSelectedJobIndex;
+                    SelectedEnetIp = storageData.SelectedEnetIp;
+                    SelectedElmWifiIp = storageData.SelectedElmWifiIp;
+                    SelectedDeepObdWifiIp = storageData.SelectedDeepObdWifiIp;
+                    MtcBtDisconnectWarnShown = storageData.MtcBtDisconnectWarnShown;
+                    instanceData.DeviceName = storageData.DeviceName;
+                    instanceData.DeviceAddress = storageData.DeviceAddress;
+                    instanceData.ConfigFileName = storageData.ConfigFileName;
+                    instanceData.UpdateCheckTime = storageData.UpdateCheckTime;
+                    instanceData.UpdateSkipVersion = storageData.UpdateSkipVersion;
+                    instanceData.LastVersionCode = storageData.LastVersionCode;
+                    instanceData.StorageRequirementsAccepted = storageData.StorageRequirementsAccepted;
+                    instanceData.XmlEditorPackageName = storageData.XmlEditorPackageName;
+                    instanceData.XmlEditorClassName = storageData.XmlEditorClassName;
+
+                    SelectedLocale = storageData.SelectedLocale;
+                    SelectedTheme = storageData.SelectedTheme;
+
+                    SetRecentConfigList(storageData.RecentConfigFiles);
+                    CustomStorageMedia = storageData.CustomStorageMedia;
+                    CopyToAppSrc = storageData.CopyToAppSrc;
+                    CopyToAppDst = storageData.CopyToAppDst;
+                    CopyFromAppSrc = storageData.CopyFromAppSrc;
+                    CopyFromAppDst = storageData.CopyFromAppDst;
+                    UsbFirmwareFileName = storageData.UsbFirmwareFileName;
+                    EnableTranslation = storageData.EnableTranslation;
+                    YandexApiKey = storageData.YandexApiKey;
+                    IbmTranslatorApiKey = storageData.IbmTranslatorApiKey;
+                    IbmTranslatorUrl = storageData.IbmTranslatorUrl;
+                    DeeplApiKey = storageData.DeeplApiKey;
+                    YandexCloudApiKey = storageData.YandexCloudApiKey;
+                    YandexCloudFolderId = storageData.YandexCloudFolderId;
+                    Translator = storageData.Translator;
+                    ShowBatteryVoltageWarning = storageData.ShowBatteryVoltageWarning;
+                    BatteryWarnings = storageData.BatteryWarnings;
+                    BatteryWarningVoltage = storageData.BatteryWarningVoltage;
+                    SetSerialInfoList(storageData.SerialInfo);
+                    AdapterBlacklist = storageData.AdapterBlacklist;
+                    LastAdapterSerial = storageData.LastAdapterSerial;
+                    EmailAddress = storageData.EmailAddress;
+                    TraceInfo = storageData.TraceInfo;
+                    AppId = storageData.AppId;
+                    AutoHideTitleBar = storageData.AutoHideTitleBar;
+                    SuppressTitleBar = storageData.SuppressTitleBar;
+                    FullScreenMode = storageData.FullScreenMode;
+                    SwapMultiWindowOrientation = storageData.SwapMultiWindowOrientation;
+                    SelectedInternetConnection = storageData.SelectedInternetConnection;
+                    SelectedManufacturer = storageData.SelectedManufacturer;
+                    BtEnbaleHandling = storageData.BtEnbaleHandling;
+                    BtDisableHandling = storageData.BtDisableHandling;
+                    LockTypeCommunication = storageData.LockTypeCommunication;
+                    LockTypeLogging = storageData.LockTypeLogging;
+                    StoreDataLogSettings = storageData.StoreDataLogSettings;
+                    if (StoreDataLogSettings)
+                    {
+                        instanceData.DataLogActive = storageData.DataLogActive;
+                        instanceData.DataLogAppend = storageData.DataLogAppend;
+                    }
+                    AutoConnectHandling = storageData.AutoConnectHandling;
+                    UpdateCheckDelay = storageData.UpdateCheckDelay;
+                    DoubleClickForAppExit = storageData.DoubleClickForAppExit;
+                    SendDataBroadcast = storageData.SendDataBroadcast;
+                    CheckCpuUsage = storageData.CheckCpuUsage;
+                    CheckEcuFiles = storageData.CheckEcuFiles;
+                    OldVagMode = storageData.OldVagMode;
+                    UseBmwDatabase = storageData.UseBmwDatabase;
+                    ShowOnlyRelevantErrors = storageData.ShowOnlyRelevantErrors;
+                    ScanAllEcus = storageData.ScanAllEcus;
+                    CollectDebugInfo = storageData.CollectDebugInfo;
+                    CompressTrace = storageData.CompressTrace;
+                    DisableNetworkCheck = storageData.DisableNetworkCheck;
+
+                    CheckSettingsVersionChange(instanceData);
+                }
+
+                if (!import)
+                {
+                    instanceData.LastLocale = SelectedLocale;
+                    instanceData.LastThemeType = SelectedTheme;
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+            finally
+            {
+                StaticDataInitialized = true;
+                if (!import)
+                {
+                    instanceData.LastSettingsHash = hash;
+                }
+
+                instanceData.GetSettingsCalled = true;
+            }
+            return false;
+        }
+
+        public bool StoreSettings(InstanceDataCommon instanceData, SettingsMode settingsMode, out string errorMessage)
+        {
+            string settingsFile = GetSettingsFileName();
+            if (!StoreSettingsToFile(instanceData, settingsFile, settingsMode, out errorMessage, true))
+            {
+                return false;
+            }
+
+            string settingsFile2 = GetSettingsFileName(true);
+            if (File.Exists(settingsFile))
+            {
+                try
+                {
+                    File.Copy(settingsFile, settingsFile2, true);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+            }
+
+            string backupFileName = settingsFile + BackupExt;
+            string backupFile2Name = settingsFile2 + BackupExt;
+            if (File.Exists(backupFileName))
+            {
+                try
+                {
+                    File.Copy(backupFileName, backupFile2Name, true);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+            }
+            else
+            {
+                try
+                {
+                    File.Delete(backupFile2Name);
+                }
+                catch (Exception)
+                {
+                    // ignored
+                }
+            }
+
+            return true;
+        }
+
+        public bool StoreSettingsToFile(InstanceDataCommon instanceData, string fileName, SettingsMode settingsMode, out string errorMessage, bool createBackup = false)
+        {
+            errorMessage = null;
+            if (instanceData == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(fileName))
+            {
+                return false;
+            }
+
+            bool export = settingsMode != SettingsMode.All;
+            try
+            {
+                if (!StaticDataInitialized || !instanceData.GetSettingsCalled)
+                {
+                    return false;
+                }
+
+                string settingsDir = Path.GetDirectoryName(fileName);
+                if (string.IsNullOrEmpty(settingsDir))
+                {
+                    return false;
+                }
+
+                if (!Directory.Exists(settingsDir))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(settingsDir);
+                    }
+                    catch (Exception)
+                    {
+                        // ignored
+                    }
+                }
+
+                lock (GlobalSettingLockObject)
+                {
+                    StorageData storageData = new StorageData(instanceData, this, true);
+                    string hash = storageData.CalcualeHash();
+
+                    if (!export && string.Compare(hash, instanceData.LastSettingsHash, StringComparison.Ordinal) == 0)
+                    {
+                        return true;
+                    }
+
+                    XmlAttributeOverrides storageClassAttributes = GetStoreXmlAttributeOverrides(settingsMode);
+                    XmlSerializer xmlSerializer = new XmlSerializer(typeof(StorageData), storageClassAttributes);
+                    Java.IO.File tempFile = Java.IO.File.CreateTempFile("Settings", ".xml", Android.App.Application.Context.CacheDir);
+                    if (tempFile == null)
+                    {
+                        return false;
+                    }
+
+                    tempFile.DeleteOnExit();
+                    string tempFileName = tempFile.AbsolutePath;
+                    using (StreamWriter sw = new StreamWriter(tempFileName))
+                    {
+                        XmlWriterSettings settings = new XmlWriterSettings
+                        {
+                            Indent = true,
+                            IndentChars = "\t"
+                        };
+                        using (XmlWriter writer = XmlWriter.Create(sw, settings))
+                        {
+                            xmlSerializer.Serialize(writer, storageData);
+                        }
+                    }
+
+                    if (createBackup && File.Exists(fileName))
+                    {
+                        try
+                        {
+                            string backupFileName = fileName + BackupExt;
+                            File.Move(fileName, backupFileName, true);
+                        }
+                        catch (Exception)
+                        {
+                            // ignored
+                        }
+                    }
+
+                    File.Move(tempFileName, fileName, true);
+
+                    if (!export)
+                    {
+                        instanceData.LastSettingsHash = hash;
+                    }
+                }
+
+                _backupManager?.DataChanged();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = EdiabasNet.GetExceptionText(ex, false, false);
+            }
+            return false;
+        }
+
+        public static AutoConnectType GetAutoConnectSetting()
+        {
+            StorageData storageData = GetStorageData();
+            return storageData.AutoConnectHandling;
+        }
+
+        public bool UpdateDirectories(InstanceDataCommon instanceData)
+        {
+            if (instanceData == null)
+            {
+                return false;
+            }
+
+            instanceData.AppDataPath = string.Empty;
+            instanceData.EcuPath = string.Empty;
+            instanceData.VagPath = string.Empty;
+            instanceData.BmwPath = string.Empty;
+            instanceData.UserEcuFiles = false;
+            if (string.IsNullOrEmpty(CustomStorageMedia))
+            {
+                if (string.IsNullOrEmpty(ExternalWritePath))
+                {
+                    if (string.IsNullOrEmpty(ExternalPath))
+                    {
+                        return false;
+                    }
+                    instanceData.AppDataPath = Path.Combine(ExternalPath, AppFolderName);
+                }
+                else
+                {
+                    instanceData.AppDataPath = ExternalWritePath;
+                }
+            }
+            else
+            {
+                instanceData.AppDataPath = Path.Combine(CustomStorageMedia, AppFolderName);
+            }
+
+            instanceData.EcuPath = Path.Combine(instanceData.AppDataPath, ManufacturerEcuDirName);
+            instanceData.VagPath = Path.Combine(instanceData.AppDataPath, EcuBaseDir, VagBaseDir);
+            instanceData.BmwPath = Path.Combine(instanceData.AppDataPath, EcuBaseDir, BmwBaseDir);
+            instanceData.TraceBackupDir = Path.Combine(instanceData.AppDataPath, TraceBackupDir);
+            instanceData.PackageAssembliesDir = Path.Combine(instanceData.AppDataPath, PackageAssembliesDir);
+
+            return true;
         }
 
         public List<string> GetAllStorageMedia()
@@ -10490,7 +12792,7 @@ namespace BmwDeepObd
 
             try
             {
-                string docId = DocumentsContract.GetTreeDocumentId(documentFile.Uri);
+                string docId = Android.Provider.DocumentsContract.GetTreeDocumentId(documentFile.Uri);
                 if (!string.IsNullOrEmpty(docId))
                 {
                     string[] parts = docId.Split(':');
@@ -10515,24 +12817,6 @@ namespace BmwDeepObd
             return documentFile.Uri.Path;
         }
 
-        public void SetMenuDocumentTreeTooltip(IMenuItem menuItem)
-        {
-            try
-            {
-                if (menuItem != null)
-                {
-                    if (IsDocumentTreeSupported() && Build.VERSION.SdkInt >= BuildVersionCodes.O)
-                    {
-                        menuItem.SetTooltipText(_activity.GetString(Resource.String.menu_hint_copy_folder));
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // ignored
-            }
-        }
-
         public static List<string> GetPersistedStorages()
         {
             List<string> storageList = new List<string>();
@@ -10547,7 +12831,7 @@ namespace BmwDeepObd
                         {
                             if (uriPermission.Uri != null && uriPermission.IsWritePermission)
                             {
-                                string docId = DocumentsContract.GetTreeDocumentId(uriPermission.Uri);
+                                string docId = Android.Provider.DocumentsContract.GetTreeDocumentId(uriPermission.Uri);
                                 if (!string.IsNullOrEmpty(docId))
                                 {
                                     string[] parts = docId.Split(':');
@@ -10729,7 +13013,6 @@ namespace BmwDeepObd
                     }
 
                     progress.Dismiss();
-                    progress.Dispose();
                     progress = null;
                     SetLock(LockType.None);
                     if (!result && !aborted)
@@ -10945,7 +13228,6 @@ namespace BmwDeepObd
                     }
 
                     progress.Dismiss();
-                    progress.Dispose();
                     progress = null;
                     SetLock(LockType.None);
                     if (!result && !aborted)
@@ -11048,6 +13330,77 @@ namespace BmwDeepObd
             }
 
             return false;
+        }
+
+        public bool IsExStorageAvailable()
+        {
+            try
+            {
+                if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
+                {
+                    string extState = Android.OS.Environment.ExternalStorageState;
+                    if (string.IsNullOrEmpty(extState))
+                    {
+                        return false;
+                    }
+
+                    return IsMediaMounted(extState);
+                }
+
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.Lollipop)
+                {   // writing to external disk is only allowed in special directories.
+                    Java.IO.File[] externalFilesDirs = Android.App.Application.Context.GetExternalFilesDirs(null);
+                    if (externalFilesDirs?.Length > 0)
+                    {
+                        foreach (Java.IO.File extDir in externalFilesDirs)
+                        {
+                            if (extDir != null)
+                            {
+                                string extState = Android.OS.Environment.GetExternalStorageState(extDir);
+                                if (string.IsNullOrEmpty(extState))
+                                {
+                                    return false;
+                                }
+
+                                if (!IsMediaMounted(extState))
+                                {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+#if DEBUG
+                Android.Util.Log.Info(Tag, "IsExStorageAvailable: All media mounted");
+#endif
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public bool IsMediaMounted(string extState)
+        {
+#if DEBUG
+            Android.Util.Log.Info(Tag, string.Format("IsMediaMounted: Media State={0}", extState));
+#endif
+            if (!extState.Equals(Android.OS.Environment.MediaRemoved))
+            {
+                if (!extState.Equals(Android.OS.Environment.MediaMounted))
+                {
+#if DEBUG
+                    Android.Util.Log.Info(Tag, "IsMediaMounted: Media not mounted");
+#endif
+                    return false;
+                }
+            }
+
+#if DEBUG
+            Android.Util.Log.Info(Tag, "IsMediaMounted: Media mounted");
+#endif
+            return true;
         }
 
         public static void SetStoragePath()
@@ -11395,15 +13748,21 @@ namespace BmwDeepObd
 
             public override void OnReceive(Context context, Intent intent)
             {
-                string action = intent.Action;
+                if (intent == null)
+                {
+                    return;
+                }
 
+                string action = intent.Action;
                 _activityCommon._bcReceiverReceivedHandler?.Invoke(context, intent);
                 switch (action)
                 {
                     case BluetoothAdapter.ActionStateChanged:
 #pragma warning disable CS0618 // Typ oder Element ist veraltet
+#pragma warning disable CA1422
                     case ConnectivityManager.ConnectivityAction:
                         _activityCommon.NetworkStateChanged();
+#pragma warning restore CA1422
 #pragma warning restore CS0618 // Typ oder Element ist veraltet
                         if (action == BluetoothAdapter.ActionStateChanged)
                         {
@@ -11588,7 +13947,9 @@ namespace BmwDeepObd
             else
             {
 #pragma warning disable CS0618
+#pragma warning disable CA1422
                 parcel = intent.GetParcelableExtra(name);
+#pragma warning restore CA1422
 #pragma warning restore CS0618
             }
 

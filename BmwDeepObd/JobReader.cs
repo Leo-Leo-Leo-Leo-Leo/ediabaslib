@@ -11,7 +11,7 @@ namespace BmwDeepObd
     {
         public class DisplayInfo
         {
-            public DisplayInfo(int originalPosition, string name, string result, string ecuJobId, string ecuJobResultId, string format, UInt32 displayOrder, GridModeType gridType, double minValue, double maxValue, string logTag)
+            public DisplayInfo(int originalPosition, string name, string result, string ecuJobId, string ecuJobResultId, string format, UInt32? displayOrder, GridModeType gridType, double minValue, double maxValue, string logTag)
             {
                 OriginalPosition = originalPosition;
                 Name = name;
@@ -49,7 +49,7 @@ namespace BmwDeepObd
 
             public string Format { get; }
 
-            public UInt32 DisplayOrder { get; }
+            public UInt32? DisplayOrder { get; }
 
             public GridModeType GridType { get; }
 
@@ -175,13 +175,13 @@ namespace BmwDeepObd
 
         public class PageInfo
         {
-            public PageInfo(string xmlFileName, string name, float weight, DisplayModeType displayMode, int textResId, int gaugesPortrait, int gaugesLandscape, string logFile, string dbName, bool jobActivate, string classCode, bool codeShowWarnings, JobsInfo jobsInfo, ErrorsInfo errorsInfo, List<DisplayInfo> displayList, List<StringInfo> stringList)
+            public PageInfo(string xmlFileName, string name, float weight, DisplayModeType displayMode, XmlToolActivity.DisplayFontSize? displayFontSize, int? gaugesPortrait, int? gaugesLandscape, string logFile, string dbName, bool jobActivate, string classCode, bool codeShowWarnings, JobsInfo jobsInfo, ErrorsInfo errorsInfo, List<DisplayInfo> displayList, List<StringInfo> stringList)
             {
                 XmlFileName = xmlFileName;
                 Name = name;
                 Weight = weight;
                 DisplayMode = displayMode;
-                TextResId = textResId;
+                DisplayFontSize = displayFontSize;
                 GaugesPortrait = gaugesPortrait;
                 GaugesLandscape = gaugesLandscape;
                 LogFile = logFile;
@@ -229,11 +229,38 @@ namespace BmwDeepObd
 
             public DisplayModeType DisplayMode { get; }
 
-            public int TextResId { get; }
+            public XmlToolActivity.DisplayFontSize? DisplayFontSize { get; }
 
-            public int GaugesPortrait { get; }
+            public int? TextResId
+            {
+                get
+                {
+                    if (DisplayFontSize != null)
+                    {
+                        switch (DisplayFontSize.Value)
+                        {
+                            case XmlToolActivity.DisplayFontSize.Small:
+                                return Android.Resource.Style.TextAppearanceSmall;
 
-            public int GaugesLandscape { get; }
+                            case XmlToolActivity.DisplayFontSize.Medium:
+                                return Android.Resource.Style.TextAppearanceMedium;
+
+                            case XmlToolActivity.DisplayFontSize.Large:
+                                return Android.Resource.Style.TextAppearanceLarge;
+                        }
+                    }
+
+                    return null;
+                }
+            }
+
+            public int? GaugesPortrait { get; }
+
+            public int GaugesPortraitValue => GaugesPortrait ?? GaugesPortraitDefault;
+
+            public int? GaugesLandscape { get; }
+
+            public int GaugesLandscapeValue => GaugesLandscape ?? GaugesLandscapeDefault;
 
             public string LogFile { get; }
 
@@ -271,14 +298,17 @@ namespace BmwDeepObd
                     return 0;
                 }
 
-                if (x.DisplayOrder > y.DisplayOrder)
+                if (x.DisplayOrder != null && y.DisplayOrder != null)
                 {
-                    return 1;
-                }
+                    if (x.DisplayOrder.Value > y.DisplayOrder.Value)
+                    {
+                        return 1;
+                    }
 
-                if (x.DisplayOrder < y.DisplayOrder)
-                {
-                    return -1;
+                    if (x.DisplayOrder.Value < y.DisplayOrder.Value)
+                    {
+                        return -1;
+                    }
                 }
 
                 if (x.OriginalPosition > y.OriginalPosition)
@@ -295,6 +325,10 @@ namespace BmwDeepObd
             }
         }
 
+        public const string PageFontSize = "fontsize";
+        public const string PageGaugesPortrait = "gauges-portrait";
+        public const string PageGaugesLandscape = "gauges-landscape";
+        public const string DisplayNodeOrder = "display-order";
         public const int GaugesPortraitDefault = 2;
         public const int GaugesLandscapeDefault = 4;
         private readonly List<PageInfo> _pageList = new List<PageInfo>();
@@ -548,9 +582,9 @@ namespace BmwDeepObd
                         string pageName = string.Empty;
                         string xmlFileName = string.Empty;
                         float pageWeight = -1;
-                        int textResId = 0;
-                        int gaugesPortrait = GaugesPortraitDefault;
-                        int gaugesLandscape = GaugesLandscapeDefault;
+                        XmlToolActivity.DisplayFontSize? displayFontSize = null;
+                        int? gaugesPortrait = null;
+                        int? gaugesLandscape = null;
                         PageInfo.DisplayModeType displayMode = PageInfo.DisplayModeType.List;
                         string logFile = string.Empty;
                         string dbName = string.Empty;
@@ -585,27 +619,17 @@ namespace BmwDeepObd
                                 }
                             }
 
-                            attrib = xnodePage.Attributes["fontsize"];
+                            attrib = xnodePage.Attributes[PageFontSize];
                             if (attrib != null)
                             {
                                 string size = attrib.Value.ToLowerInvariant();
-                                switch (size)
+                                if (Enum.TryParse(size, true, out XmlToolActivity.DisplayFontSize fontSize))
                                 {
-                                    case "small":
-                                        textResId = Android.Resource.Style.TextAppearanceSmall;
-                                        break;
-
-                                    case "medium":
-                                        textResId = Android.Resource.Style.TextAppearanceMedium;
-                                        break;
-
-                                    case "large":
-                                        textResId = Android.Resource.Style.TextAppearanceLarge;
-                                        break;
+                                    displayFontSize = fontSize;
                                 }
                             }
 
-                            attrib = xnodePage.Attributes["gauges-portrait"];
+                            attrib = xnodePage.Attributes[PageGaugesPortrait];
                             if (attrib != null)
                             {
                                 try
@@ -622,7 +646,7 @@ namespace BmwDeepObd
                                 }
                             }
 
-                            attrib = xnodePage.Attributes["gauges-landscape"];
+                            attrib = xnodePage.Attributes[PageGaugesLandscape];
                             if (attrib != null)
                             {
                                 try
@@ -874,7 +898,7 @@ namespace BmwDeepObd
                             classCode = null;
                         }
 
-                        _pageList.Add(new PageInfo(xmlFileName, pageName, pageWeight, displayMode, textResId, gaugesPortrait, gaugesLandscape, logFile, dbName, jobActivate, classCode, codeShowWarnings, jobsInfo, errorsInfo, displayList, stringList));
+                        _pageList.Add(new PageInfo(xmlFileName, pageName, pageWeight, displayMode, displayFontSize, gaugesPortrait, gaugesLandscape, logFile, dbName, jobActivate, classCode, codeShowWarnings, jobsInfo, errorsInfo, displayList, stringList));
                     }
                 }
 
@@ -936,7 +960,7 @@ namespace BmwDeepObd
                 string ecuJobId = string.Empty;
                 string ecuJobResultId = string.Empty;
                 string format = null;
-                UInt32 displayOrder = 0;
+                UInt32? displayOrder = null;
                 DisplayInfo.GridModeType gridType = DisplayInfo.GridModeType.Hidden;
                 double minValue = 0;
                 double maxValue = 100;
@@ -961,7 +985,7 @@ namespace BmwDeepObd
                     attrib = xmlNode.Attributes["format"];
                     if (attrib != null) format = attrib.Value;
 
-                    attrib = xmlNode.Attributes["display-order"];
+                    attrib = xmlNode.Attributes[DisplayNodeOrder];
                     if (attrib != null)
                     {
                         try

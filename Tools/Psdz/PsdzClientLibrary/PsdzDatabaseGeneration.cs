@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Data.SQLite;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -18,7 +17,10 @@ using BmwFileReader;
 using HarmonyLib;
 using ICSharpCode.SharpZipLib.Core;
 using ICSharpCode.SharpZipLib.Zip;
+using Microsoft.Data.Sqlite;
 using PsdzClient.Core;
+using PsdzClient.Programming;
+using PsdzClientLibrary.Core;
 
 namespace PsdzClient
 {
@@ -538,6 +540,110 @@ namespace PsdzClient
 
             [XmlElement("Version"), DefaultValue(null)] public VehicleStructsBmw.VersionInfo Version { get; set; }
             [XmlElement("EcuXmlDict"), DefaultValue(null)] public SerializableDictionary<string, string> EcuXmlDict { get; set; }
+        }
+
+        private class EcuCharacteristicsMatch
+        {
+            public EcuCharacteristicsMatch(BaseEcuCharacteristics ecuCharacteristics, RuleDate ruleDate, List<VehicleStructsBmw.VehicleEcuInfo> ruleEcus, string ruleFormula)
+            {
+                EcuCharacteristics = ecuCharacteristics;
+                RuleDate = ruleDate;
+                RuleEcus = ruleEcus;
+                RuleFormula = ruleFormula;
+            }
+
+            public BaseEcuCharacteristics EcuCharacteristics { get; set; }
+            public RuleDate RuleDate { get; set; }
+            public string Series { get; set; }
+            public List<VehicleStructsBmw.VehicleEcuInfo> RuleEcus { get; set; }
+            public string RuleFormula { get; set; }
+        }
+
+        private class EcuCharacteristicsInfo
+        {
+            public EcuCharacteristicsInfo(BaseEcuCharacteristics ecuCharacteristics, string series, string modelSeries, BNType? bnType, string brand, string sgbdAdd, RuleDate ruleDate, List<VehicleStructsBmw.VehicleEcuInfo> ruleEcus, string ruleFormula)
+            {
+                EcuCharacteristics = ecuCharacteristics;
+                Series = series;
+                ModelSeries = modelSeries;
+                BnType = bnType;
+                Brand = brand;
+                SgbdAdd = sgbdAdd;
+                RuleDate = ruleDate;
+                RuleEcus = ruleEcus;
+                RuleFormula = ruleFormula;
+            }
+
+            public BaseEcuCharacteristics EcuCharacteristics { get; set; }
+            public string Series { get; set; }
+            public string ModelSeries { get; set; }
+            public BNType? BnType { get; set; }
+            public string Brand { get; set; }
+            public string SgbdAdd { get; set; }
+            public RuleDate RuleDate { get; set; }
+            public List<VehicleStructsBmw.VehicleEcuInfo> RuleEcus { get; set; }
+            public string RuleFormula { get; set; }
+        }
+
+        private class RuleDate
+        {
+            public RuleDate(string date, string dateCompare)
+            {
+                Date = date;
+                DateCompare = dateCompare;
+            }
+
+            public string Date { get; set; }
+
+            public string DateCompare { get; set; }
+
+            public long GetValue(long yearOffset = 0)
+            {
+                if (string.IsNullOrEmpty(Date))
+                {
+                    return 0;
+                }
+
+                if (Date.Length != 6)
+                {
+                    return 0;
+                }
+
+                long dateValue = Date.ConvertToInt();
+                if (dateValue == 0)
+                {
+                    return 0;
+                }
+
+                return dateValue + (yearOffset * 100);
+            }
+
+            public string GetYear(long yearOffset = 0)
+            {
+                long dateValue = GetValue(yearOffset);
+                if (dateValue == 0)
+                {
+                    return string.Empty;
+                }
+
+                return string.Format(CultureInfo.InvariantCulture, "{0:0000}", dateValue / 100);
+            }
+
+            public string GetMonth(long yearOffset = 0)
+            {
+                long dateValue = GetValue(yearOffset);
+                if (dateValue == 0)
+                {
+                    return string.Empty;
+                }
+
+                return string.Format(CultureInfo.InvariantCulture, "{0:00}", dateValue % 100);
+            }
+
+            public override string ToString()
+            {
+                return GetYear() + GetMonth();
+            }
         }
 
         private const int MaxCallsLimit = 10;
@@ -1914,6 +2020,19 @@ namespace PsdzClient
                 VehicleStructsBmw.ServiceData serviceData = null;
                 XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.ServiceData));
                 string serviceDataZipFile = Path.Combine(_databaseExtractPath, VehicleStructsBmw.ServiceDataZipFile);
+                if (serviceModules == null)
+                {
+                    log.ErrorFormat("GenerateVehicleServiceData Data missing");
+
+                    if (File.Exists(serviceDataZipFile))
+                    {
+                        log.InfoFormat("GenerateVehicleServiceData Deleting old file: '{0}'", serviceDataZipFile);
+                        File.Delete(serviceDataZipFile);
+                    }
+
+                    return true;
+                }
+
                 if (File.Exists(serviceDataZipFile))
                 {
                     try
@@ -1978,7 +2097,15 @@ namespace PsdzClient
 
                     using (MemoryStream memStream = new MemoryStream())
                     {
-                        serializer.Serialize(memStream, serviceData);
+                        XmlWriterSettings settings = new XmlWriterSettings
+                        {
+                            Indent = true,
+                            IndentChars = "\t"
+                        };
+                        using (XmlWriter writer = XmlWriter.Create(memStream, settings))
+                        {
+                            serializer.Serialize(writer, serviceData);
+                        }
                         memStream.Seek(0, SeekOrigin.Begin);
 
                         FileStream fsOut = File.Create(serviceDataZipFile);
@@ -2090,6 +2217,9 @@ namespace PsdzClient
                     {
                         log.InfoFormat("GenerateServiceModuleData Data not valid, Valid: {0}, Complete: {1}, Progress: {2}%, Failures: {3}",
                             dataValid, completed, lastProgress, convertFailures);
+                        // delete old service data file
+                        GenerateVehicleServiceData(null);
+
                         if (progressHandler != null)
                         {
                             progressHandler.Invoke(true, lastProgress, convertFailures);
@@ -2132,7 +2262,15 @@ namespace PsdzClient
 
                     using (MemoryStream memStream = new MemoryStream())
                     {
-                        serializer.Serialize(memStream, serviceModules);
+                        XmlWriterSettings settings = new XmlWriterSettings
+                        {
+                            Indent = true,
+                            IndentChars = "\t"
+                        };
+                        using (XmlWriter writer = XmlWriter.Create(memStream, settings))
+                        {
+                            serializer.Serialize(writer, serviceModules);
+                        }
                         memStream.Seek(0, SeekOrigin.Begin);
 
                         FileStream fsOut = File.Create(serviceModulesZipFile);
@@ -2160,10 +2298,13 @@ namespace PsdzClient
                     }
                 }
 
-                if (!GenerateVehicleServiceData(serviceModules))
+                if (checkOnly && serviceModules.Completed)
                 {
-                    log.ErrorFormat("GenerateVehicleServiceData failed");
-                    return false;
+                    if (!GenerateVehicleServiceData(serviceModules))
+                    {
+                        log.ErrorFormat("GenerateVehicleServiceData failed");
+                        return false;
+                    }
                 }
 
                 return true;
@@ -3431,7 +3572,15 @@ namespace PsdzClient
 
                     using (MemoryStream memStream = new MemoryStream())
                     {
-                        serializer.Serialize(memStream, testModules);
+                        XmlWriterSettings settings = new XmlWriterSettings
+                        {
+                            Indent = true,
+                            IndentChars = "\t"
+                        };
+                        using (XmlWriter writer = XmlWriter.Create(memStream, settings))
+                        {
+                            serializer.Serialize(writer, testModules);
+                        }
                         memStream.Seek(0, SeekOrigin.Begin);
 
                         FileStream fsOut = File.Create(testModulesZipFile);
@@ -3624,7 +3773,15 @@ namespace PsdzClient
 
                     using (MemoryStream memStream = new MemoryStream())
                     {
-                        serializer.Serialize(memStream, ecuCharacteristicsData);
+                        XmlWriterSettings settings = new XmlWriterSettings
+                        {
+                            Indent = true,
+                            IndentChars = "\t"
+                        };
+                        using (XmlWriter writer = XmlWriter.Create(memStream, settings))
+                        {
+                            serializer.Serialize(writer, ecuCharacteristicsData);
+                        }
                         memStream.Seek(0, SeekOrigin.Begin);
 
                         FileStream fsOut = File.Create(ecuCharacteristicsZipFile);
@@ -3849,11 +4006,9 @@ namespace PsdzClient
         {
             try
             {
-                Regex seriesFormulaRegex = new Regex(@"IsValidRuleString\(""(E-Bezeichnung)"",\s*""([a-z0-9\- ]+)""\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                Regex modelSeriesFormulaRegex = new Regex(@"IsValidRuleString\(""(Baureihenverbund)"",\s*""([a-z0-9\- ]+)""\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                Regex brandFormulaRegex = new Regex(@"IsValidRuleString\(""(Marke)"",\s*""([a-z0-9\- ]+)""\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
                 Regex dateFormulaRegex = new Regex(@"(RuleNum\(""Baustand""\))\s*([<>=]+)\s*([0-9]+)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                RuleExpression.FormulaConfig formulaConfig = new RuleExpression.FormulaConfig("RuleString", "RuleNum", "IsValidRuleString", "IsValidRuleNum", "IsFaultRuleValid", null, "|");
+                Regex ecuCliqueFormulaRegex = new Regex(@"IsValidRuleString\(""EcuClique""\s*,\s*""([a-zA-Z0-9_\-]+)""\s*\)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                RuleExpression.FormulaConfig formulaConfig = new RuleExpression.FormulaConfig("RuleString", "RuleNum", "IsValidRuleString", "IsValidRuleNum", "IsFaultRuleValid", false, null, "|");
 
                 List<string> typeKeys = GetAllTypeKeys();
                 if (typeKeys == null)
@@ -3862,191 +4017,413 @@ namespace PsdzClient
                     return null;
                 }
 
-                Dictionary<string, Tuple<string, string, string>> seriesDict = new Dictionary<string, Tuple<string, string, string>>();
+                IDiagnosticsBusinessData service = ServiceLocator.Current.GetService<IDiagnosticsBusinessData>();
+                List<BordnetsData> boardnetsList = GetAllBordnetRules();
+                Dictionary<string, Tuple<Vehicle, List<string>>> vehicleTypeKeyHashes = new Dictionary<string, Tuple<Vehicle, List<string>>>();
+
                 foreach (string typeKey in typeKeys)
                 {
                     List<Characteristics> characteristicsList = GetVehicleIdentByTypeKey(typeKey, false);
                     if (characteristicsList != null)
                     {
-                        string series = null;
-                        string modelSeries = null;
-                        string productType = null;
-                        string productLine = null;
-                        foreach (Characteristics characteristics in characteristicsList)
+                        Vehicle vehicleIdent = new Vehicle(clientContext);
+                        vehicleIdent.VehicleIdentLevel = IdentificationLevel.VINBasedFeatures;
+                        vehicleIdent.VINRangeType = typeKey;
+                        vehicleIdent.VCI.VCIType = VCIDeviceType.EDIABAS;
+                        vehicleIdent.Modelljahr = "2100";
+                        vehicleIdent.Modellmonat = "01";
+                        vehicleIdent.Modelltag = "01";
+
+                        if (!PsdzContext.UpdateAllVehicleCharacteristics(characteristicsList, this, vehicleIdent))
                         {
-                            if (string.Compare(characteristics.NodeClass, "40128130", StringComparison.OrdinalIgnoreCase) == 0)
-                            {
-                                series = characteristics.EcuTranslation.TextDe;
-                            }
-                            else if (string.Compare(characteristics.NodeClass, "99999999951", StringComparison.OrdinalIgnoreCase) == 0)
-                            {
-                                modelSeries = characteristics.EcuTranslation.TextDe;
-                            }
-                            else if (string.Compare(characteristics.NodeClass, "40135682", StringComparison.OrdinalIgnoreCase) == 0)
-                            {
-                                productType = characteristics.EcuTranslation.TextDe;
-                            }
-                            else if (string.Compare(characteristics.NodeClass, "40039952514", StringComparison.OrdinalIgnoreCase) == 0)
-                            {
-                                productLine = characteristics.EcuTranslation.TextDe;
-                            }
+                            log.ErrorFormat("ExtractEcuCharacteristicsVehicles UpdateAllVehicleCharacteristics failed");
                         }
 
-                        if (!string.IsNullOrEmpty(series) && !string.IsNullOrEmpty(modelSeries) && !string.IsNullOrEmpty(productType))
+                        string series = vehicleIdent.Ereihe;
+                        string modelSeries = vehicleIdent.Baureihenverbund;
+                        string productType = vehicleIdent.Prodart;
+                        string productLine = vehicleIdent.Produktlinie;
+
+                        if (string.IsNullOrEmpty(series))
                         {
-                            string key = series.ToUpperInvariant();
-                            if (!seriesDict.ContainsKey(key))
-                            {
-                                seriesDict.Add(key, new Tuple<string, string, string>(modelSeries, productType, productLine));
-                            }
+                            log.ErrorFormat("ExtractEcuCharacteristicsVehicles Vehicle series missing");
+                            continue;
+                        }
+
+                        string vehicleHash = (series ?? string.Empty) + ";" + (modelSeries ?? string.Empty) + ";" + (productType ?? string.Empty) + ";" + (productLine ?? string.Empty);
+                        if (!vehicleTypeKeyHashes.TryGetValue(vehicleHash, out Tuple<Vehicle, List<string>> typeKeyTuple))
+                        {
+                            vehicleTypeKeyHashes.Add(vehicleHash, new Tuple<Vehicle, List<string>>(vehicleIdent, new List<string> { typeKey }));
+                        }
+                        else
+                        {
+                            typeKeyTuple.Item2.Add(typeKey);
                         }
                     }
                 }
 
-                Vehicle vehicle = new Vehicle(clientContext);
                 List<EcuCharacteristicsInfo> vehicleSeriesList = new List<EcuCharacteristicsInfo>();
-                List<BordnetsData> boardnetsList = GetAllBordnetRules();
-                foreach (BordnetsData bordnetsData in boardnetsList)
+                foreach (KeyValuePair<string, Tuple<Vehicle, List<string>>> keyValuePair in vehicleTypeKeyHashes)
                 {
-                    BaseEcuCharacteristics baseEcuCharacteristics = null;
-                    if (bordnetsData.DocData != null)
-                    {
-                        baseEcuCharacteristics = VehicleLogistics.CreateCharacteristicsInstance<GenericEcuCharacteristics>(vehicle, bordnetsData.DocData, bordnetsData.InfoObjIdent);
-                    }
+                    Vehicle vehicleIdent = keyValuePair.Value.Item1;
+                    List<EcuCharacteristicsMatch> validCharacteristics = new List<EcuCharacteristicsMatch>();
 
-                    if (baseEcuCharacteristics != null && bordnetsData.XepRule != null)
+                    foreach (BordnetsData bordnetsData in boardnetsList)
                     {
-                        string ruleFormula = bordnetsData.XepRule.GetRuleFormula(vehicle, formulaConfig);
-                        if (!string.IsNullOrEmpty(ruleFormula))
+                        List<RuleDate> ruleDates = new List<RuleDate>();
+                        List<Tuple<EcuVar, EcuGroup>> ruleEcus = new List<Tuple<EcuVar, EcuGroup>>();
+                        BaseEcuCharacteristics baseEcuCharacteristics = null;
+                        if (bordnetsData.DocData != null)
                         {
-                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Rule formula: {0}", ruleFormula);
+                            baseEcuCharacteristics = VehicleLogistics.CreateCharacteristicsInstance<GenericEcuCharacteristics>(vehicleIdent, bordnetsData.DocData, bordnetsData.InfoObjIdent);
+                        }
 
-                            HashSet<string> seriesHash = new HashSet<string>();
-                            HashSet<string> modelSeriesHash = new HashSet<string>();
-                            HashSet<string> brandHash = new HashSet<string>();
-                            string date = null;
-                            string dateCompare = null;
+                        if (baseEcuCharacteristics != null && bordnetsData.XepRule != null)
+                        {
+                            string ruleFormulaStd = bordnetsData.XepRule.GetRuleFormula(vehicleIdent);
+                            string ruleFormulaRegEx = bordnetsData.XepRule.GetRuleFormula(vehicleIdent, formulaConfig);
+                            string[] formulaParts = ruleFormulaRegEx.Split('|');
 
-                            string[] formulaParts = ruleFormula.Split('|');
                             foreach (string formulaPart in formulaParts)
                             {
-                                if (string.IsNullOrWhiteSpace(formulaPart))
-                                {
-                                    continue;
-                                }
-
-                                MatchCollection seriesMatches = seriesFormulaRegex.Matches(formulaPart);
-                                foreach (Match match in seriesMatches)
-                                {
-                                    if (match.Groups.Count == 3 && match.Groups[2].Success)
-                                    {
-                                        seriesHash.Add(match.Groups[2].Value.Trim());
-                                    }
-                                }
-
-                                MatchCollection modelSeriesMatches = modelSeriesFormulaRegex.Matches(formulaPart);
-                                foreach (Match match in modelSeriesMatches)
-                                {
-                                    if (match.Groups.Count == 3 && match.Groups[2].Success)
-                                    {
-                                        modelSeriesHash.Add(match.Groups[2].Value.Trim());
-                                    }
-                                }
-
-                                MatchCollection brandMatches = brandFormulaRegex.Matches(formulaPart);
-                                foreach (Match match in brandMatches)
-                                {
-                                    if (match.Groups.Count == 3 && match.Groups[2].Success)
-                                    {
-                                        brandHash.Add(match.Groups[2].Value.Trim());
-                                        break;
-                                    }
-                                }
-
                                 MatchCollection dateMatches = dateFormulaRegex.Matches(formulaPart);
                                 foreach (Match match in dateMatches)
                                 {
                                     if (match.Groups.Count == 4 && match.Groups[2].Success && match.Groups[3].Success)
                                     {
-                                        date = match.Groups[3].Value.Trim();
-                                        dateCompare = match.Groups[2].Value.Trim();
-                                        break;
+                                        string date = match.Groups[3].Value.Trim();
+                                        string dateCompare = match.Groups[2].Value.Trim();
+                                        if (!string.IsNullOrEmpty(date) && date.Length == 6 && !string.IsNullOrEmpty(dateCompare))
+                                        {
+                                            RuleDate ruleDate = new RuleDate(date, dateCompare);
+                                            if (ruleDate.GetValue() != 0)
+                                            {
+                                                ruleDates.Add(ruleDate);
+                                            }
+                                        }
                                     }
                                 }
-                            }
 
-                            string prodType = "P";
-                            // add missing model series
-                            foreach (string series in seriesHash)
-                            {
-                                if (seriesDict.TryGetValue(series.ToUpperInvariant(), out Tuple<string, string, string> seriesTuple))
+                                MatchCollection ecuCliqueMatches = ecuCliqueFormulaRegex.Matches(formulaPart);
+                                foreach (Match match in ecuCliqueMatches)
                                 {
-                                    modelSeriesHash.Add(seriesTuple.Item1);
-                                    prodType = seriesTuple.Item2;
-                                }
-                            }
-
-                            HashSet<BNType> bnTypes = new HashSet<BNType>();
-                            HashSet<string> sgbdAddHash = new HashSet<string>();
-                            Vehicle vehicleSeries = new Vehicle(clientContext);
-                            vehicleSeries.Prodart = prodType;
-                            foreach (string series in seriesHash)
-                            {
-                                vehicleSeries.Ereihe = series;
-                                BNType bnType = DiagnosticsBusinessData.Instance.GetBNType(vehicleSeries);
-                                if (bnType != BNType.UNKNOWN)
-                                {
-                                    bnTypes.Add(bnType);
-                                }
-                            }
-
-                            vehicleSeries.Ereihe = null;
-                            foreach (string modelSeries in modelSeriesHash)
-                            {
-                                vehicleSeries.Baureihenverbund = modelSeries;
-                                BNType bnType = DiagnosticsBusinessData.Instance.GetBNType(vehicleSeries);
-                                if (bnType != BNType.UNKNOWN)
-                                {
-                                    bnTypes.Add(bnType);
-                                }
-                            }
-
-                            foreach (string series in seriesHash)
-                            {
-                                if (seriesDict.TryGetValue(series.ToUpperInvariant(), out Tuple<string, string, string> seriesTuple))
-                                {
-                                    vehicleSeries.Ereihe = series;
-                                    vehicleSeries.Produktlinie = seriesTuple.Item3;
-                                    if (!string.IsNullOrEmpty(vehicleSeries.Produktlinie))
+                                    if (match.Groups.Count == 2 && match.Groups[1].Success)
                                     {
-                                        string sgbdAdditional = DiagnosticsBusinessData.Instance.GetMainSeriesSgbdAdditional(vehicleSeries);
-                                        if (!string.IsNullOrEmpty(sgbdAdditional))
+                                        string ecuName = match.Groups[1].Value.Trim();
+                                        if (!string.IsNullOrEmpty(ecuName))
                                         {
-                                            sgbdAddHash.Add(sgbdAdditional);
+                                            bool ecuFound = false;
+                                            EcuVar ecuVar = GetEcuVariantByName(ecuName);
+                                            if (ecuVar != null)
+                                            {
+                                                EcuGroup ecuGroup = GetEcuGroupById(ecuVar.EcuGroupId);
+                                                if (ecuGroup != null)
+                                                {
+                                                    ecuFound = true;
+                                                    if (ruleEcus.All(x => string.Compare(x.Item1.Name, ecuName, StringComparison.OrdinalIgnoreCase) != 0))
+                                                    {
+                                                        ruleEcus.Add(new Tuple<EcuVar, EcuGroup>(ecuVar, ecuGroup));
+                                                    }
+                                                }
+                                            }
+
+                                            if (!ecuFound)
+                                            {
+                                                log.InfoFormat("ExtractEcuCharacteristicsVehicles ECU not found : {0}", ecuName);
+                                            }
                                         }
                                     }
                                 }
                             }
 
-                            BNType? bnTypeSeries = null;
-                            switch (bnTypes.Count)
+                            StringBuilder sbRuleEcus = new StringBuilder();
+                            foreach (Tuple<EcuVar, EcuGroup> tupleEcu in ruleEcus)
                             {
-                                case 0:
-                                    log.InfoFormat("ExtractEcuCharacteristicsVehicles Series: {0}, No BnTypes found", seriesHash.ToStringItems());
-                                    break;
+                                if (sbRuleEcus.Length > 0)
+                                {
+                                    sbRuleEcus.Append(", ");
+                                }
 
-                                case 1:
-                                    bnTypeSeries = bnTypes.First();
-                                    break;
-
-                                default:
-                                    log.InfoFormat("ExtractEcuCharacteristicsVehicles Series: {0}, BnTypes: {1}", seriesHash.ToStringItems(), bnTypes.ToStringItems());
-                                    break;
+                                sbRuleEcus.Append("[Var='");
+                                sbRuleEcus.Append(tupleEcu.Item1.Name);
+                                sbRuleEcus.Append("'");
+                                sbRuleEcus.Append(" Group=");
+                                sbRuleEcus.Append(tupleEcu.Item2.Name);
+                                sbRuleEcus.Append("']");
                             }
 
-                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Sgbd: {0}, Brand: {1}, Series: {2}, BnType: {3}, SgdbAdd: {4}, Date: {5} {6}",
-                                baseEcuCharacteristics.brSgbd, brandHash.ToStringItems(), seriesHash.ToStringItems(), bnTypeSeries, sgbdAddHash.ToStringItems(), dateCompare ?? string.Empty, date ?? string.Empty);
-                            vehicleSeriesList.Add(new EcuCharacteristicsInfo(baseEcuCharacteristics, seriesHash.ToList(), bnTypeSeries, brandHash.ToList(), sgbdAddHash.ToList(), date, dateCompare));
+                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Rule dates: {0}, Rule ECUS: {1}", ruleDates.ToStringItems(), sbRuleEcus);
+
+                            ObservableCollection<ECU> ecuListOrg = new ObservableCollection<ECU>();
+                            ObservableCollection<ECU> ecuList1 = new ObservableCollection<ECU>();
+                            ObservableCollection<ECU> ecuList2 = new ObservableCollection<ECU>();
+                            ObservableCollection<ECU> ecuList3 = new ObservableCollection<ECU>();
+                            List<string> ruleEcusUsed = new List<string>();
+                            int maxEcuList = 1;
+                            foreach (IEcuLogisticsEntry ecuLogisticsEntry in baseEcuCharacteristics.ecuTable)
+                            {
+                                ECU ecuOrg = new ECU();
+                                ecuOrg.ID_SG_ADR = ecuLogisticsEntry.DiagAddress;
+                                ecuOrg.ECU_NAME = ecuLogisticsEntry.Name;
+                                ecuOrg.ECU_GRUPPE = ecuLogisticsEntry.GroupSgbd;
+                                ecuListOrg.Add(ecuOrg);
+
+                                ECU ecu = new ECU();
+                                ecu.ID_SG_ADR = ecuOrg.ID_SG_ADR;
+                                ecu.ECU_NAME = ecuOrg.ECU_NAME;
+                                ecu.ECU_GRUPPE = ecuOrg.ECU_GRUPPE;
+
+                                List<string> ecuNamesAdd = new List<string>();
+                                if (!string.IsNullOrEmpty(ecuLogisticsEntry.GroupSgbd))
+                                {
+                                    string[] groupArray = ecuLogisticsEntry.GroupSgbd.Split('|');
+                                    foreach (Tuple<EcuVar, EcuGroup> tupleEcu in ruleEcus)
+                                    {
+                                        foreach (string groupName in groupArray)
+                                        {
+                                            if (string.Compare(groupName, tupleEcu.Item2.Name, StringComparison.OrdinalIgnoreCase) == 0)
+                                            {
+                                                if (!ecuNamesAdd.Contains(tupleEcu.Item1.Name, StringComparer.OrdinalIgnoreCase))
+                                                {
+                                                    ecuNamesAdd.Add(tupleEcu.Item1.Name);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                foreach (string ecuName in ecuNamesAdd)
+                                {
+                                    if (!ruleEcusUsed.Contains(ecuName, StringComparer.OrdinalIgnoreCase))
+                                    {
+                                        ruleEcusUsed.Add(ecuName);
+                                    }
+                                }
+
+                                if (ecuNamesAdd.Count > 0)
+                                {
+                                    ecu.ECU_SGBD = ecuNamesAdd[0];
+                                }
+                                ecuList1.Add(ecu);
+
+                                if (ecuNamesAdd.Count > 1)
+                                {
+                                    ECU ecuExtra = new ECU();
+                                    ecuExtra.ID_SG_ADR = ecu.ID_SG_ADR;
+                                    ecuExtra.ECU_NAME = ecu.ECU_NAME;
+                                    ecuExtra.ECU_GRUPPE = ecu.ECU_GRUPPE;
+                                    ecuExtra.ECU_SGBD = ecuNamesAdd[1];
+                                    ecuList2.Add(ecuExtra);
+                                    if (maxEcuList < 2)
+                                    {
+                                        maxEcuList = 2;
+                                    }
+                                }
+                                else
+                                {
+                                    ecuList2.Add(ecu);
+                                }
+
+                                if (ecuNamesAdd.Count > 2)
+                                {
+                                    ECU ecuExtra = new ECU();
+                                    ecuExtra.ID_SG_ADR = ecu.ID_SG_ADR;
+                                    ecuExtra.ECU_NAME = ecu.ECU_NAME;
+                                    ecuExtra.ECU_GRUPPE = ecu.ECU_GRUPPE;
+                                    ecuExtra.ECU_SGBD = ecuNamesAdd[2];
+                                    ecuList3.Add(ecuExtra);
+                                    if (maxEcuList < 3)
+                                    {
+                                        maxEcuList = 3;
+                                    }
+                                }
+                                else
+                                {
+                                    ecuList3.Add(ecu);
+                                }
+                            }
+
+                            if (ruleEcus.Count != ruleEcusUsed.Count)
+                            {
+                                log.ErrorFormat("ExtractEcuCharacteristicsVehicles Not all ECUs used: {0}, Used: {1}", sbRuleEcus, ruleEcusUsed.ToStringItems());
+                            }
+
+                            List<ObservableCollection<ECU>> ecuListCollection = new List<ObservableCollection<ECU>>
+                            {
+                                ecuListOrg, ecuList1
+                            };
+
+                            if (maxEcuList >= 2)
+                            {
+                                ecuListCollection.Add(ecuList2);
+                            }
+
+                            if (maxEcuList >= 3)
+                            {
+                                ecuListCollection.Add(ecuList3);
+                            }
+
+                            RuleDate ruleDateUse = null;
+                            ObservableCollection<ECU> ecuListUse = null;
+                            bool ruleValid = false;
+                            for (int ecuListIndex = 0; ecuListIndex < ecuListCollection.Count; ecuListIndex++)
+                            {
+                                log.InfoFormat("ExtractEcuCharacteristicsVehicles Trying ecu list index: {0}", ecuListIndex);
+                                vehicleIdent.ECU = ecuListCollection[ecuListIndex];
+
+                                ruleDateUse = null;
+                                int ruleDateIndex = 0;
+                                for (; ; )
+                                {
+                                    if (ruleDates.Count > ruleDateIndex)
+                                    {
+                                        ruleDateUse = ruleDates[ruleDateIndex];
+                                    }
+
+                                    if (ruleDateUse != null)
+                                    {
+                                        vehicleIdent.Modelljahr = ruleDateUse.GetYear(-1);
+                                        vehicleIdent.Modellmonat = ruleDateUse.GetMonth(-1);
+                                    }
+
+                                    bordnetsData.XepRule.ResetResult();
+                                    ruleValid = bordnetsData.XepRule.EvaluateRule(vehicleIdent, null);
+                                    if (!ruleValid && ruleDateUse != null)
+                                    {
+                                        vehicleIdent.Modelljahr = ruleDateUse.GetYear(1);
+                                        vehicleIdent.Modellmonat = ruleDateUse.GetMonth(1);
+
+                                        bordnetsData.XepRule.ResetResult();
+                                        ruleValid = bordnetsData.XepRule.EvaluateRule(vehicleIdent, null);
+                                        if (ruleValid)
+                                        {
+                                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Date required: {0}-{1} for formula: {2}", vehicleIdent.Modelljahr, vehicleIdent.Modellmonat, ruleFormulaStd);
+                                        }
+                                    }
+
+                                    if (ruleValid)
+                                    {
+                                        break;
+                                    }
+
+                                    ruleDateIndex++;
+                                    if (ruleDateIndex >= ruleDates.Count)
+                                    {
+                                        break;
+                                    }
+
+                                    log.InfoFormat("ExtractEcuCharacteristicsVehicles Trying date index: {0}", ruleDateIndex);
+                                }
+
+                                if (ruleValid)
+                                {
+                                    ecuListUse = vehicleIdent.ECU;
+                                    break;
+                                }
+                            }
+
+                            if (ruleValid)
+                            {
+                                List<VehicleStructsBmw.VehicleEcuInfo> usedEcus = new List<VehicleStructsBmw.VehicleEcuInfo>();
+                                if (ecuListUse != null)
+                                {
+                                    foreach (ECU ecu in ecuListUse)
+                                    {
+                                        if (!string.IsNullOrEmpty(ecu.ECU_SGBD))
+                                        {
+                                            if (usedEcus.All(x => string.Compare(x.Name, ecu.ECU_SGBD, StringComparison.OrdinalIgnoreCase) != 0))
+                                            {
+                                                usedEcus.Add(new VehicleStructsBmw.VehicleEcuInfo((int)ecu.ID_SG_ADR, ecu.ECU_NAME, ecu.ECU_GRUPPE, ecu.ECU_SGBD));
+                                            }
+                                        }
+                                    }
+                                }
+
+                                log.InfoFormat("ExtractEcuCharacteristicsVehicles Boardnets rule valid: ECUs: {0}, rule: {1}", usedEcus.ToStringItems(), ruleFormulaStd);
+                                validCharacteristics.Add(new EcuCharacteristicsMatch(baseEcuCharacteristics, ruleDateUse, usedEcus, ruleFormulaStd));
+                            }
+                            else
+                            {
+                                log.InfoFormat("ExtractEcuCharacteristicsVehicles Boardnets rule not valid: rule: {0}", ruleFormulaStd);
+                            }
+                        }
+                    }
+
+                    if (validCharacteristics.Count >= 1)
+                    {
+                        log.InfoFormat("ExtractEcuCharacteristicsVehicles Characteristics: ER={0}, BR={1}, Brand={2}", vehicleIdent.Ereihe, vehicleIdent.Baureihenverbund, vehicleIdent.Marke);
+                        if (validCharacteristics.Count > 1)
+                        {
+                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Multiple characteristicts found: Count={0}", validCharacteristics.Count);
+                            foreach (EcuCharacteristicsMatch characteristicsMatch in validCharacteristics)
+                            {
+                                string ruleDateString = characteristicsMatch.RuleDate?.ToString() ?? string.Empty;
+                                List<VehicleStructsBmw.VehicleEcuInfo> ruleEcus = characteristicsMatch.RuleEcus;
+                                string ruleFormula = characteristicsMatch.RuleFormula;
+                                log.InfoFormat("ExtractEcuCharacteristicsVehicles Match ECUs: {0}, Date: {1}, Rule: {2}", ruleEcus.ToStringItems(), ruleDateString, ruleFormula);
+                            }
+                        }
+
+                        foreach (EcuCharacteristicsMatch characteristicsMatch in validCharacteristics)
+                        {
+                            string series = vehicleIdent.Ereihe;
+                            string modelSeries = vehicleIdent.Baureihenverbund;
+                            string brandName = vehicleIdent.BrandName?.ToString();
+                            RuleDate ruleDate = characteristicsMatch.RuleDate;
+                            string ruleFormula = characteristicsMatch.RuleFormula;
+                            List<VehicleStructsBmw.VehicleEcuInfo> ruleEcus = characteristicsMatch.RuleEcus;
+
+                            BNType bnType = service.GetBNType(vehicleIdent);
+                            string sgbdAdd = service.GetMainSeriesSgbdAdditional(vehicleIdent);
+
+                            vehicleSeriesList.Add(new EcuCharacteristicsInfo(characteristicsMatch.EcuCharacteristics, series, modelSeries, bnType, brandName, sgbdAdd, ruleDate, ruleEcus, ruleFormula));
+                        }
+                    }
+                    else
+                    {
+                        bool ignoreMissing = false;
+                        if (!string.IsNullOrEmpty(vehicleIdent.Ereihe))
+                        {
+                            switch (vehicleIdent.Ereihe.ToUpperInvariant())
+                            {
+                                // cars
+                                case "E30":
+                                case "E31":
+                                case "E32":
+                                case "E34":
+                                case "U06":
+
+                                // motorbikes
+                                case "246":
+                                case "247":
+                                case "247E":
+                                case "248":
+                                case "259":
+                                case "259C":
+                                case "259R":
+                                case "259S":
+                                case "C01":
+                                case "EXX":
+                                case "E169":
+                                case "R13":
+                                case "R21":
+                                case "R22":
+                                case "R28":
+                                case "K14":
+                                case "K15":
+                                case "K16":
+                                case "K30":
+                                case "K41":
+                                case "K569":
+                                case "K589":
+                                    ignoreMissing = true;
+                                    break;
+                            }
+                        }
+
+                        if (!ignoreMissing)
+                        {
+                            log.ErrorFormat("ExtractEcuCharacteristicsVehicles No characteristics for: ER={0}, BR={1}, Brand={2}", vehicleIdent.Ereihe, vehicleIdent.Baureihenverbund, vehicleIdent.Marke);
                         }
                     }
                 }
@@ -4057,7 +4434,6 @@ namespace PsdzClient
                     BaseEcuCharacteristics ecuCharacteristics = ecuCharacteristicsInfo.EcuCharacteristics;
                     string brSgbd = ecuCharacteristics.brSgbd.Trim().ToUpperInvariant();
                     BNType? bnType = ecuCharacteristicsInfo.BnType;
-
 
                     string bnTypeName = null;
                     if (bnType.HasValue)
@@ -4071,61 +4447,97 @@ namespace PsdzClient
                         ecuList.Add(new VehicleStructsBmw.VehicleEcuInfo(ecuLogisticsEntry.DiagAddress, ecuLogisticsEntry.Name, ecuLogisticsEntry.GroupSgbd));
                     }
 
-                    List<KeyValuePair<string, string>> seriesPair = new List<KeyValuePair<string, string>>();
-                    foreach (string series in ecuCharacteristicsInfo.SeriesList)
+                    string series = ecuCharacteristicsInfo.Series;
+                    string modelSeries = ecuCharacteristicsInfo.ModelSeries;
+                    string ruleDate = ecuCharacteristicsInfo.RuleDate?.Date;
+                    string ruleDateCompare = ecuCharacteristicsInfo.RuleDate?.DateCompare;
+                    string ruleFormula = ecuCharacteristicsInfo.RuleFormula;
+                    List<VehicleStructsBmw.VehicleEcuInfo> ruleEcus = ecuCharacteristicsInfo.RuleEcus;
+                    if (string.IsNullOrEmpty(series))
                     {
-                        string modelSeries = null;
-                        if (seriesDict.TryGetValue(series.ToUpperInvariant(), out Tuple<string, string, string> seriesTuple))
-                        {
-                            modelSeries = seriesTuple.Item1;
-                        }
-
-                        seriesPair.AddIfNotContains(new KeyValuePair<string, string>(series, modelSeries));
+                        log.ErrorFormat("ExtractEcuCharacteristicsVehicles Series missing for ModelsSeries: {0}", modelSeries);
+                        continue;
                     }
 
-                    foreach (KeyValuePair<string, string> keyValuePair in seriesPair)
+                    string key = series.Trim().ToUpperInvariant();
+                    VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoAdd = new VehicleStructsBmw.VehicleSeriesInfo(
+                        series, modelSeries, brSgbd, ecuCharacteristicsInfo.SgbdAdd, bnTypeName, ecuCharacteristicsInfo.Brand, ruleDate, ruleDateCompare, ruleEcus, ecuList, ruleFormula);
+
+                    if (sgbdDict.TryGetValue(key, out List<VehicleStructsBmw.VehicleSeriesInfo> vehicleSeriesInfoList))
                     {
-                        string series = keyValuePair.Key;
-                        string modelSeries = keyValuePair.Value;
-                        string key = series;
-
-                        List<string> sgdbAdd = new List<string>();
-                        foreach (string sgdb in ecuCharacteristicsInfo.SgdbAddList)
+                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoMatch = null;
+                        foreach (VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo in vehicleSeriesInfoList)
                         {
-                            if (string.Compare(brSgbd, sgdb, StringComparison.OrdinalIgnoreCase) != 0)
+                            // ReSharper disable once ReplaceWithSingleAssignment.True
+                            bool identical = true;
+                            if (string.Compare(vehicleSeriesInfo.BrSgbd ?? string.Empty, vehicleSeriesInfoAdd.BrSgbd ?? string.Empty, StringComparison.OrdinalIgnoreCase) != 0)
                             {
-                                sgdbAdd.Add(sgdb);
+                                identical = false;
                             }
-                        }
 
-                        if (sgdbAdd.Count == 0)
-                        {
-                            sgdbAdd = null;
-                        }
-
-                        VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoAdd = new VehicleStructsBmw.VehicleSeriesInfo(key, modelSeries, brSgbd, sgdbAdd, bnTypeName, ecuCharacteristicsInfo.BrandList, ecuList, ecuCharacteristicsInfo.Date, ecuCharacteristicsInfo.DateCompare);
-
-                        if (sgbdDict.TryGetValue(key, out List<VehicleStructsBmw.VehicleSeriesInfo> vehicleSeriesInfoList))
-                        {
-                            bool sgbdFound = false;
-                            foreach (VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo in vehicleSeriesInfoList)
+                            if (string.Compare(vehicleSeriesInfo.SgbdAdd ?? string.Empty, vehicleSeriesInfoAdd.SgbdAdd ?? string.Empty, StringComparison.OrdinalIgnoreCase) != 0)
                             {
-                                if (string.Compare(vehicleSeriesInfo.BrSgbd, brSgbd, StringComparison.OrdinalIgnoreCase) == 0)
+                                identical = false;
+                            }
+
+                            if (vehicleSeriesInfo.EcuList.Count != vehicleSeriesInfoAdd.EcuList.Count)
+                            {
+                                identical = false;
+                            }
+                            else
+                            {
+                                for (int ecu = 0; ecu < vehicleSeriesInfo.EcuList.Count; ecu++)
                                 {
-                                    sgbdFound = true;
+                                    VehicleStructsBmw.VehicleEcuInfo ecuInfo1 = vehicleSeriesInfo.EcuList[ecu];
+                                    VehicleStructsBmw.VehicleEcuInfo ecuInfo2 = vehicleSeriesInfoAdd.EcuList[ecu];
+
+                                    if (ecuInfo1.DiagAddr != ecuInfo2.DiagAddr)
+                                    {
+                                        identical = false;
+                                        break;
+                                    }
+
+                                    if (string.Compare(ecuInfo1.Name ?? string.Empty, ecuInfo2.Name ?? string.Empty, StringComparison.OrdinalIgnoreCase) != 0)
+                                    {
+                                        identical = false;
+                                        break;
+                                    }
+
+                                    if (string.Compare(ecuInfo1.GroupSgbd ?? string.Empty, ecuInfo2.GroupSgbd ?? string.Empty, StringComparison.OrdinalIgnoreCase) != 0)
+                                    {
+                                        identical = false;
+                                        break;
+                                    }
                                 }
                             }
 
-                            if (!sgbdFound)
+                            if (identical)
                             {
-                                log.InfoFormat("ExtractEcuCharacteristicsVehicles Multiple entries for Series: {0}", series);
-                                vehicleSeriesInfoList.Add(vehicleSeriesInfoAdd);
+                                vehicleSeriesInfoMatch = vehicleSeriesInfo;
+                                break;
                             }
                         }
-                        else
+
+                        if (vehicleSeriesInfoMatch == null)
                         {
-                            sgbdDict.Add(key, new List<VehicleStructsBmw.VehicleSeriesInfo> { vehicleSeriesInfoAdd });
+                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Multiple entries for Series: {0}", series);
+                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Add: ModelSeries: {0}, Sgbd: {1}, Brand: {2}, Rule ECUs: '{3}', Rule Date: '{4}'",
+                                vehicleSeriesInfoAdd.ModelSeries, vehicleSeriesInfoAdd.BrSgbd, vehicleSeriesInfoAdd.Brand ?? string.Empty, vehicleSeriesInfoAdd.RuleEcus.ToStringItems(), vehicleSeriesInfoAdd.Date ?? string.Empty);
+                            log.InfoFormat("ExtractEcuCharacteristicsVehicles Rule formula: '{0}'",
+                                vehicleSeriesInfoAdd.RuleFormula);
+                            foreach (VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfoLog in vehicleSeriesInfoList)
+                            {
+                                log.InfoFormat("ExtractEcuCharacteristicsVehicles Exist: ModelSeries: {0}, Sgbd: {1}, Brand: {2}, Rule ECUs: '{3}', Rule Date: '{4}'",
+                                    vehicleSeriesInfoLog.ModelSeries, vehicleSeriesInfoLog.BrSgbd, vehicleSeriesInfoLog.Brand ?? string.Empty, vehicleSeriesInfoLog.RuleEcus.ToStringItems(), vehicleSeriesInfoLog.Date ?? string.Empty);
+                                log.InfoFormat("ExtractEcuCharacteristicsVehicles Rule formula: '{0}'",
+                                    vehicleSeriesInfoLog.RuleFormula);
+                            }
+                            vehicleSeriesInfoList.Add(vehicleSeriesInfoAdd);
                         }
+                    }
+                    else
+                    {
+                        sgbdDict.Add(key, new List<VehicleStructsBmw.VehicleSeriesInfo> { vehicleSeriesInfoAdd });
                     }
                 }
 
@@ -4149,7 +4561,7 @@ namespace PsdzClient
                     foreach (VehicleStructsBmw.VehicleSeriesInfo vehicleSeriesInfo in vehicleSeriesInfoList)
                     {
                         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "[{0}, {1}, '{2}' {3} {4}]",
-                            vehicleSeriesInfo.BrSgbd, vehicleSeriesInfo.Series, vehicleSeriesInfo.BrandList.ToStringItems(), vehicleSeriesInfo.DateCompare ?? string.Empty, vehicleSeriesInfo.Date ?? string.Empty));
+                            vehicleSeriesInfo.BrSgbd, vehicleSeriesInfo.Series, vehicleSeriesInfo.Brand, vehicleSeriesInfo.DateCompare ?? string.Empty, vehicleSeriesInfo.Date ?? string.Empty));
                     }
                 }
 
@@ -4215,7 +4627,7 @@ namespace PsdzClient
 
                 VehicleStructsBmw.VersionInfo versionInfo = new VehicleStructsBmw.VersionInfo(dbInfo?.Version, dbInfo?.DateTime);
                 rulesInfoData = new VehicleStructsBmw.RulesInfoData(versionInfo, faultRulesDict, ecuFuncRulesDict, diagObjectRulesDict);
-                if (!SaveFaultRulesClass(rulesInfoData, rulesCsFile))
+                if (!SaveRulesClass(rulesInfoData, rulesCsFile))
                 {
                     log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo SaveFaultRulesFunction failed");
                     return false;
@@ -4226,7 +4638,15 @@ namespace PsdzClient
                 using (MemoryStream memStream = new MemoryStream())
                 {
                     XmlSerializer serializer = new XmlSerializer(typeof(VehicleStructsBmw.RulesInfoData));
-                    serializer.Serialize(memStream, rulesInfoData);
+                    XmlWriterSettings settings = new XmlWriterSettings
+                    {
+                        Indent = true,
+                        IndentChars = "\t"
+                    };
+                    using (XmlWriter writer = XmlWriter.Create(memStream, settings))
+                    {
+                        serializer.Serialize(writer, rulesInfoData);
+                    }
                     memStream.Seek(0, SeekOrigin.Begin);
 
                     FileStream fsOut = File.Create(rulesZipFile);
@@ -4337,34 +4757,34 @@ namespace PsdzClient
             }
         }
 
-        public bool SaveFaultRulesClass(VehicleStructsBmw.RulesInfoData rulesInfoData, string fileName)
+        public bool SaveRulesClass(VehicleStructsBmw.RulesInfoData rulesInfoData, string fileName)
         {
             try
             {
-                log.InfoFormat(CultureInfo.InvariantCulture, "SaveFaultRulesFunction Saving: {0}", fileName);
+                log.InfoFormat(CultureInfo.InvariantCulture, "SaveRulesClass Saving: {0}", fileName);
 
                 if (rulesInfoData == null)
                 {
-                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesFunction faultRulesInfoData missing");
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveRulesClass faultRulesInfoData missing");
                     return false;
                 }
 
                 List<string> ruleNames = new List<string>();
                 if (!ExtractRuleNames(rulesInfoData.FaultRuleDict, ruleNames))
                 {
-                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo ExtractRuleNames FaultRuleDict failed");
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveRulesClass ExtractRuleNames FaultRuleDict failed");
                     return false;
                 }
 
                 if (!ExtractRuleNames(rulesInfoData.EcuFuncRuleDict, ruleNames))
                 {
-                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo ExtractRuleNames EcuFuncRuleDict failed");
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveRulesClass ExtractRuleNames EcuFuncRuleDict failed");
                     return false;
                 }
 
                 if (!ExtractRuleNames(rulesInfoData.DiagObjectRuleDict, ruleNames))
                 {
-                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesInfo ExtractRuleNames DiagObjectRuleDict failed");
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveRulesClass ExtractRuleNames DiagObjectRuleDict failed");
                     return false;
                 }
 
@@ -4384,7 +4804,7 @@ namespace PsdzClient
                 DbInfo dbInfo = GetDbInfo();
                 if (dbInfo == null)
                 {
-                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveFaultRulesFunction GetDbInfo failed");
+                    log.ErrorFormat(CultureInfo.InvariantCulture, "SaveRulesClass GetDbInfo failed");
                     return false;
                 }
 
@@ -4396,11 +4816,15 @@ namespace PsdzClient
 
                 List<VehicleStructsBmw.RuleInfo> diagObjectRuleList = rulesInfoData.DiagObjectRuleDict.Values.ToList();
                 List<VehicleStructsBmw.RuleInfo> diagObjectRuleListOrder = diagObjectRuleList.OrderBy(x => x.RuleFormula).ToList();
+                Dictionary<string, VehicleStructsBmw.RuleInfo> rulesFuncDict = new Dictionary<string, VehicleStructsBmw.RuleInfo>();
 
                 StringBuilder sb = new StringBuilder();
                 sb.Append(
 $@"using BmwFileReader;
 using System.Collections.Generic;
+
+// This file is auto generated by PsdzClient, do not edit manually, changes will be lost.
+// Edit {GetCallingSourceFileName()} method {GetCallingMemberName()} instead.
 
 public class RulesInfo
 {{
@@ -4409,120 +4833,163 @@ public class RulesInfo
     public const string DatabaseDate = ""{dbInfo.DateTime.ToString(CultureInfo.InvariantCulture)}"";
 
     public static List<string> RuleNames = new List<string> {{ {sbRuleNames} }};
+");
 
-    public RuleEvalBmw RuleEvalClass {{ get; private set; }}
+                sb.Append(
+@"
+    public RuleEvalBmw RuleEvalClass { get; private set; }
+
+    private delegate bool RuleDelegate();
+
+    private readonly Dictionary<ulong, RuleDelegate> _faultRuleDict;
+
+    private readonly Dictionary<ulong, RuleDelegate> _ecuFuncRuleDict;
+
+    private readonly Dictionary<ulong, RuleDelegate> _diagObjectRuleDict;
 
     public RulesInfo(RuleEvalBmw ruleEvalBmw)
-    {{
+    {
         RuleEvalClass = ruleEvalBmw;
-    }}
 
-    public bool IsFaultRuleValid(string id)
-    {{
-        switch (id.Trim())
-        {{
-");
-                {
-                    VehicleStructsBmw.RuleInfo ruleInfoLast = null;
-                    VehicleStructsBmw.RuleInfo ruleInfoEnd = faultRuleListOrder.Last();
-                    foreach (VehicleStructsBmw.RuleInfo ruleInfo in faultRuleListOrder)
-                    {
-                        sb.Append(
-$@"            case ""{ruleInfo.Id.Trim()}"":
-"
-                        );
-
-                        if (ruleInfoEnd == ruleInfo ||
-                            (ruleInfoLast != null && string.Compare(ruleInfo.RuleFormula, ruleInfoLast.RuleFormula, StringComparison.Ordinal) != 0))
-                        {
-                            sb.Append(
-$@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormula)};
-
-"
-                            );
-                        }
-
-                        ruleInfoLast = ruleInfo;
-                    }
-                }
-                sb.Append(
-@"        }
-
-        RuleNotFound(id.Trim());
-        return true;
-    }
-
-    public bool IsEcuFuncRuleValid(string id)
-    {
-        switch (id.Trim())
+        _faultRuleDict = new Dictionary<ulong, RuleDelegate>()
         {
 ");
                 {
+                    List<VehicleStructsBmw.RuleInfo> ruleList = faultRuleListOrder;
+                    string funcNameLast = null;
                     VehicleStructsBmw.RuleInfo ruleInfoLast = null;
-                    VehicleStructsBmw.RuleInfo ruleInfoEnd = ecuFuncRuleListOrder.Last();
-                    foreach (VehicleStructsBmw.RuleInfo ruleInfo in ecuFuncRuleListOrder)
+                    foreach (VehicleStructsBmw.RuleInfo ruleInfo in ruleList)
                     {
-                        sb.Append(
-$@"            case ""{ruleInfo.Id.Trim()}"":
-"
-                        );
-
-                        if (ruleInfoEnd == ruleInfo ||
-                            (ruleInfoLast != null && string.Compare(ruleInfo.RuleFormula, ruleInfoLast.RuleFormula, StringComparison.Ordinal) != 0))
+                        if (ruleInfoLast != null && string.Compare(ruleInfo.RuleFormula, ruleInfoLast.RuleFormula, StringComparison.Ordinal) != 0)
                         {
-                            sb.Append(
-$@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormula)};
-
-"
-                            );
+                            funcNameLast = null;
                         }
 
+                        if (funcNameLast == null)
+                        {
+                            funcNameLast = "FaultRule_" + ruleInfo.Id.Trim();
+                        }
+
+                        if (!rulesFuncDict.ContainsKey(funcNameLast))
+                        {
+                            rulesFuncDict.Add(funcNameLast, ruleInfo);
+                        }
+
+                        sb.Append(
+$@"            {{{ruleInfo.Id.Trim()}, {funcNameLast}}},
+");
                         ruleInfoLast = ruleInfo;
                     }
                 }
+
                 sb.Append(
-@"        }
+@"      };
 
-        RuleNotFound(id.Trim());
-        return true;
-    }
-
-    public bool IsDiagObjectRuleValid(string id)
-    {
-        switch (id.Trim())
+        _ecuFuncRuleDict = new Dictionary<ulong, RuleDelegate>()
         {
 ");
                 {
+                    List<VehicleStructsBmw.RuleInfo> ruleList = ecuFuncRuleListOrder;
+                    string funcNameLast = null;
                     VehicleStructsBmw.RuleInfo ruleInfoLast = null;
-                    VehicleStructsBmw.RuleInfo ruleInfoEnd = diagObjectRuleListOrder.Last();
-                    foreach (VehicleStructsBmw.RuleInfo ruleInfo in diagObjectRuleListOrder)
+                    foreach (VehicleStructsBmw.RuleInfo ruleInfo in ruleList)
                     {
-                        sb.Append(
-$@"            case ""{ruleInfo.Id.Trim()}"":
-"
-                        );
-
-                        if (ruleInfoEnd == ruleInfo ||
-                            (ruleInfoLast != null && string.Compare(ruleInfo.RuleFormula, ruleInfoLast.RuleFormula, StringComparison.Ordinal) != 0))
+                        if (ruleInfoLast != null && string.Compare(ruleInfo.RuleFormula, ruleInfoLast.RuleFormula, StringComparison.Ordinal) != 0)
                         {
-                            sb.Append(
-$@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormula)};
-
-"
-                            );
+                            funcNameLast = null;
                         }
+
+                        if (funcNameLast == null)
+                        {
+                            funcNameLast = "EcuFuncRule_" + ruleInfo.Id.Trim();
+                        }
+
+                        if (!rulesFuncDict.ContainsKey(funcNameLast))
+                        {
+                            rulesFuncDict.Add(funcNameLast, ruleInfo);
+                        }
+
+                        sb.Append(
+$@"            {{{ruleInfo.Id.Trim()}, {funcNameLast}}},
+");
 
                         ruleInfoLast = ruleInfo;
                     }
                 }
-                sb.Append(
-@"        }
 
-        RuleNotFound(id.Trim());
+                sb.Append(
+@"      };
+
+        _diagObjectRuleDict = new Dictionary<ulong, RuleDelegate>()
+        {
+");
+                {
+                    List<VehicleStructsBmw.RuleInfo> ruleList = diagObjectRuleListOrder;
+                    string funcNameLast = null;
+                    VehicleStructsBmw.RuleInfo ruleInfoLast = null;
+                    foreach (VehicleStructsBmw.RuleInfo ruleInfo in ruleList)
+                    {
+                        if (ruleInfoLast != null && string.Compare(ruleInfo.RuleFormula, ruleInfoLast.RuleFormula, StringComparison.Ordinal) != 0)
+                        {
+                            funcNameLast = null;
+                        }
+
+                        if (funcNameLast == null)
+                        {
+                            funcNameLast = "DiagObjectRule_" + ruleInfo.Id.Trim();
+                        }
+
+                        if (!rulesFuncDict.ContainsKey(funcNameLast))
+                        {
+                            rulesFuncDict.Add(funcNameLast, ruleInfo);
+                        }
+
+                        sb.Append(
+$@"            {{{ruleInfo.Id.Trim()}, {funcNameLast}}},
+");
+
+                        ruleInfoLast = ruleInfo;
+                    }
+                }
+
+                sb.Append(
+@"      };
+    }
+
+    public bool IsFaultRuleValid(ulong id)
+    {
+        if (_faultRuleDict.TryGetValue(id, out RuleDelegate ruleDelegate))
+        {
+            return ruleDelegate();
+        }
+
+        RuleNotFound(id);
         return true;
     }
 
-    private void RuleNotFound(string id)
+    public bool IsEcuFuncRuleValid(ulong id)
+    {
+        if (_ecuFuncRuleDict.TryGetValue(id, out RuleDelegate ruleDelegate))
+        {
+            return ruleDelegate();
+        }
+
+        RuleNotFound(id);
+        return true;
+    }
+
+    public bool IsDiagObjectRuleValid(ulong id)
+    {
+        if (_diagObjectRuleDict.TryGetValue(id, out RuleDelegate ruleDelegate))
+        {
+            return ruleDelegate();
+        }
+
+        RuleNotFound(id);
+        return true;
+    }
+
+    private void RuleNotFound(ulong id)
     {
         if (RuleEvalClass != null)
         {
@@ -4565,9 +5032,26 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
         }
         return false;
     }
+");
+
+                foreach (KeyValuePair<string, VehicleStructsBmw.RuleInfo> funcKeyValuePair in rulesFuncDict)
+                {
+                    sb.Append(
+$@"
+    private bool {funcKeyValuePair.Key}()
+    {{
+        bool result = {VehicleInfoBmw.RemoveNonAsciiChars(funcKeyValuePair.Value.RuleFormula)};
+        return result;
+    }}
+");
+                }
+
+                sb.Append(
+@"
 }
 ");
-                File.WriteAllText(fileName, sb.ToString());
+
+            File.WriteAllText(fileName, sb.ToString());
             }
             catch (Exception ex)
             {
@@ -4584,14 +5068,15 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
             {
                 List<EcuFunctionStructs.EcuFaultCode> ecuFaultCodeList = new List<EcuFunctionStructs.EcuFaultCode>();
                 string sql = @"SELECT ID, CODE, DATATYPE, RELEVANCE FROM XEP_FAULTCODES";
-                using (SQLiteCommand command = new SQLiteCommand(sql, _mDbConnection))
+                using (SqliteCommand command = _mDbConnection.CreateCommand())
                 {
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (SqliteDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
                             EcuFunctionStructs.EcuFaultCode ecuFaultCode = new EcuFunctionStructs.EcuFaultCode(
-                                reader["ID"].ToString().Trim(),
+                                reader["ID"].ToString()?.Trim(),
                                 reader["CODE"].ToString(),
                                 reader["DATATYPE"].ToString(),
                                 reader["RELEVANCE"].ToString());
@@ -4643,13 +5128,14 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
             {
                 List<string> ecuFixedFuncList = new List<string>();
                 string sql = @"SELECT ID FROM XEP_ECUFIXEDFUNCTIONS";
-                using (SQLiteCommand command = new SQLiteCommand(sql, _mDbConnection))
+                using (SqliteCommand command = _mDbConnection.CreateCommand())
                 {
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+                    command.CommandText = sql;
+                    using (SqliteDataReader reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
-                            ecuFixedFuncList.Add(reader["ID"].ToString().Trim());
+                            ecuFixedFuncList.Add(reader["ID"].ToString()?.Trim());
                         }
                     }
                 }
@@ -4749,6 +5235,20 @@ $@"                return {VehicleInfoBmw.RemoveNonAsciiChars(ruleInfo.RuleFormu
                 log.ErrorFormat("ExtractRuleNames Exception: '{0}'", e.Message);
                 return false;
             }
+        }
+        public string GetCallingMemberName([System.Runtime.CompilerServices.CallerMemberName] string memberName = null)
+        {
+            return memberName ?? string.Empty;
+        }
+
+        public string GetCallingSourceFileName([System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = null)
+        {
+            if (string.IsNullOrEmpty(sourceFilePath))
+            {
+                return string.Empty;
+            }
+
+            return Path.GetFileName(sourceFilePath);
         }
     }
 }

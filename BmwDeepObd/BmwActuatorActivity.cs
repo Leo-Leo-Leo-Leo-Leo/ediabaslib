@@ -306,17 +306,7 @@ namespace BmwDeepObd
                     AbortJobFunc = AbortEdiabasJob
                 };
                 _ediabas.SetConfigProperty("EcuPath", _ecuDir);
-                if (!string.IsNullOrEmpty(_traceDir))
-                {
-                    _ediabas.SetConfigProperty("TracePath", _traceDir);
-                    _ediabas.SetConfigProperty("IfhTrace", string.Format("{0}", (int)EdiabasNet.EdLogLevel.Error));
-                    _ediabas.SetConfigProperty("AppendTrace", _traceAppend ? "1" : "0");
-                    _ediabas.SetConfigProperty("CompressTrace", "1");
-                }
-                else
-                {
-                    _ediabas.SetConfigProperty("IfhTrace", "0");
-                }
+                ActivityCommon.SetEdiabasConfigProperties(_ediabas, _traceDir, _traceAppend);
             }
 
             _activityCommon.SetEdiabasInterface(_ediabas, _deviceAddress);
@@ -418,7 +408,7 @@ namespace BmwDeepObd
                 return;
             }
 
-            string language = ActivityCommon.GetCurrentLanguage();
+            string language = _activityCommon.GetCurrentLanguage();
             bool multipleFuncStruct = false;
             _jobActuatorList = new List<XmlToolEcuActivity.JobInfo>();
             foreach (XmlToolEcuActivity.JobInfo jobInfo in _ecuInfo.JobList)
@@ -526,7 +516,7 @@ namespace BmwDeepObd
         {
             int selectedFunction = _instanceData.SelectedFunction;
             int selection = 0;
-            string language = ActivityCommon.GetCurrentLanguage();
+            string language = _activityCommon.GetCurrentLanguage();
 
             CreateActuatorJobList();
 
@@ -600,7 +590,7 @@ namespace BmwDeepObd
             return null;
         }
 
-        private void AppendSbText(StringBuilder sb, string text)
+        public static void AppendSbText(StringBuilder sb, string text)
         {
             if (!string.IsNullOrWhiteSpace(text))
             {
@@ -617,7 +607,7 @@ namespace BmwDeepObd
         {
             UpdateActuatorStatus();
 
-            string language = ActivityCommon.GetCurrentLanguage();
+            string language = _activityCommon.GetCurrentLanguage();
             StringBuilder stringBuilderComments = new StringBuilder();
             XmlToolEcuActivity.JobInfo selectedJob = GetSelectedJob();
 
@@ -725,7 +715,7 @@ namespace BmwDeepObd
                 return;
             }
             object lockObject = new object();
-            string language = ActivityCommon.GetCurrentLanguage();
+            string language = _activityCommon.GetCurrentLanguage();
 
             bool activation = selectedJob.EcuFixedFuncStruct.Activation.ConvertToInt() > 0;
             Int64 activationDuration = selectedJob.EcuFixedFuncStruct.ActivationDurationMs.ConvertToInt();
